@@ -1,0 +1,104 @@
+[
+  {
+    "id": "natick-orkney",
+    "name": "Project Natick (Northern Isles)",
+    "operator": "Microsoft",
+    "status": "decommissioned",
+    "status_note": "Second-phase Natick unit deployed 2018 off Orkney (the first, smaller Natick I pilot ran off the Pacific coast near San Luis Obispo, California in 2015). Retrieved 2020 after a successful research run; Data Center Dynamics confirmed in 2025 that Microsoft has abandoned the underwater data center program with no further deployments planned.",
+    "lat": 59.15,
+    "lng": -2.78,
+    "depth_m": 117,
+    "capacity_mw": null,
+    "capacity_note": "864 servers in a single 12.2m shipping-container-sized vessel; MW rating never publicly disclosed by Microsoft.",
+    "coordinate_precision": "approximate",
+    "coordinate_note": "Microsoft never published exact GPS coordinates for the seabed unit. Position is placed at the European Marine Energy Centre (EMEC) tidal test site off Eday, Orkney, the publicly reported deployment site, rounded to ~1km precision.",
+    "sources": [
+      "https://news.microsoft.com/source/features/sustainability/project-natick-underwater-datacenter/",
+      "https://www.datacenterdynamics.com/en/news/microsoft-confirms-project-natick-underwater-data-center-is-no-more/",
+      "https://www.emec.org.uk/"
+    ],
+    "nearestLandingPoint": {
+      "id": "bay-of-london-united-kingdom",
+      "name": "Bay of London, United Kingdom",
+      "lat": 59.19229999999987,
+      "lng": -2.766219999999832
+    },
+    "nearestLandingPointDistanceKm": 5
+  },
+  {
+    "id": "highlander-hainan-lingshui",
+    "name": "Hainan Underwater Data Center Cluster",
+    "operator": "Beijing Highlander Digital Technology / Shenzhen HiCloud Data Center Technology",
+    "status": "operational",
+    "status_note": "World's first commercial underwater data center; first module installed Nov 2023, in commercial service since 2023 with clients including China Telecom and Tencent. A further module (400 high-performance servers) was added to the cluster in Feb 2025. Long-term plan calls for up to 100 modules total.",
+    "lat": 18.38,
+    "lng": 110.06,
+    "depth_m": 35,
+    "capacity_mw": null,
+    "capacity_note": "First module: ~1,300 metric tons, 24 racks holding 400-500 servers, computing power reported as equivalent to ~30,000-60,000 standard PCs across sources; project-wide MW figure not publicly disclosed.",
+    "coordinate_precision": "approximate",
+    "coordinate_note": "News coverage places the site in coastal waters off Lingshui Li Autonomous County, Hainan, but no precise seabed coordinates have been published. Position is centered on the Lingshui coastline (~5-10km uncertainty).",
+    "sources": [
+      "https://www.chinadailyhk.com/article/364068",
+      "https://www.flanders-china.be/en/newsletterpublications/worlds-first-commercial-underwater-data-center-ready-for-operations-off-the-hainan-coast",
+      "https://www.datacenterdynamics.com/en/news/chinas-underwater-data-center-expanded/"
+    ],
+    "nearestLandingPoint": {
+      "id": "lingshui-china",
+      "name": "Lingshui, China",
+      "lat": 18.389897000000236,
+      "lng": 110.04937200000029
+    },
+    "nearestLandingPointDistanceKm": 2
+  },
+  {
+    "id": "hicloud-shanghai-lingang",
+    "name": "Shanghai Lingang Undersea Data Center",
+    "operator": "HiCloud Technology (Shanghai Hailanyun) / China Communications Construction Company",
+    "status": "operational",
+    "status_note": "World's first wind-powered underwater data centre. Construction completed Oct 2025 after a June 2025 launch, initial trials Feb 2026, full commercial operations from ~May 2026. Directly tied to a nearby offshore wind farm (~95% renewable-powered). ~$226M (1.6bn yuan) investment. Part of a larger HiCloud build-out plan targeting up to 500MW of wind-powered underwater capacity at this site.",
+    "lat": 30.83,
+    "lng": 122,
+    "depth_m": 35,
+    "capacity_mw": 24,
+    "capacity_note": "24 MW design capacity; reported PUE below 1.15.",
+    "coordinate_precision": "approximate",
+    "coordinate_note": "Reported as 'more than 6 miles (10km) off the coast of Shanghai' near Lingang Special Area. Depth is reported inconsistently across sources: DataCenterDynamics cites ~35m below the surface, while The Guardian cites 10m -- shown here as 35m per the more technically-detailed trade-press source. Position estimated from the distance/bearing description, not a published GPS fix (~5km uncertainty).",
+    "sources": [
+      "https://www.theguardian.com/world/2026/jun/09/worlds-first-wind-powered-underwater-datacentre-starts-operating-in-china",
+      "https://www.datacenterdynamics.com/en/news/hiclouds-offshore-wind-powered-underwater-data-center-up-and-running-off-coast-of-shanghai-china/",
+      "https://www.offshorewind.biz/2026/05/18/china-puts-worlds-first-offshore-wind-powered-underwater-data-centre-into-operation/"
+    ],
+    "nearestLandingPoint": {
+      "id": "nanhui-china",
+      "name": "Nanhui, China",
+      "lat": 30.864713861582327,
+      "lng": 121.92506915087795
+    },
+    "nearestLandingPointDistanceKm": 8
+  },
+  {
+    "id": "subsea-cloud-port-angeles",
+    "name": "Subsea Cloud \"Jules Verne\" Pod",
+    "operator": "Subsea Cloud",
+    "status": "planned",
+    "status_note": "Announced Sept 2022: a 6m shipping-container pod (\"Jules Verne\"), ~9m underwater, holding 800 servers, planned as the first of up to 100 pods near Port Angeles, Washington, with two further projects (including a proposed 3,000m deep-ocean site) announced alongside it. No independent confirmation of physical deployment or operational status has been found since the announcement -- treat as an announced/pilot-stage project, not a confirmed live site.",
+    "lat": 48.12,
+    "lng": -123.45,
+    "depth_m": 9,
+    "capacity_mw": null,
+    "capacity_note": "800 servers per pod; MW rating not disclosed. Scale-up plan cited up to 100 pods long-term.",
+    "coordinate_precision": "unverified",
+    "coordinate_note": "Positioned near Port Angeles, WA (the general area named in the announcement) with no seabed coordinates published, and no confirmation the pod was ever actually deployed. Treat this pin as indicative of the announced project area only.",
+    "sources": [
+      "https://www.datacenterdynamics.com/en/news/subsea-cloud-announces-three-underwater-data-center-projects/"
+    ],
+    "nearestLandingPoint": {
+      "id": "esquimalt-bc-canada",
+      "name": "Esquimalt, BC, Canada",
+      "lat": 48.43011999999963,
+      "lng": -123.414634
+    },
+    "nearestLandingPointDistanceKm": 35
+  }
+]
