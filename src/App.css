@@ -353,3 +353,158 @@ html, body, #root {
 .sources a {
   color: #7dd3fc;
 }
+
+/* --- Launch / loading screen ------------------------------------------- */
+/* Covers the app while datasets and the 4.2 MB Earth texture load. Sits
+   above everything so the half-built globe underneath is never visible. */
+.launch-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(ellipse at 50% 40%, #10243c 0%, #060d18 60%, #03070d 100%);
+  color: #e2e8f0;
+  animation: launch-fade-in 260ms ease-out;
+}
+
+@keyframes launch-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.launch-inner {
+  width: min(560px, 88vw);
+  text-align: center;
+}
+
+/* Simple orbiting mark. Pure CSS -- the WebGL context is busy doing the
+   actual work this screen is waiting on. */
+.launch-orbit {
+  position: relative;
+  width: 92px;
+  height: 92px;
+  margin: 0 auto 28px;
+}
+.launch-orbit-ring,
+.launch-orbit-ring--2 {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(94, 234, 212, 0.35);
+  border-top-color: rgba(94, 234, 212, 0.95);
+  animation: launch-spin 1.5s linear infinite;
+}
+.launch-orbit-ring--2 {
+  inset: 14px;
+  border-color: rgba(56, 189, 248, 0.25);
+  border-top-color: rgba(56, 189, 248, 0.9);
+  animation-duration: 2.4s;
+  animation-direction: reverse;
+}
+.launch-orbit-core {
+  position: absolute;
+  inset: 32px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #5eead4, #0e7490 70%);
+  box-shadow: 0 0 24px rgba(45, 212, 191, 0.45);
+}
+@keyframes launch-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .launch-orbit-ring,
+  .launch-orbit-ring--2 { animation: none; }
+}
+
+.launch-title {
+  margin: 0 0 10px;
+  font-size: 1.35rem;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+}
+
+.launch-sub {
+  margin: 0 auto 26px;
+  max-width: 44ch;
+  font-size: 0.86rem;
+  line-height: 1.5;
+  color: #94a3b8;
+}
+
+.launch-progress {
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.16);
+  overflow: hidden;
+}
+.launch-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #38bdf8, #5eead4);
+  transition: width 240ms ease-out;
+}
+
+.launch-steps {
+  list-style: none;
+  margin: 18px 0 26px;
+  padding: 0;
+  display: grid;
+  gap: 7px;
+  font-size: 0.78rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: #64748b;
+  text-align: left;
+}
+.launch-steps li {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  transition: color 200ms ease;
+}
+.launch-steps li.is-done { color: #94a3b8; }
+.launch-step-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(148, 163, 184, 0.3);
+  flex: none;
+  transition: background 200ms ease, box-shadow 200ms ease;
+}
+.launch-steps li.is-done .launch-step-dot {
+  background: #5eead4;
+  box-shadow: 0 0 8px rgba(94, 234, 212, 0.6);
+}
+
+.launch-button {
+  min-width: 168px;
+  padding: 11px 30px;
+  border-radius: 999px;
+  border: 1px solid rgba(94, 234, 212, 0.35);
+  background: rgba(94, 234, 212, 0.08);
+  color: #7dd3fc;
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  cursor: not-allowed;
+  transition: all 220ms ease;
+}
+.launch-button.is-ready {
+  cursor: pointer;
+  color: #042f2e;
+  background: linear-gradient(135deg, #5eead4, #38bdf8);
+  border-color: transparent;
+  box-shadow: 0 6px 26px rgba(56, 189, 248, 0.32);
+}
+.launch-button.is-ready:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 32px rgba(56, 189, 248, 0.42);
+}
+.launch-button.is-ready:active { transform: translateY(0); }
+
+.launch-error {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #fca5a5;
+  line-height: 1.5;
+}

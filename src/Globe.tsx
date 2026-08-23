@@ -369,27 +369,63 @@ const Globe = forwardRef<GlobeApi, Props>(function Globe(
   // Scaling the radius with camera altitude keeps markers roughly constant on
   // SCREEN: visible when zoomed out, and shrinking onto their true position as
   // you approach. Clamped at both ends so they never vanish or swell.
-  const [markerScale, setMarkerScale] = useState(1);
+  //
+  // PERFORMANCE: this state must only change when the camera SETTLES, never
+  // while it is moving. Changing it re-runs the point accessors and rebuilds
+  // the geometry for every marker; doing that mid-drag is a rebuild of
+  // thousands of markers on a frame the user is trying to interact with. The
+  // first version of this quantized to 1/20 steps and updated live, which
+  // meant a single zoom gesture triggered ~20 full rebuilds -- stutter
+  // introduced by the very change that was supposed to improve things.
+  // Debouncing instead means one rebuild per gesture, and the markers being
+  // momentarily the wrong size mid-zoom is imperceptible.
+  const [camera, setCamera] = useState<{ scale: number; lat: number; lng: number; altitude: number }>({
+    scale: 1,
+    lat: 20,
+    lng: 10,
+    altitude: DEFAULT_ALTITUDE,
+  });
   useEffect(() => {
     const g = globeRef.current;
     if (!g) return;
     const controls = g.controls();
-    const update = () => {
-      const alt = g.pointOfView?.()?.altitude;
-      if (typeof alt !== "number") return;
-      const raw = alt / DEFAULT_ALTITUDE;
-      const clamped = Math.min(1.3, Math.max(0.16, raw));
-      // Quantize before committing to state. The controls fire continuously
-      // while dragging, and every distinct value re-runs the accessors for
-      // thousands of points; stepping means a smooth zoom triggers a handful
-      // of updates instead of hundreds.
-      const stepped = Math.round(clamped * 20) / 20;
-      setMarkerScale((prev) => (prev === stepped ? prev : stepped));
+    let timer = 0;
+    const commit = () => {
+      const pov = g.pointOfView?.();
+      if (!pov || typeof pov.altitude !== "number") return;
+      const clamped = Math.min(1.3, Math.max(0.16, pov.altitude / DEFAULT_ALTITUDE));
+      setCamera((prev) =>
+        Math.abs(prev.scale - clamped) < 0.02 &&
+        Math.abs(prev.lat - pov.lat) < 2 &&
+        Math.abs(prev.lng - pov.lng) < 2
+          ? prev
+          : { scale: clamped, lat: pov.lat, lng: pov.lng, altitude: pov.altitude }
+      );
     };
-    update();
+    const update = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(commit, 160);
+    };
+    commit();
     controls.addEventListener("change", update);
-    return () => controls.removeEventListener("change", update);
+    return () => {
+      window.clearTimeout(timer);
+      controls.removeEventListener("change", update);
+    };
   }, []);
+
+  const markerScale = camera.scale;
+
+  /** Angular radius of the visible cap, in degrees, plus a margin.
+   *  From altitude h (in globe radii) the horizon is at acos(1/(1+h)) -- 72
+   *  degrees when zoomed out, under 40 when zoomed in close. Markers beyond it
+   *  are behind the planet and cannot be seen or clicked, so building geometry
+   *  for them is pure cost. */
+  const visibleCapDeg = useMemo(() => {
+    const h = Math.max(0.05, camera.altitude);
+    const horizon = (Math.acos(1 / (1 + h)) * 180) / Math.PI;
+    return Math.min(180, horizon + 25);
+  }, [camera.altitude]);
 
   const flatCablePaths: CableFlatPath[] = useMemo(
     () =>
@@ -478,18 +514,49 @@ const Globe = forwardRef<GlobeApi, Props>(function Globe(
     return landingPoints.map((lp) => ({ kind: "exploreLandingPoint" as const, data: lp }));
   }, [planningMode, toggles.landingPoints, landingPoints]);
 
+  // Horizon culling for the bulk facility layers.
+  //
+  // The dataset is 5,260 land facilities. Every one becomes real geometry,
+  // and at any moment at least half are behind the planet where they cannot
+  // be seen or clicked. Zoomed in, the great majority are. Dropping them is
+  // the single largest rendering saving available here and costs the user
+  // nothing, because they were never visible.
+  //
+  // Deliberately NOT applied to the small curated layers -- connectivity
+  // landing points and explore-mode selections number in the dozens, and
+  // culling them would risk a selected item vanishing for no benefit.
+  const cullToVisible = useCallback(
+    <T extends { lat: number; lng: number }>(items: T[]): T[] => {
+      if (visibleCapDeg >= 180) return items;
+      const toRad = Math.PI / 180;
+      const cLat = camera.lat * toRad;
+      const cLng = camera.lng * toRad;
+      const cosCap = Math.cos(visibleCapDeg * toRad);
+      const sinCLat = Math.sin(cLat);
+      const cosCLat = Math.cos(cLat);
+      return items.filter((d) => {
+        const lat = d.lat * toRad;
+        // Cosine of the angular distance from the camera's sub-point.
+        const cosD =
+          sinCLat * Math.sin(lat) + cosCLat * Math.cos(lat) * Math.cos(d.lng * toRad - cLng);
+        return cosD >= cosCap;
+      });
+    },
+    [camera.lat, camera.lng, visibleCapDeg]
+  );
+
   const pointsData = useMemo(
     () => [
       ...(toggles.landDCs && !connectivityAnalysis
-        ? landDCs.map((d) => ({ kind: "land" as const, data: d }))
+        ? cullToVisible(landDCs).map((d) => ({ kind: "land" as const, data: d }))
         : []),
       ...(toggles.subseaDCs && !connectivityAnalysis
-        ? subseaDCs.map((d) => ({ kind: "subsea" as const, data: d }))
+        ? cullToVisible(subseaDCs).map((d) => ({ kind: "subsea" as const, data: d }))
         : []),
       ...connectivityLandingPoints.map((lp) => ({ kind: "landingPoint" as const, data: lp })),
       ...explorePointsData,
     ],
-    [toggles.landDCs, toggles.subseaDCs, connectivityAnalysis, landDCs, subseaDCs, connectivityLandingPoints, explorePointsData]
+    [toggles.landDCs, toggles.subseaDCs, connectivityAnalysis, landDCs, subseaDCs, connectivityLandingPoints, explorePointsData, cullToVisible]
   );
 
   // Custom cable click/hover hit-testing -- see cableHitTest.ts for why
@@ -787,8 +854,8 @@ const Globe = forwardRef<GlobeApi, Props>(function Globe(
       width={dims.width}
       height={dims.height}
       globeImageUrl={earthTextureUrl}
-      bumpImageUrl="//unpkg.com/three-globe/example/img/earth-topology.png"
-      backgroundImageUrl="//unpkg.com/three-globe/example/img/night-sky.png"
+      bumpImageUrl="/textures/earth-topology.png"
+      backgroundImageUrl="/textures/night-sky.png"
       showAtmosphere
       atmosphereColor="#4fd1ff"
       atmosphereAltitude={0.22}
@@ -977,10 +1044,11 @@ const Globe = forwardRef<GlobeApi, Props>(function Globe(
         }
         return (item.kind === "subsea" ? 0.44 : 0.2) * s;
       }}
-      // 8 segments read as a visible octagon once a marker is large on screen
-      // (see the zoomed-in facility marker that prompted this). 14 is smooth
-      // at any size and still cheap across ~5,260 points.
-      pointResolution={14}
+      // Back to 8. Raising this to 14 to smooth the octagon edge was the wrong
+      // trade: it added ~75% more geometry across thousands of markers to fix
+      // an artefact that was only visible because the markers were 93 km wide.
+      // Now that they are sized correctly the facet count is imperceptible.
+      pointResolution={8}
       pointLabel={(p: unknown) => {
         const point = p as
           | Selection

@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Globe from "./Globe";
 import type { GlobeApi, PlanningMarker, ConnectivitySelection } from "./Globe";
 import Legend from "./Legend";
+import LaunchScreen from "./LaunchScreen";
+import type { LoadStep } from "./LaunchScreen";
 import DetailPanel from "./DetailPanel";
 import PlanningPanel from "./design/PlanningPanel";
 import ConnectivityInspector from "./design/ConnectivityInspector";
@@ -32,6 +34,10 @@ export default function App() {
   const [subseaDCs, setSubseaDCs] = useState<SubseaDC[]>([]);
   const [landingPoints, setLandingPoints] = useState<LandingPoint[]>([]);
   const [loading, setLoading] = useState(true);
+  // Gate on an explicit user action: the globe is heavy to initialise, and
+  // starting that work while the user is still reading is what made the first
+  // seconds feel broken.
+  const [launched, setLaunched] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Selection | null>(null);
   const [rotating, setRotating] = useState(true);
@@ -58,12 +64,28 @@ export default function App() {
   const [explorerScope, setExplorerScope] = useState<Set<string> | null>(null);
   const [cableChoices, setCableChoices] = useState<CableHitCandidate[] | null>(null);
 
+  // Each dataset marks its own step complete as it lands, so the launch
+  // screen's progress reflects work that actually finished rather than a
+  // timer. The Earth texture is included because it is the largest single
+  // asset (4.2 MB) and dominates the wait on a slow connection -- excluding
+  // it would show 100% while the globe was still blank.
+  const [loadedSteps, setLoadedSteps] = useState<Record<string, boolean>>({});
+  const markLoaded = useCallback((id: string) => {
+    setLoadedSteps((prev) => (prev[id] ? prev : { ...prev, [id]: true }));
+  }, []);
+
   useEffect(() => {
+    const track = <T,>(id: string, p: Promise<T>) =>
+      p.then((v) => {
+        markLoaded(id);
+        return v;
+      });
+
     Promise.all([
-      fetchJSON<CableFeature[]>("/data/cables.json"),
-      fetchJSON<LandDC[]>("/data/land-dcs.json"),
-      fetchJSON<SubseaDC[]>("/data/subsea-dcs.json"),
-      fetchJSON<LandingPoint[]>("/data/landing-points.json"),
+      track("cables", fetchJSON<CableFeature[]>("/data/cables.json")),
+      track("facilities", fetchJSON<LandDC[]>("/data/land-dcs.json")),
+      track("subsea", fetchJSON<SubseaDC[]>("/data/subsea-dcs.json")),
+      track("landings", fetchJSON<LandingPoint[]>("/data/landing-points.json")),
     ])
       .then(([c, l, s, lp]) => {
         setCables(c);
@@ -73,7 +95,27 @@ export default function App() {
       })
       .catch((e) => setError(String(e)))
       .finally(() => setLoading(false));
-  }, []);
+
+    // Decoding, not just downloading -- an Image that has loaded is one the
+    // GPU upload can proceed from without stalling the first frames.
+    const img = new Image();
+    const finish = () => markLoaded("texture");
+    img.onload = finish;
+    // A missing texture must not strand the user on the launch screen forever.
+    img.onerror = finish;
+    img.src = "/textures/earth-8k.jpg";
+  }, [markLoaded]);
+
+  const loadSteps: LoadStep[] = useMemo(
+    () => [
+      { id: "cables", label: "Submarine cable geometry (TeleGeography)", done: !!loadedSteps.cables },
+      { id: "facilities", label: "Data centre facilities (PeeringDB)", done: !!loadedSteps.facilities },
+      { id: "landings", label: "Cable landing points", done: !!loadedSteps.landings },
+      { id: "subsea", label: "Subsea data centre sites", done: !!loadedSteps.subsea },
+      { id: "texture", label: "Earth imagery (NASA Blue Marble, 8K)", done: !!loadedSteps.texture },
+    ],
+    [loadedSteps]
+  );
 
   function focusCamera(loc: LocationRequirement | null, dest: LocationRequirement | null) {
     const api = globeApiRef.current;
@@ -252,10 +294,15 @@ export default function App() {
         </p>
       </header>
 
-      {loading && <div className="loading-overlay">Loading globe data…</div>}
-      {error && <div className="error-overlay">{error}</div>}
+      {!launched && (
+        <LaunchScreen steps={loadSteps} error={error} onLaunch={() => setLaunched(true)} />
+      )}
+      {error && launched && <div className="error-overlay">{error}</div>}
 
-      {!loading && !error && (
+      {/* The globe is only mounted after Launch. Building it costs a large
+          burst of geometry work, and doing that behind the loading screen
+          just moved the stutter to the moment the user started interacting. */}
+      {launched && !loading && !error && (
         <>
           <Globe
             ref={globeApiRef}
