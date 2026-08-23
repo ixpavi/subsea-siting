@@ -60,6 +60,10 @@ const SELECTED_ROUTE_COLOR = "#ffffff";
 const EARTH_TEXTURE_SMALL = "/textures/earth-2k.jpg";
 const EARTH_TEXTURE_FULL = "/textures/earth-8k.jpg";
 
+/** Starting camera altitude, and the reference point for marker scaling --
+ *  markerScale is 1 here and shrinks as the camera moves closer. */
+const DEFAULT_ALTITUDE = 2.2;
+
 type ArcDatum =
   | { kind: "connector"; startLat: number; startLng: number; endLat: number; endLng: number; label: string }
   | { kind: "planning"; startLat: number; startLng: number; endLat: number; endLng: number; label: string };
@@ -224,7 +228,7 @@ const Globe = forwardRef<GlobeApi, Props>(function Globe(
   useEffect(() => {
     const g = globeRef.current;
     if (!g) return;
-    g.pointOfView({ lat: 20, lng: 10, altitude: 2.2 }, 0);
+    g.pointOfView({ lat: 20, lng: 10, altitude: DEFAULT_ALTITUDE }, 0);
     const controls = g.controls();
     controls.autoRotateSpeed = 0.35;
     controls.enableDamping = true;
@@ -346,6 +350,46 @@ const Globe = forwardRef<GlobeApi, Props>(function Globe(
     const lps = cableNetworkIndex.cableToLandingPoints.get(exploreSelectedCableId) ?? [];
     return new Set(lps.map((lp) => lp.id));
   }, [exploreSelectedCableId, cableNetworkIndex]);
+
+  // True whenever something specific is selected and everything else is
+  // context rather than subject. Cables already de-emphasize in this state;
+  // the facility markers did not, so selecting a cable left 5,260 bright
+  // points competing with the thing the user actually clicked.
+  const hasFocusedSelection =
+    planningMode || exploreSelectedCableId !== null || exploreSelectedLandingPointId !== null;
+
+  // --- Zoom-aware marker scale ----------------------------------------------
+  // pointRadius is an ANGULAR radius in degrees, so a fixed value draws a
+  // fixed patch of the Earth regardless of zoom. At the previous 0.42 deg a
+  // land facility was a 93 km blob and a subsea site 190 km -- for buildings
+  // that are ~100 m across. Zoomed out that reads as a smear of overlapping
+  // dots; zoomed in it makes it impossible to see WHERE a facility actually
+  // is, which is the whole point of zooming.
+  //
+  // Scaling the radius with camera altitude keeps markers roughly constant on
+  // SCREEN: visible when zoomed out, and shrinking onto their true position as
+  // you approach. Clamped at both ends so they never vanish or swell.
+  const [markerScale, setMarkerScale] = useState(1);
+  useEffect(() => {
+    const g = globeRef.current;
+    if (!g) return;
+    const controls = g.controls();
+    const update = () => {
+      const alt = g.pointOfView?.()?.altitude;
+      if (typeof alt !== "number") return;
+      const raw = alt / DEFAULT_ALTITUDE;
+      const clamped = Math.min(1.3, Math.max(0.16, raw));
+      // Quantize before committing to state. The controls fire continuously
+      // while dragging, and every distinct value re-runs the accessors for
+      // thousands of points; stepping means a smooth zoom triggers a handful
+      // of updates instead of hundreds.
+      const stepped = Math.round(clamped * 20) / 20;
+      setMarkerScale((prev) => (prev === stepped ? prev : stepped));
+    };
+    update();
+    controls.addEventListener("change", update);
+    return () => controls.removeEventListener("change", update);
+  }, []);
 
   const flatCablePaths: CableFlatPath[] = useMemo(
     () =>
@@ -894,34 +938,49 @@ const Globe = forwardRef<GlobeApi, Props>(function Globe(
           const id = item.data?.id;
           if (id && exploreSelectedLandingPointId === id) return "#facc15";
           if (id && exploreSelectedCableLandingPointIds?.has(id)) return "#67e8f9";
-          return hexToRgba("#94a3b8", 0.45);
+          // Unrelated landing points recede further once a cable is the
+          // subject, so the cable's own landings read as the highlighted set.
+          return hexToRgba("#94a3b8", exploreSelectedCableId ? 0.16 : 0.45);
         }
         const base = item.kind === "subsea" ? SUBSEA_DC_COLOR : LAND_DC_COLOR;
-        return planningMode ? hexToRgba(base, 0.08) : base;
+        // Facilities are background context whenever a cable or landing point
+        // is the subject. Kept faintly visible rather than hidden, so the user
+        // can still see that infrastructure is there.
+        return hasFocusedSelection ? hexToRgba(base, 0.08) : base;
       }}
       pointAltitude={(p: unknown) => {
         const item = p as { kind: string; data?: { id?: string } };
-        if (item.kind === "landingPoint") return 0.012;
+        // Altitude is the column height above the surface. It scales with the
+        // same factor as radius, or markers become tall spikes when zoomed in.
+        const s = markerScale;
+        if (item.kind === "landingPoint") return 0.012 * s;
         if (item.kind === "exploreLandingPoint") {
           const id = item.data?.id;
           const emphasized =
             (id && exploreSelectedLandingPointId === id) || (id && exploreSelectedCableLandingPointIds?.has(id));
-          return emphasized ? 0.014 : 0.006;
+          return (emphasized ? 0.014 : 0.006) * s;
         }
-        return item.kind === "subsea" ? 0.018 : 0.006;
+        return (item.kind === "subsea" ? 0.018 : 0.006) * s;
       }}
       pointRadius={(p: unknown) => {
         const item = p as { kind: string; data?: { id?: string } };
-        if (item.kind === "landingPoint") return 0.55;
+        // Base radii roughly halved from the originals AND scaled by zoom.
+        // The old land-facility value of 0.42 deg drew a 93 km circle for a
+        // building; 0.2 deg at full zoom-out is ~22 km and shrinks from there.
+        const s = markerScale;
+        if (item.kind === "landingPoint") return 0.3 * s;
         if (item.kind === "exploreLandingPoint") {
           const id = item.data?.id;
-          if (id && exploreSelectedLandingPointId === id) return 0.7;
-          if (id && exploreSelectedCableLandingPointIds?.has(id)) return 0.48;
-          return 0.28;
+          if (id && exploreSelectedLandingPointId === id) return 0.42 * s;
+          if (id && exploreSelectedCableLandingPointIds?.has(id)) return 0.3 * s;
+          return 0.16 * s;
         }
-        return item.kind === "subsea" ? 0.85 : 0.42;
+        return (item.kind === "subsea" ? 0.44 : 0.2) * s;
       }}
-      pointResolution={8}
+      // 8 segments read as a visible octagon once a marker is large on screen
+      // (see the zoomed-in facility marker that prompted this). 14 is smooth
+      // at any size and still cheap across ~5,260 points.
+      pointResolution={14}
       pointLabel={(p: unknown) => {
         const point = p as
           | Selection
