@@ -10,7 +10,7 @@
 // completed. A timed fake bar would be easier and would be lying to the user
 // about what the app is doing -- and would still be sitting at 100% while the
 // texture decoded. If a step is slow, the user can see which one.
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 
 export interface LoadStep {
   id: string;
@@ -29,13 +29,10 @@ export default function LaunchScreen({ steps, error, onLaunch }: Props) {
   const ready = done === steps.length && !error;
   const pct = steps.length ? Math.round((100 * done) / steps.length) : 0;
 
-  // Let the button appear only once everything is genuinely ready, then allow
-  // Enter/Space to trigger it -- the globe is heavy to set up and a user
-  // hammering a disabled button is a worse experience than a clear wait.
-  const [visible, setVisible] = useState(false);
-  useEffect(() => {
-    if (ready) setVisible(true);
-  }, [ready]);
+  // `ready` only ever goes false -> true (steps complete and stay complete),
+  // so it needs no latching state of its own -- it is derived during render.
+  // An earlier version mirrored it into state via an effect, which is the
+  // cascading-render pattern React Compiler warns about, for no behaviour.
 
   useEffect(() => {
     if (!ready) return;
@@ -84,7 +81,7 @@ export default function LaunchScreen({ steps, error, onLaunch }: Props) {
         ) : (
           <button
             type="button"
-            className={`launch-button${visible ? " is-ready" : ""}`}
+            className={`launch-button${ready ? " is-ready" : ""}`}
             onClick={onLaunch}
             disabled={!ready}
           >

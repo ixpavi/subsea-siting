@@ -10,7 +10,7 @@
 // It runs the same code the worker runs, on the same JSON, so the numbers are
 // the engine's real behaviour and not a synthetic proxy.
 import { readFileSync } from "fs";
-import { fileURLToPath, pathToFileURL } from "url";
+import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
