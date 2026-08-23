@@ -1,11 +1,11 @@
-// Computes depth/distance statistics for a candidate route by resampling
-// its geometry at fixed intervals and looking up each sample's depth band
-// from the real (rasterized) ocean grid -- see oceanGrid.ts for why every
-// depth value here is a contour-band lower bound, not a precise sounding.
+// Computes depth/distance statistics for a candidate route by resampling its
+// geometry at fixed intervals and looking up each sample's depth band from
+// the derived ocean grid -- see oceanGrid.ts and provenance.ts for why every
+// depth value here is a contour-band bound, never a sounding.
 import type { OceanGrid } from "./oceanGrid";
 import { bandAt, bandDepthM } from "./oceanGrid";
-import { depthDifficultyMultiplier, classifySeabedDifficulty } from "./marineCostSurface";
-import type { DepthProfileSample, RouteAnalysis } from "./routingTypes";
+import { bandRange, computeDifficultyIndex, depthDifficultyMultiplier } from "./marineCostSurface";
+import type { DepthBandRange, DepthProfileSample, RouteAnalysis } from "./routingTypes";
 
 function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371;
@@ -16,7 +16,7 @@ function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): nu
   return 2 * R * Math.asin(Math.sqrt(a));
 }
 
-/** Resamples a polyline at approximately `stepKm` intervals, returning [lat,lng,cumulativeDistanceKm]. */
+/** Resamples a polyline at approximately `stepKm` intervals. */
 function resamplePath(path: [number, number][], stepKm: number): { lat: number; lng: number; distanceKm: number }[] {
   if (path.length < 2) return path.map(([lat, lng]) => ({ lat, lng, distanceKm: 0 }));
 
@@ -49,7 +49,7 @@ function resamplePath(path: [number, number][], stepKm: number): { lat: number; 
 
 const SAMPLE_STEP_KM = 50;
 
-/** Loose geomorphological labels for each depth band -- descriptive shorthand for the UI, not a separate classification system (still keyed to the same band lower bounds as everywhere else). */
+/** Loose geomorphological shorthand per band -- descriptive labelling for the UI, keyed to the same band bounds used everywhere else, not a separate classification. */
 const BAND_DESCRIPTIONS: Record<number, string> = {
   1: "nearshore/shelf",
   2: "continental shelf edge",
@@ -65,29 +65,6 @@ const BAND_DESCRIPTIONS: Record<number, string> = {
   12: "trench-class depth",
 };
 
-function bandRangeLabel(grid: OceanGrid, bandIndex: number): string {
-  const lower = bandDepthM(grid, bandIndex);
-  const next = grid.depthBands.find((b) => b.index === bandIndex + 1);
-  return next ? `${lower.toLocaleString()}-${next.minDepthM.toLocaleString()}m band` : `>= ${lower.toLocaleString()}m band`;
-}
-
-/** Which single depth band covers the largest share of the route's sampled length -- a one-line summary of the depth profile's overall shape. */
-function computeDominantDepthBandLabel(grid: OceanGrid, depthProfile: DepthProfileSample[]): string {
-  const counts = new Map<number, number>();
-  for (const d of depthProfile) counts.set(d.depthBandIndex, (counts.get(d.depthBandIndex) ?? 0) + 1);
-  let dominantBand = depthProfile[0]?.depthBandIndex ?? 1;
-  let best = -1;
-  for (const [band, count] of counts) {
-    if (count > best) {
-      best = count;
-      dominantBand = band;
-    }
-  }
-  const sharePct = Math.round((100 * best) / depthProfile.length);
-  const desc = BAND_DESCRIPTIONS[dominantBand] ?? "ocean";
-  return `Predominantly ${desc} (${bandRangeLabel(grid, dominantBand)}, ~${sharePct}% of sampled route length)`;
-}
-
 export function computeRouteAnalysis(
   grid: OceanGrid,
   marinePath: [number, number][],
@@ -100,35 +77,94 @@ export function computeRouteAnalysis(
   }
 
   const samples = resamplePath(marinePath, SAMPLE_STEP_KM);
-  const depthProfile: DepthProfileSample[] = samples.map((s) => {
-    const band = Math.max(1, bandAt(grid, s.lat, s.lng)); // clamp: endpoints snapped exactly onto shore can land on a land cell by a fraction of a grid cell; treat as shallowest ocean band rather than crashing the stats.
-    return { distanceAlongRouteKm: s.distanceKm, depthM: bandDepthM(grid, band), depthBandIndex: band };
-  });
 
-  const depths = depthProfile.map((d) => d.depthM);
-  const minDepthM = Math.min(...depths);
-  const maxDepthM = Math.max(...depths);
-  const meanDepthM = depths.reduce((a, b) => a + b, 0) / depths.length;
-  const variance = depths.reduce((a, b) => a + (b - meanDepthM) ** 2, 0) / depths.length;
-  const depthStdDevM = Math.sqrt(variance);
-
-  const meanMultiplier =
-    depthProfile.reduce((a, d) => a + depthDifficultyMultiplier(d.depthBandIndex), 0) / depthProfile.length;
-  const { difficulty, basis } = classifySeabedDifficulty(meanMultiplier, depthStdDevM);
-  const dominantDepthBandLabel = computeDominantDepthBandLabel(grid, depthProfile);
+  // A route's endpoints are snapped onto real landing points, which sit on
+  // the coast and therefore routinely fall inside a "land" cell at this
+  // grid's ~55km resolution. A previous version clamped those samples to
+  // band 1 (`Math.max(1, ...)`), which silently injected a 0m lower bound
+  // into the depth statistics -- that alone made "minimum depth" read
+  // ">= 0 m" for every route ever generated, presented as a seabed finding.
+  // Unclassified samples are now excluded and COUNTED instead, so the
+  // shallowest band reported is one the route genuinely crosses.
+  const depthProfile: DepthProfileSample[] = [];
+  let unclassifiedSampleCount = 0;
+  for (const s of samples) {
+    const band = bandAt(grid, s.lat, s.lng);
+    if (band === 0) {
+      unclassifiedSampleCount++;
+      continue;
+    }
+    depthProfile.push({ distanceAlongRouteKm: s.distanceKm, depthM: bandDepthM(grid, band), depthBandIndex: band });
+  }
 
   const totalDistanceKm = marineDistanceKm + (terrestrialAccessKmSource ?? 0) + (terrestrialAccessKmDest ?? 0);
+  const classifiedSampleCount = depthProfile.length;
+
+  if (classifiedSampleCount === 0) {
+    // Every sample landed on an unclassified cell -- report unavailable
+    // rather than manufacturing depth statistics from nothing.
+    return {
+      marineDistanceKm,
+      totalDistanceKm,
+      depthProfile,
+      shallowestBand: null,
+      deepestBand: null,
+      dominantBand: null,
+      meanBandLowerBoundM: null,
+      bandLowerBoundStdDevM: 0,
+      unclassifiedSampleCount,
+      classifiedSampleCount,
+      difficultyIndex: 1,
+      difficultyIndexBasis: "no classified ocean samples along this route -- difficulty index unavailable, defaulted to 1.0 (no penalty)",
+      dominantDepthBandLabel: "Depth band composition unavailable for this route.",
+    };
+  }
+
+  const bandIndices = depthProfile.map((d) => d.depthBandIndex);
+  const lowerBounds = depthProfile.map((d) => d.depthM);
+  const meanBandLowerBoundM = lowerBounds.reduce((a, b) => a + b, 0) / lowerBounds.length;
+  const variance = lowerBounds.reduce((a, b) => a + (b - meanBandLowerBoundM) ** 2, 0) / lowerBounds.length;
+  const bandLowerBoundStdDevM = Math.sqrt(variance);
+
+  const shallowestBand = bandRange(grid, Math.min(...bandIndices));
+  const deepestBand = bandRange(grid, Math.max(...bandIndices));
+
+  const counts = new Map<number, number>();
+  for (const b of bandIndices) counts.set(b, (counts.get(b) ?? 0) + 1);
+  let dominantIndex = bandIndices[0];
+  let bestCount = -1;
+  for (const [band, count] of counts) {
+    if (count > bestCount) {
+      bestCount = count;
+      dominantIndex = band;
+    }
+  }
+  const dominantBand: DepthBandRange = bandRange(grid, dominantIndex);
+  const sharePct = Math.round((100 * bestCount) / classifiedSampleCount);
+  const dominantDepthBandLabel =
+    `Predominantly ${BAND_DESCRIPTIONS[dominantIndex] ?? "ocean"} (${dominantBand.label}, ` +
+    `~${sharePct}% of classified route samples)`;
+
+  const meanMultiplier =
+    bandIndices.reduce((a, b) => a + depthDifficultyMultiplier(b), 0) / bandIndices.length;
+  const { index: difficultyIndex, basis: difficultyIndexBasis } = computeDifficultyIndex(
+    meanMultiplier,
+    bandLowerBoundStdDevM
+  );
 
   return {
     marineDistanceKm,
     totalDistanceKm,
     depthProfile,
-    minDepthM,
-    maxDepthM,
-    meanDepthM,
-    depthStdDevM,
-    seabedDifficulty: difficulty,
-    seabedDifficultyBasis: basis,
+    shallowestBand,
+    deepestBand,
+    dominantBand,
+    meanBandLowerBoundM,
+    bandLowerBoundStdDevM,
+    unclassifiedSampleCount,
+    classifiedSampleCount,
+    difficultyIndex,
+    difficultyIndexBasis,
     dominantDepthBandLabel,
   };
 }

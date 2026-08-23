@@ -35,10 +35,10 @@ function inputKey(input: UseHypotheticalRouteInput): string | null {
     input.sourceLng.toFixed(3),
     input.destLat.toFixed(3),
     input.destLng.toFixed(3),
-    input.weights.cost,
+    input.weights.length,
+    input.weights.seabedDifficulty,
     input.weights.resilience,
     input.weights.environmental,
-    input.weights.length,
   ].join("|");
 }
 

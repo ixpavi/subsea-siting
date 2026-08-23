@@ -237,17 +237,22 @@ export default function App() {
   // Real-data connectivity analysis: recomputed whenever the proposed site or
   // connectivity destination resolves to coordinates. Needs only the source
   // (destination is optional) -- see design/connectivityAnalysis.ts.
+  // Coordinates are narrowed to plain numbers BEFORE the memo rather than
+  // inside it. Semantically identical, but it removes the non-null assertions
+  // the React Compiler could not see through -- it was bailing out of this
+  // memo ("existing memoization could not be preserved"), and this is the one
+  // memo in the app that must not be lost: analyzeConnectivity merges 724
+  // cable systems and geometrically joins them against 1,920 landing points.
+  const srcLat = planningMode ? planningLocation?.lat ?? null : null;
+  const srcLng = planningMode ? planningLocation?.lng ?? null : null;
+  const dstLat = planningMode ? planningDestination?.lat ?? null : null;
+  const dstLng = planningMode ? planningDestination?.lng ?? null : null;
+
   const connectivityAnalysis = useMemo(() => {
-    if (!planningMode) return null;
-    if (planningLocation?.lat == null || planningLocation.lng == null) return null;
-    const hasDest = planningDestination?.lat != null && planningDestination.lng != null;
-    return analyzeConnectivity(
-      { lat: planningLocation.lat, lng: planningLocation.lng },
-      hasDest ? { lat: planningDestination!.lat!, lng: planningDestination!.lng! } : null,
-      cables,
-      landingPoints
-    );
-  }, [planningMode, planningLocation, planningDestination, cables, landingPoints]);
+    if (srcLat == null || srcLng == null) return null;
+    const destination = dstLat != null && dstLng != null ? { lat: dstLat, lng: dstLng } : null;
+    return analyzeConnectivity({ lat: srcLat, lng: srcLng }, destination, cables, landingPoints);
+  }, [srcLat, srcLng, dstLat, dstLng, cables, landingPoints]);
 
   return (
     <div className="app-root">

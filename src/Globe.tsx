@@ -697,19 +697,34 @@ const Globe = forwardRef<GlobeApi, Props>(function Globe(
           // ROUTE_COLORS, muted, so they're still identifiable from the
           // panel's color-coded list without competing with the selection.
           if (p.selected) return SELECTED_ROUTE_COLOR;
-          return hexToRgba(ROUTE_COLORS[p.routeId], 0.22);
+          // Unselected candidates must still outrank real cables in the visual
+          // hierarchy (proposed infrastructure above existing infrastructure),
+          // so they sit clearly above the 1.6-stroke full-colour relevant
+          // cables while staying well below the selected route.
+          return hexToRgba(ROUTE_COLORS[p.routeId], 0.65);
         }
         if (planningMode) {
-          // While hypothetical routes are on screen, real cables fade hard
-          // regardless of "relevant" status -- the proposed route must never
-          // have to compete with them for attention (see hypotheticalRoutesActive).
-          if (hypotheticalRoutesActive) {
-            return relevantCableIds.has(p.cableId) ? hexToRgba(p.color, 0.12) : hexToRgba(p.color, 0.012);
-          }
+          // The real cable network is CONTEXT AND EVIDENCE, not clutter: it is
+          // what makes the geography legible ("what already connects these two
+          // places, and along which corridors"). An earlier revision faded
+          // relevant cables to 0.12 alpha / 0.5 stroke whenever hypothetical
+          // routes were on screen, on the theory that the proposal must not
+          // have to compete for attention. That was the wrong lever -- it
+          // bought route prominence by destroying the infrastructure context
+          // the planning view exists to show. Dominance is established by the
+          // ROUTE'S OWN treatment instead (see the route branch above and
+          // pathStroke below: a 4.2 white stroke under a 7-unit halo, against
+          // a 1.6 maximum for any cable), which reads as unmistakably "on top"
+          // without dimming anything underneath it.
+          //
+          // Connectivity-relevant cables therefore keep full colour and weight
+          // whether or not routes are displayed. Non-relevant cables stay
+          // faint but non-zero so the surrounding network still reads as a
+          // network rather than empty ocean.
           if (relevantCableIds.size > 0) {
-            return relevantCableIds.has(p.cableId) ? p.color : hexToRgba(p.color, 0.025);
+            return relevantCableIds.has(p.cableId) ? p.color : hexToRgba(p.color, 0.07);
           }
-          return hexToRgba(p.color, 0.05);
+          return hexToRgba(p.color, 0.09);
         }
         // Explore mode: an explicit selection always wins; otherwise a
         // planning-handoff scope (see explorerScope) provides a base emphasis.
@@ -757,12 +772,12 @@ const Globe = forwardRef<GlobeApi, Props>(function Globe(
         // "substantially thicker" per the visual-hierarchy requirement, not
         // just "a bit more".
         if (p.kind === "route-halo") return 7;
-        if (p.kind === "route") return p.selected ? 4.2 : 0.9;
+        if (p.kind === "route") return p.selected ? 4.2 : 1.9;
         const cableId = p.cableId;
-        if (planningMode) {
-          if (hypotheticalRoutesActive) return relevantCableIds.has(cableId) ? 0.5 : 0.3;
-          return relevantCableIds.has(cableId) ? 1.6 : 0.6;
-        }
+        // Unchanged whether or not hypothetical routes are displayed -- see the
+        // context note in pathColor. 1.6 is the heaviest any real cable gets,
+        // against 4.2 for the selected route and 7 for its halo.
+        if (planningMode) return relevantCableIds.has(cableId) ? 1.6 : 0.6;
         if (exploreSelectedCableId) return cableId === exploreSelectedCableId ? 2.6 : 0.4;
         if (exploreRelatedCableIds) return exploreRelatedCableIds.has(cableId) ? 1.8 : 0.4;
         return 0.6;

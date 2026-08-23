@@ -1,27 +1,23 @@
 // Shared types for the hypothetical marine-cable routing engine (src/routing/*).
 // Everything here describes a MODELED / HYPOTHETICAL proposed route -- never
 // real infrastructure. See hypotheticalRouting.ts for the orchestration that
-// produces these, and design/RouteInspector.tsx for how they're presented
-// (always under a MODELED / HYPOTHETICAL banner, never alongside real cable
-// data without that label).
+// produces these, provenance.ts for how each displayed value is classified,
+// and design/RouteInspector.tsx for how they're presented.
 
 export type EndpointKind = "real-landing-point" | "modeled-access-point" | "unavailable";
 
 /**
  * Where a candidate route actually starts/ends in the ocean, distinguished
- * from the business location itself. A data centre site is not on the
- * seabed -- see terrestrialAccessKm for the gap between the two.
+ * from the business location itself. A data centre is not on the seabed --
+ * see terrestrialAccessKm for the gap between the two.
  */
 export interface MarineEndpoint {
   kind: EndpointKind;
-  /** The original business location (data-centre site / destination city), as resolved by geocoding. */
   businessLat: number;
   businessLng: number;
   businessLabel: string;
-  /** The marine start/end point. Present unless kind === "unavailable". */
   lat: number | null;
   lng: number | null;
-  /** Name of the real landing point used, only when kind === "real-landing-point". */
   landingPointName: string | null;
   landingPointId: string | null;
   /** Straight-line distance from the business site to the marine access point -- a separate, disclosed terrestrial segment, not part of the marine route length. */
@@ -29,45 +25,71 @@ export interface MarineEndpoint {
   note: string;
 }
 
-export type SeabedDifficulty = "LOW" | "MEDIUM" | "HIGH";
+/**
+ * One depth band from the derived grid, carrying BOTH bounds so the UI can
+ * render a range ("1,000-2,000 m") instead of a bare lower bound. Reporting
+ * only `minDepthM` was the defect that made every route display
+ * "Minimum depth >= 0 m": for any route that touches the shelf -- i.e. every
+ * route, since they all start at a coast -- the shallowest band's lower bound
+ * is 0, which is true but carries no information and reads as a measurement.
+ */
+export interface DepthBandRange {
+  index: number;
+  minDepthM: number;
+  /** null for the deepest band, which is open-ended. */
+  maxDepthM: number | null;
+  /** e.g. "1,000-2,000 m" or ">= 10,000 m". */
+  label: string;
+}
 
 export interface DepthProfileSample {
   distanceAlongRouteKm: number;
-  /** Band lower-bound depth in metres -- see oceanGrid.ts. Always a conservative "at least this deep" estimate, never a fabricated precise sounding. */
+  /** Band lower bound in metres. A bound, never a sounding -- see provenance.ts. */
   depthM: number;
   depthBandIndex: number;
 }
 
 export interface RouteAnalysis {
   marineDistanceKm: number;
-  totalDistanceKm: number; // marine + both terrestrial access legs
+  totalDistanceKm: number;
   depthProfile: DepthProfileSample[];
-  minDepthM: number;
-  maxDepthM: number;
-  meanDepthM: number;
-  depthStdDevM: number;
-  seabedDifficulty: SeabedDifficulty;
-  /** Human-readable basis for the difficulty label -- always shown next to it. */
-  seabedDifficultyBasis: string;
-  /** The single depth band covering the largest share of the route's sampled length, e.g. "continental slope/plain (1,000-2,000m band)" -- a one-line summary of the depth profile's shape, not a new data source. */
+  /** null when no sample fell in a classified ocean cell (see unclassifiedSampleCount). */
+  shallowestBand: DepthBandRange | null;
+  deepestBand: DepthBandRange | null;
+  dominantBand: DepthBandRange | null;
+  /** Mean of band LOWER BOUNDS -- explicitly not a mean depth. Comparable across candidates; not meaningful in isolation. */
+  meanBandLowerBoundM: number | null;
+  bandLowerBoundStdDevM: number;
+  /** Samples that landed on a land/unclassified grid cell and were excluded from depth statistics rather than silently clamped to the shallowest ocean band. */
+  unclassifiedSampleCount: number;
+  classifiedSampleCount: number;
+  /**
+   * Continuous modeled seabed-difficulty index. Replaces the previous
+   * LOW/MEDIUM/HIGH classification, which returned MEDIUM for every route
+   * tested (measured index range across nine real pairs: 1.057-1.212, all
+   * inside the single MEDIUM bin) and therefore contributed nothing to
+   * ranking or explanation while appearing to. The underlying index does
+   * vary and is now surfaced and ranked directly.
+   */
+  difficultyIndex: number;
+  difficultyIndexBasis: string;
   dominantDepthBandLabel: string;
 }
 
 export interface EnvironmentalAssessment {
   available: boolean;
   reason: string;
-  /** Only populated when available is true (no dataset integrated yet -- always false today, see environmentalConstraints.ts). */
   constrainedDistanceKm?: number;
   affectedZoneCount?: number;
-  penaltyScore?: number; // 0..1, higher = more exposure
+  penaltyScore?: number;
 }
 
 export interface ResilienceAssessment {
-  /** Fraction (0..1) of the route's sampled length within CORRIDOR_THRESHOLD_KM of an existing real cable. */
+  /** Fraction (0..1) of the route's sampled length within corridorThresholdKm of real cable geometry. */
   corridorOverlapFraction: number;
   meanDistanceToNearestCableKm: number;
   minDistanceToNearestCableKm: number;
-  /** 0..1, higher = more physically diverse from the existing real cable network. Derived deterministically from the overlap/distance figures above -- not a failure-probability estimate. */
+  /** 0..1, higher = more physically diverse from the existing real cable network. Deterministic; NOT a failure-probability estimate. */
   diversityScore: number;
   corridorThresholdKm: number;
   methodNote: string;
@@ -76,7 +98,6 @@ export interface ResilienceAssessment {
 export interface CostAssumptions {
   baseCostPerKmUsd: number;
   installationFactor: number;
-  depthDifficultyMultiplier: Record<SeabedDifficulty, number>;
   shoreEndCostUsd: number;
   environmentalPenaltyPerConstrainedKmUsd: number;
   contingencyPct: number;
@@ -99,10 +120,9 @@ export type RoutingProfileId = "shortest" | "shallow-favoring" | "diverse-corrid
 export interface RouteCandidate {
   id: RoutingProfileId;
   label: string;
-  /** Compact all-caps display name -- e.g. "SHORTEST", "DEPTH-FAVORING", "DIVERSITY-SEEKING". */
   shortName: string;
   description: string;
-  /** Full route geometry, source marine endpoint -> destination marine endpoint, as [lat,lng] pairs. Real computed geometry -- not densified for hit-testing (Globe.tsx/react-globe.gl densifies for rendering the same way it does real cables). */
+  /** Full route geometry, source marine endpoint -> destination marine endpoint, as [lat,lng] pairs. */
   path: [number, number][];
   analysis: RouteAnalysis;
   environmental: EnvironmentalAssessment;
@@ -110,21 +130,57 @@ export interface RouteCandidate {
   cost: CostBreakdown;
 }
 
+/**
+ * Ranking criteria. `cost` is deliberately absent: the cost model is a
+ * deterministic function of route length and the difficulty index, both of
+ * which are already criteria here, so including it made the score
+ * double-count length. Measured before the fix: normalized cost and
+ * normalized length were identical to three decimal places in 9/9 candidate
+ * rows. Cost remains a displayed, derived estimate -- just not an
+ * independent axis.
+ */
+export type RoutingCriterionId = "length" | "seabedDifficulty" | "resilience" | "environmental";
+
+export interface RoutingWeights {
+  length: number;
+  seabedDifficulty: number;
+  resilience: number;
+  environmental: number;
+}
+
+export interface CriterionOutcome {
+  id: RoutingCriterionId;
+  label: string;
+  /** False when every candidate scores identically -- such a criterion adds a constant to every score and is excluded from the weighted sum and from rationale text. */
+  discriminates: boolean;
+  /** False when no dataset backs this criterion at all (environmental today). */
+  available: boolean;
+  weight: number;
+  /** Share of the final score this criterion actually accounted for, after excluding non-discriminating and unavailable criteria. */
+  effectiveWeightShare: number;
+}
+
 export interface RankedRouteCandidate {
   candidate: RouteCandidate;
   score: number;
-  normalized: { cost: number; length: number; seabedDifficulty: number; resilience: number; environmental: number };
+  normalized: Record<RoutingCriterionId, number>;
+  /** Criterion ids this candidate is strictly best on AND that actually discriminate. Drives rationale text. */
+  winsOn: RoutingCriterionId[];
   rank: number;
   isRecommended: boolean;
   whyText: string;
 }
 
-export interface RoutingWeights {
-  cost: number;
-  resilience: number;
-  environmental: number;
-  /** Route length / directness. */
-  length: number;
+/**
+ * Two candidates whose corridors are closer together than the resolution of
+ * the data that produced them, and therefore cannot honestly be presented as
+ * independent engineering alternatives.
+ */
+export interface DegeneratePair {
+  a: RoutingProfileId;
+  b: RoutingProfileId;
+  meanSeparationKm: number;
+  maxSeparationKm: number;
 }
 
 export interface RouteEngineResult {
@@ -132,7 +188,11 @@ export interface RouteEngineResult {
   destinationEndpoint: MarineEndpoint;
   candidates: RankedRouteCandidate[];
   weights: RoutingWeights;
-  /** Set when marine routing could not be attempted at all (e.g. no ocean cell reachable near an endpoint). Candidates will be empty in that case. */
+  criteria: CriterionOutcome[];
+  /** Candidate pairs closer than separationThresholdKm. Never removed from the result -- surfaced so the user knows they are not independent options. */
+  degeneratePairs: DegeneratePair[];
+  /** One grid cell width. Derived from the grid, not chosen: corridors closer than one cell cannot be distinguished by the data that generated them. */
+  separationThresholdKm: number;
   unavailableReason: string | null;
   gridProvenance: string;
 }

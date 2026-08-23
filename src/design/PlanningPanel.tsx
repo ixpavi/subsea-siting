@@ -558,8 +558,8 @@ export default function PlanningPanel({
                           </span>
                         </div>
                         <div className="design-metric">
-                          <span className="design-label">Seabed difficulty</span>
-                          <span className="dc-mono">{chosen.candidate.analysis.seabedDifficulty}</span>
+                          <span className="design-label">Seabed difficulty index (modeled)</span>
+                          <span className="dc-mono">{chosen.candidate.analysis.difficultyIndex.toFixed(3)}</span>
                         </div>
                         <div className="design-metric">
                           <span className="design-label">Estimated modeled cost</span>

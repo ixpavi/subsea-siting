@@ -57,7 +57,10 @@ export function computeRouteResilience(cableIndex: CableProximityIndex, marinePa
     const [lat2, lng2] = marinePath[segIndex + 1];
     const lat = lat1 + (lat2 - lat1) * t;
     const lng = lng1 + (lng2 - lng1) * t;
-    distances.push(nearestCableDistanceKm(cableIndex, lat, lng));
+    // 6 rings at the index's 2-degree buckets covers ~1,330km. diversityScore
+    // saturates its distance term at 1,000km, so this bounds the search
+    // without truncating any distance the score can actually distinguish.
+    distances.push(nearestCableDistanceKm(cableIndex, lat, lng, 6));
   }
 
   const meanDistanceToNearestCableKm = distances.reduce((a, b) => a + b, 0) / distances.length;
@@ -79,6 +82,6 @@ export function computeRouteResilience(cableIndex: CableProximityIndex, marinePa
     diversityScore,
     corridorThresholdKm: CORRIDOR_THRESHOLD_KM,
     methodNote:
-      "Sampled every ~50km along the route; distance-to-nearest-cable measured against real TeleGeography-derived cable vertices (nearest stored vertex, not exact segment geometry -- see cableProximityIndex.ts).",
+      "Sampled every ~50km along the route; distance measured by true point-to-segment distance against real TeleGeography-derived cable geometry. Indicates physical corridor diversity only -- it is not a failure-probability estimate, and it does not account for the anthropogenic hazards (fishing gear, anchoring) that dominate real cable faults.",
   };
 }

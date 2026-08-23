@@ -84,6 +84,31 @@ export interface RoutingProfile {
   ) => number;
 }
 
+// --- Corridor-diversity weighting (MODELED) ---
+//
+// A previous version expressed this as
+//   `Math.min(1.2, Math.max(0.7, 1.15 - nearestCableKm / 1700))`
+// with a comment claiming "30% discount beyond 500km, 20% penalty within
+// 50km". Neither figure matched the arithmetic (500km actually gave ~14%,
+// 50km ~12%), and the 1.2 upper clamp was unreachable dead code since the
+// expression's maximum is 1.15. The constants below reproduce the ORIGINAL
+// behaviour exactly -- a linear ramp from 1.15 at zero separation down to
+// 0.70 at 765km, flat thereafter -- restated as named values so the code is
+// self-describing. No new coefficient has been introduced, because there is
+// no evidence base that would justify choosing a different one.
+/** Cost multiplier applied at zero separation from an existing cable: shadowing an existing corridor is discouraged. */
+const CORRIDOR_SHADOW_FACTOR = 1.15;
+/** Cost multiplier applied at or beyond DIVERSITY_SATURATION_KM: full diversity reward. */
+const DIVERSITY_REWARD_FACTOR = 0.7;
+/** Separation at which the diversity reward saturates. */
+const DIVERSITY_SATURATION_KM = 765;
+
+/** Linear ramp CORRIDOR_SHADOW_FACTOR -> DIVERSITY_REWARD_FACTOR over 0..DIVERSITY_SATURATION_KM, constant outside that range. */
+export function corridorDiversityFactor(nearestCableKm: number): number {
+  const t = Math.min(1, Math.max(0, nearestCableKm / DIVERSITY_SATURATION_KM));
+  return CORRIDOR_SHADOW_FACTOR + t * (DIVERSITY_REWARD_FACTOR - CORRIDOR_SHADOW_FACTOR);
+}
+
 export const ROUTING_PROFILES: RoutingProfile[] = [
   {
     id: "shortest",
@@ -109,10 +134,11 @@ export const ROUTING_PROFILES: RoutingProfile[] = [
       "Minimizes marine distance weighted by depth difficulty AND a modeled bonus for staying away from existing real cable corridors (physical route diversity) -- see cableProximityIndex.ts.",
     edgeCost: (_grid, idx, flat, flng, tlat, tlng, toBand) => {
       const base = haversineKm(flat, flng, tlat, tlng) * depthDifficultyMultiplier(toBand);
-      const nearestCableKm = nearestCableDistanceKm(idx, tlat, tlng, 3);
-      // Modeled: distance >= 500km from any existing cable -> up to a 30% cost discount (encourages diversity); distance <= 50km -> up to a 20% penalty (discourages hugging an existing corridor).
-      const diversityFactor = Math.min(1.2, Math.max(0.7, 1.15 - nearestCableKm / 1700));
-      return base * diversityFactor;
+      // 4 rings at the index's 2-degree buckets covers ~890km, past
+      // DIVERSITY_SATURATION_KM -- beyond saturation every distance yields the
+      // same factor, so searching farther cannot change the edge cost.
+      const nearestCableKm = nearestCableDistanceKm(idx, tlat, tlng, 4);
+      return base * corridorDiversityFactor(nearestCableKm);
     },
   },
 ];
@@ -257,7 +283,13 @@ export interface CandidateGeometry {
 }
 
 let cachedCableIndex: { cables: CableFeature[]; index: CableProximityIndex } | null = null;
-function getCableProximityIndex(cables: CableFeature[]): CableProximityIndex {
+/**
+ * Shared, memoized cable-proximity index. Exported because the resilience
+ * pass needs the SAME instance the A* search used: building it is the single
+ * most expensive step in a routing run, and sharing it also shares its query
+ * cache between pathfinding and scoring.
+ */
+export function getCableProximityIndex(cables: CableFeature[]): CableProximityIndex {
   if (cachedCableIndex?.cables === cables) return cachedCableIndex.index;
   const index = buildCableProximityIndex(cables);
   cachedCableIndex = { cables, index };

@@ -35,7 +35,7 @@
 // exterior must contain the point; the point must NOT be contained by any
 // later ring in the same polygon). No dependency added for this -- same
 // hand-rolled-geometry convention as cableNetwork.ts/connectivityAnalysis.ts.
-import { readFileSync, writeFileSync, readdirSync } from "fs";
+import { readFileSync, writeFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 
@@ -280,7 +280,10 @@ rasterize(landPolys, (row, col) => {
 console.log(`  land mask: ${landPolys.length} polygons, cleared ${landCells} previously-classified cells`);
 
 let oceanCells = 0, landOrUnknown = 0;
-for (let i = 0; i < grid.length; i++) (grid[i] > 0 ? oceanCells++ : landOrUnknown++);
+for (let i = 0; i < grid.length; i++) {
+  if (grid[i] > 0) oceanCells++;
+  else landOrUnknown++;
+}
 console.log(`Grid complete: ${oceanCells} ocean cells, ${landOrUnknown} land/unclassified cells`);
 
 const output = {
