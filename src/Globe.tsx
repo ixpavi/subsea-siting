@@ -54,6 +54,12 @@ const ROUTE_COLORS: Record<RoutingProfileId, string> = {
 /** Bright, high-contrast override for whichever candidate is currently selected -- distinct from every ROUTE_COLORS entry and from every real-cable color in the dataset, so "the proposed route" reads as a completely different kind of object, not just another colored line among hundreds. */
 const SELECTED_ROUTE_COLOR = "#ffffff";
 
+// Self-hosted rather than pulled from a CDN, so the globe is not one unpkg
+// outage away from a black sphere. Built by scripts/build-earth-texture.py
+// from NASA Blue Marble Next Generation (public domain).
+const EARTH_TEXTURE_SMALL = "/textures/earth-2k.jpg";
+const EARTH_TEXTURE_FULL = "/textures/earth-8k.jpg";
+
 type ArcDatum =
   | { kind: "connector"; startLat: number; startLng: number; endLat: number; endLng: number; label: string }
   | { kind: "planning"; startLat: number; startLng: number; endLat: number; endLng: number; label: string };
@@ -235,6 +241,69 @@ const Globe = forwardRef<GlobeApi, Props>(function Globe(
     if (!g) return;
     g.controls().autoRotate = rotating;
   }, [rotating]);
+
+  // --- Earth texture: load small first, swap to 8K when it arrives ----------
+  // The 8K texture is 4.2 MB. Making first paint wait on it would leave the
+  // screen empty for seconds on a slow connection, so the 0.3 MB version is
+  // shown immediately and replaced once the large one has actually decoded.
+  // Assigning the URL directly would blank the globe mid-load instead.
+  const [earthTextureUrl, setEarthTextureUrl] = useState(EARTH_TEXTURE_SMALL);
+  useEffect(() => {
+    let cancelled = false;
+    const img = new Image();
+    img.onload = () => {
+      if (!cancelled) setEarthTextureUrl(EARTH_TEXTURE_FULL);
+    };
+    // On failure the small texture simply stays. A missing high-res file
+    // should degrade the globe's sharpness, never leave it black.
+    img.src = EARTH_TEXTURE_FULL;
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Anisotropic filtering, applied whenever the texture changes.
+  //
+  // This matters more than the resolution bump. A globe is nearly always
+  // viewed at a grazing angle away from the point facing the camera, and
+  // three.js defaults to anisotropy 1, which forces the GPU to pick an
+  // over-blurred mip level for exactly those foreshortened areas. The result
+  // is that most of the visible Earth is soft no matter how large the texture
+  // is. Raising it to the hardware maximum costs nothing at these sizes and
+  // is the single biggest visible improvement when zoomed in.
+  useEffect(() => {
+    const g = globeRef.current;
+    if (!g) return;
+    // three-globe exposes globeMaterial as a PROP, not a method, so the
+    // material is reached by walking the scene instead. The texture is also
+    // created asynchronously after the URL prop changes, so poll briefly
+    // rather than assume it already exists.
+    type Tex = { anisotropy: number; needsUpdate: boolean };
+    type Textured = { material?: { map?: Tex } | { map?: Tex }[] };
+    let tries = 0;
+    const id = window.setInterval(() => {
+      const max = g.renderer()?.capabilities?.getMaxAnisotropy?.() ?? 1;
+      if (max <= 1) {
+        window.clearInterval(id);
+        return;
+      }
+      let applied = false;
+      g.scene()?.traverse((obj: unknown) => {
+        const mats = (obj as Textured).material;
+        if (!mats) return;
+        for (const m of Array.isArray(mats) ? mats : [mats]) {
+          const map = m?.map;
+          if (map && typeof map.anisotropy === "number" && map.anisotropy < max) {
+            map.anisotropy = max;
+            map.needsUpdate = true;
+            applied = true;
+          }
+        }
+      });
+      if (applied || ++tries > 40) window.clearInterval(id);
+    }, 100);
+    return () => window.clearInterval(id);
+  }, [earthTextureUrl]);
 
   // Cables/landing points the real-data connectivity analysis found relevant
   // -- used purely to emphasize/de-emphasize existing rendering, never to
@@ -673,7 +742,7 @@ const Globe = forwardRef<GlobeApi, Props>(function Globe(
       ref={globeRef}
       width={dims.width}
       height={dims.height}
-      globeImageUrl="//unpkg.com/three-globe/example/img/earth-blue-marble.jpg"
+      globeImageUrl={earthTextureUrl}
       bumpImageUrl="//unpkg.com/three-globe/example/img/earth-topology.png"
       backgroundImageUrl="//unpkg.com/three-globe/example/img/night-sky.png"
       showAtmosphere

@@ -90,6 +90,14 @@ export function useHypotheticalRoute(input: UseHypotheticalRouteInput): { status
       lastRequestId.current = requestId;
       setStatus("loading");
       setError(null);
+      // Drop the previous route BEFORE the new search starts. Without this the
+      // last result stays in state for the whole 15-25 s the worker runs, so
+      // the globe keeps drawing the route between the PREVIOUS pair of cities
+      // while the panel says it is routing the new one -- geometry presented as
+      // current that belongs to somewhere else entirely. Showing nothing is
+      // correct here; showing stale geometry is a false claim about where a
+      // cable would go.
+      setResult(null);
 
       const req: RoutingRequest = {
         requestId,

@@ -14,6 +14,7 @@ import type { DesignResult, LocationRequirement } from "./design/designTypes";
 import { analyzeConnectivity } from "./design/connectivityAnalysis";
 import type { RouteEngineResult, RoutingProfileId } from "./routing/routingTypes";
 import { buildCableNetworkIndex, getCableDetail } from "./cableNetwork";
+import { frameForPoints, sphericalCentroid, angularDistanceDeg } from "./cameraFraming";
 import type { NetworkSelection } from "./cableNetwork";
 import type { CableHitCandidate } from "./cableHitTest";
 import type { CableFeature, LandDC, SubseaDC, LandingPoint, LayerToggles, Selection } from "./types";
@@ -23,16 +24,6 @@ async function fetchJSON<T>(path: string): Promise<T> {
   const res = await fetch(path);
   if (!res.ok) throw new Error(`Failed to load ${path}: ${res.status}`);
   return res.json();
-}
-
-/** Approximate great-circle angular distance in degrees -- used only to size the camera framing, not for any engineering calculation. */
-function angularDistanceDeg(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const dLat = toRad(lat2 - lat1);
-  const dLng = toRad(lng2 - lng1);
-  const a =
-    Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
-  return (2 * Math.asin(Math.sqrt(a)) * 180) / Math.PI;
 }
 
 export default function App() {
@@ -90,11 +81,17 @@ export default function App() {
     const hasLoc = loc?.lat != null && loc.lng != null;
     const hasDest = dest?.lat != null && dest.lng != null;
     if (hasLoc && hasDest) {
-      const midLat = (loc!.lat! + dest!.lat!) / 2;
-      const midLng = (loc!.lng! + dest!.lng!) / 2;
+      // Same antimeridian trap as focusOnPoints: averaging the two longitudes
+      // sends a Tokyo-Los Angeles plan to the Atlantic. Centre comes from the
+      // vector mean; the altitude tuning here is deliberately wider than
+      // frameForPoints' so both endpoints sit comfortably in view.
+      const centre = sphericalCentroid([
+        [loc!.lat!, loc!.lng!],
+        [dest!.lat!, dest!.lng!],
+      ]);
       const dist = angularDistanceDeg(loc!.lat!, loc!.lng!, dest!.lat!, dest!.lng!);
       const altitude = Math.min(3.2, Math.max(1.8, dist / 16));
-      api.flyTo(midLat, midLng, altitude);
+      if (centre) api.flyTo(centre.lat, centre.lng, altitude);
     } else if (hasLoc) {
       api.flyTo(loc!.lat!, loc!.lng!, 1.3);
     } else if (hasDest) {
@@ -107,25 +104,16 @@ export default function App() {
   // explore-mode highlighting (see cableNetwork.ts).
   const cableNetworkIndex = useMemo(() => buildCableNetworkIndex(cables, landingPoints), [cables, landingPoints]);
 
-  /** Frames the camera on a route's full stored geometry -- generous enough that the route doesn't disappear around the globe's curve, without zooming so far out the highlight is imperceptible. */
+  /** Frames the camera on a route's full stored geometry -- generous enough that
+   *  the route doesn't disappear around the globe's curve, without zooming so far
+   *  out the highlight is imperceptible. Geometry lives in cameraFraming.ts so
+   *  the antimeridian handling is directly testable. */
   function focusOnPoints(points: [number, number][]) {
     const api = globeApiRef.current;
-    if (!api || points.length === 0) return;
-    let minLat = 90,
-      maxLat = -90,
-      minLng = 180,
-      maxLng = -180;
-    for (const [lat, lng] of points) {
-      minLat = Math.min(minLat, lat);
-      maxLat = Math.max(maxLat, lat);
-      minLng = Math.min(minLng, lng);
-      maxLng = Math.max(maxLng, lng);
-    }
-    const centerLat = (minLat + maxLat) / 2;
-    const centerLng = (minLng + maxLng) / 2;
-    const span = angularDistanceDeg(minLat, minLng, maxLat, maxLng);
-    const altitude = Math.min(3.4, Math.max(1.1, span / 45));
-    api.flyTo(centerLat, centerLng, altitude);
+    if (!api) return;
+    const framing = frameForPoints(points);
+    if (!framing) return;
+    api.flyTo(framing.lat, framing.lng, framing.altitude);
   }
 
   function handleSelectNetworkItem(sel: NetworkSelection) {
