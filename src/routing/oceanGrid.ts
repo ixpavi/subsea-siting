@@ -19,6 +19,19 @@
 // This is a disclosed modeling limitation, not a bug; a real canal-aware
 // routing engine would need explicit canal waypoints injected into the
 // graph, which is out of scope here.
+//
+// NARROW NATURAL STRAITS ARE CORRECTED AT BUILD TIME. A 0.5 deg cell is
+// 56 km across, so a strait narrower than that can rasterize to solid land.
+// The Strait of Gibraltar is 14 km wide and did exactly that, sealing the
+// Mediterranean into an isolated basin: routes between it and any other
+// ocean returned "no marine path could be found", and 282 of 1,920 real
+// landing points (14.7%) were unreachable. build-ocean-grid.mjs now forces
+// a small, enumerated set of named natural straits to water, which brings
+// that to 4 -- the two Suez-side points and the two Caspian points, both
+// correctly isolated. The corrections are listed in the shipped grid's
+// `straitCorrections` field and are natural straits ONLY; artificial canals
+// stay closed, which is what makes the "around Africa" behaviour above
+// genuinely true rather than a route that simply fails.
 
 export interface DepthBand {
   index: number;

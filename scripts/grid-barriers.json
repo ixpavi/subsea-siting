@@ -1,0 +1,79 @@
+{
+  "generatedAt": "2026-08-23T21:10:20.752Z",
+  "cellKm": 55.66,
+  "barriers": [
+    {
+      "component": 12,
+      "landingPoints": 14,
+      "gapCells": 1,
+      "approxKm": 55.66,
+      "nearLat": 40.75,
+      "nearLng": 27.75,
+      "examples": [
+        "Ilyich, Russia",
+        "Kerch, Ukraine",
+        "Poti, Georgia"
+      ]
+    },
+    {
+      "component": 5,
+      "landingPoints": 3,
+      "gapCells": 1,
+      "approxKm": 55.66,
+      "nearLat": 28.75,
+      "nearLng": 34.75,
+      "examples": [
+        "Taba, Egypt",
+        "Aqaba, Jordan",
+        "Haql, Saudi Arabia"
+      ]
+    },
+    {
+      "component": 13,
+      "landingPoints": 2,
+      "gapCells": 1,
+      "approxKm": 55.66,
+      "nearLat": 61.25,
+      "nearLng": -150.75,
+      "examples": [
+        "McHugh Point, AK, United States",
+        "Anchorage, AK, United States"
+      ]
+    },
+    {
+      "component": 6,
+      "landingPoints": 2,
+      "gapCells": 1,
+      "approxKm": 55.66,
+      "nearLat": 29.25,
+      "nearLng": 32.75,
+      "examples": [
+        "Suez, Egypt",
+        "Zafarana, Egypt"
+      ]
+    },
+    {
+      "component": 10,
+      "landingPoints": 2,
+      "gapCells": 13,
+      "approxKm": 723.5799999999999,
+      "nearLat": 36.75,
+      "nearLng": 51.25,
+      "examples": [
+        "Aktau, Kazakhstan",
+        "Sumgait, Azerbaijan"
+      ]
+    },
+    {
+      "component": 4,
+      "landingPoints": 1,
+      "gapCells": 1,
+      "approxKm": 55.66,
+      "nearLat": -53.75,
+      "nearLng": -70.75,
+      "examples": [
+        "Punta Arenas, Chile"
+      ]
+    }
+  ]
+}

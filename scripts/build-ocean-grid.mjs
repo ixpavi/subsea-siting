@@ -279,6 +279,85 @@ rasterize(landPolys, (row, col) => {
 });
 console.log(`  land mask: ${landPolys.length} polygons, cleared ${landCells} previously-classified cells`);
 
+// --- Narrow straits that the raster cannot represent -----------------------
+//
+// A 0.5 degree cell is 56 km across. Any strait narrower than that can close
+// completely during rasterization, and the consequences are not cosmetic: the
+// Strait of Gibraltar is 14 km wide, came out solid land, and sealed the
+// Mediterranean into an isolated basin. 189 real cable landing points --
+// Marseille, Barcelona, Genoa among them -- became unreachable from every
+// other ocean, and routes to them returned no path at all rather than a long
+// one. Measured across the whole grid, 282 of 1,920 landing points (14.7%)
+// were stranded this way. See scripts/analyse-grid-connectivity.mjs and
+// scripts/find-grid-barriers.mjs, which located these by searching for
+// one-cell gaps between water bodies rather than by guesswork.
+//
+// WHAT THIS LIST IS AND IS NOT. Every entry is a real, named, navigable
+// natural strait that genuinely connects two bodies of open ocean. Forcing
+// these cells to water corrects a known rasterization error; it does not
+// invent geography. Two categories are deliberately EXCLUDED:
+//
+//   - Artificial canals (Suez, Panama). These are man-made, the source
+//     polygons never claimed to contain them, and whether a new cable could
+//     transit one is a permitting question rather than a geographic fact.
+//     Leaving them closed keeps the engine's documented behaviour honest:
+//     routes between Europe and Asia come out around Africa, which is what
+//     the disclosure has always said and -- once Gibraltar is open -- is now
+//     actually what happens instead of failing outright.
+//
+//   - Genuinely landlocked water. The Caspian Sea sits 13 cells from open
+//     ocean and stays isolated, because it IS isolated. A rule that simply
+//     connected every stranded basin would have carved a 724 km channel
+//     through Iran.
+//
+// Depth is set to the shallowest band. These are all shallow sills (Gibraltar
+// about 300 m, Juan de Fuca about 100-200 m), so the shallowest band is the
+// honest classification and it correctly makes the router treat them as
+// nearshore rather than easy deep water.
+const NAVIGABLE_STRAITS = [
+  { name: "Strait of Gibraltar", lat: 35.95, lng: -5.6, connects: "Mediterranean <-> Atlantic" },
+  { name: "Strait of Juan de Fuca", lat: 48.35, lng: -124.2, connects: "Salish Sea <-> Pacific" },
+  { name: "Queen Charlotte Strait", lat: 50.85, lng: -127.6, connects: "Inside Passage <-> Pacific" },
+  { name: "Strait of Tiran", lat: 28.75, lng: 34.75, radius: 1, connects: "Gulf of Aqaba <-> Red Sea" },
+  { name: "Sumner Strait", lat: 56.15, lng: -133.3, connects: "SE Alaska Inside Passage <-> Pacific" },
+  { name: "Cook Inlet", lat: 60.15, lng: -152.2, connects: "Cook Inlet <-> Gulf of Alaska" },
+  { name: "Strait of Magellan (west)", lat: -52.55, lng: -74.9, connects: "Magellan <-> Pacific" },
+  { name: "Tablazo Strait", lat: 10.9, lng: -71.55, connects: "Lake Maracaibo <-> Gulf of Venezuela" },
+  { name: "Strait of Malacca", lat: 2.4, lng: 101.2, connects: "Andaman Sea <-> Strait of Singapore" },
+  { name: "Bosphorus", lat: 41.15, lng: 29.1, radius: 1, connects: "Black Sea <-> Sea of Marmara" },
+  { name: "Dardanelles", lat: 40.25, lng: 26.75, radius: 1, connects: "Sea of Marmara <-> Aegean" },
+  { name: "Kerch Strait", lat: 45.3, lng: 36.6, connects: "Sea of Azov <-> Black Sea" },
+  { name: "Cook Inlet (upper)", lat: 61.25, lng: -150.75, radius: 1, connects: "Upper Cook Inlet <-> Gulf of Alaska" },
+  { name: "Strait of Magellan (eastern narrows)", lat: -53.75, lng: -70.75, radius: 1, connects: "Magellan <-> Atlantic" },
+];
+
+// Carve radius in cells. 0 means the single cell containing the coordinate,
+// which is normally enough: the router is 8-connected, so one opened cell
+// bridges the water either side of it. Radius is only raised where the
+// connectivity check proves one cell does not join the two bodies, because
+// every extra cell is real land being called water. A blanket 3x3 would carve
+// roughly 50 km through the Gallipoli peninsula to open the Dardanelles, which
+// is a far larger claim than the correction needs to make.
+const SHALLOWEST_BAND = 1;
+let straitCells = 0;
+for (const s of NAVIGABLE_STRAITS) {
+  const row = latToRow(s.lat);
+  const col = lngToCol(s.lng);
+  const radius = s.radius ?? 0;
+  for (let dr = -radius; dr <= radius; dr++) {
+    for (let dc = -radius; dc <= radius; dc++) {
+      const r = row + dr;
+      if (r < 0 || r >= ROWS) continue;
+      const c = ((col + dc) % COLS + COLS) % COLS;
+      if (grid[r * COLS + c] === 0) {
+        grid[r * COLS + c] = SHALLOWEST_BAND;
+        straitCells++;
+      }
+    }
+  }
+}
+console.log(`  strait corrections: ${NAVIGABLE_STRAITS.length} named straits, opened ${straitCells} cells`);
+
 let oceanCells = 0, landOrUnknown = 0;
 for (let i = 0; i < grid.length; i++) {
   if (grid[i] > 0) oceanCells++;
@@ -292,7 +371,11 @@ const output = {
   cols: COLS,
   depthBands: DEPTH_BANDS.map((b, i) => ({ index: i + 1, minDepthM: b.minDepthM })),
   provenance:
-    "Land + bathymetry-contour polygons from Natural Earth v5.1.1 (bathymetry contours derived from GEBCO/ETOPO per Natural Earth's documentation), simplified and rasterized to a 0.5° grid at build time. Depth values are contour-band lower bounds, not point-precise soundings. See scripts/raw/{bathymetry,land}/SOURCE.md.",
+    "Land + bathymetry-contour polygons from Natural Earth v5.1.1 (bathymetry contours derived from GEBCO/ETOPO per Natural Earth's documentation), simplified and rasterized to a 0.5° grid at build time. Depth values are contour-band lower bounds, not point-precise soundings. Cells at the named natural straits listed in straitCorrections were forced to the shallowest depth band, because straits narrower than the 56 km cell size rasterize to land and would otherwise disconnect real oceans (Gibraltar, 14 km wide, sealed the Mediterranean). Artificial canals (Suez, Panama) are deliberately NOT opened. See scripts/raw/{bathymetry,land}/SOURCE.md.",
+  // Named, real, navigable natural straits whose cells were forced to water.
+  // Listed explicitly so this correction is auditable rather than an
+  // unexplained difference between the source polygons and the shipped grid.
+  straitCorrections: NAVIGABLE_STRAITS,
   // flat row-major array, row 0 = -90..-89.5 lat, col 0 = -180..-179.5 lng
   data: Array.from(grid),
 };

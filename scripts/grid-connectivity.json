@@ -1,0 +1,36 @@
+{
+  "generatedAt": "2026-08-23T21:12:17.545Z",
+  "grid": {
+    "rows": 360,
+    "cols": 720,
+    "resolutionDeg": 0.5
+  },
+  "waterBodies": 31,
+  "mainComponentCells": 172672,
+  "strandedLandingPoints": 4,
+  "groups": [
+    {
+      "component": 0,
+      "isMain": true,
+      "count": 1860
+    },
+    {
+      "component": 4,
+      "isMain": false,
+      "count": 2,
+      "names": [
+        "Suez, Egypt",
+        "Zafarana, Egypt"
+      ]
+    },
+    {
+      "component": 8,
+      "isMain": false,
+      "count": 2,
+      "names": [
+        "Aktau, Kazakhstan",
+        "Sumgait, Azerbaijan"
+      ]
+    }
+  ]
+}
