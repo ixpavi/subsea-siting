@@ -85,9 +85,16 @@ function CableView({
         </div>
       </div>
 
+      {/* Stating what the source does NOT contain, so a blank space is never
+          mistaken for "this cable has no owner" or for a loading failure. The
+          public submarinecablemap.com export carries only id, name, colour and
+          geometry -- verified against scripts/raw/cable-geo.json. */}
       <div className="ni-section">
-        <span className="ni-label">Unavailable in this dataset</span>
-        <div className="ni-unavailable-fields">Capacity, owners, RFS date, suppliers, status, cost</div>
+        <span className="ni-label">Not published in this dataset</span>
+        <div className="ni-unavailable-fields">
+          Capacity, owners, RFS date, suppliers, status and cost are not part of the public TeleGeography export, which
+          provides cable naming and route geometry only. These are missing from the source, not from this app.
+        </div>
       </div>
 
       <p className="ni-source">Source: TeleGeography-derived dataset (submarinecablemap.com).</p>
