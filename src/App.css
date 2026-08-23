@@ -23,21 +23,61 @@ html, body, #root {
   left: 0;
   right: 0;
   z-index: 10;
-  padding: 14px 20px;
+  padding: 14px 18px;
   background: linear-gradient(to bottom, rgba(5, 7, 13, 0.85), transparent);
   pointer-events: none;
 }
 
 .title-bar h1 {
-  margin: 0 0 4px;
-  font-size: 18px;
-  font-weight: 600;
+  margin: 0 0 2px;
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(231, 237, 245, 0.85);
 }
 
 .title-bar p {
   margin: 0;
+  font-size: 10.5px;
+  font-family: ui-monospace, "JetBrains Mono", "SFMono-Regular", Menlo, monospace;
+  letter-spacing: 0.01em;
+  opacity: 0.5;
+}
+
+/* Single toolbar cluster, right-aligned -- replaces a scatter of
+   independently absolute-positioned buttons at hand-tuned right:Npx
+   offsets. Buttons are ordinary flex children; the row grows/shrinks from
+   one place instead of every button needing its neighbor's width. */
+.top-toolbar {
+  position: absolute;
+  top: 14px;
+  right: 18px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.toolbar-btn {
+  background: rgba(11, 18, 32, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #e7edf5;
+  border-radius: 6px;
+  padding: 6px 11px;
   font-size: 12px;
-  opacity: 0.7;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  white-space: nowrap;
+}
+.toolbar-btn:hover {
+  background: rgba(20, 30, 50, 0.92);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+.toolbar-btn.active {
+  border-color: rgba(79, 209, 255, 0.6);
+  color: #4fd1ff;
+  background: rgba(79, 209, 255, 0.08);
 }
 
 /* three-globe's own tooltip wrapper -- restyle to match our dark theme */
@@ -66,23 +106,21 @@ html, body, #root {
   font-size: 10.5px;
 }
 
-.rotate-toggle {
-  position: absolute;
-  top: 66px;
-  right: 20px;
-  z-index: 20;
-  background: rgba(11, 18, 32, 0.88);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  color: #e7edf5;
-  border-radius: 8px;
-  padding: 7px 12px;
-  font-size: 12.5px;
+.design-launch-btn {
+  background: rgba(79, 209, 255, 0.1);
+  border: 1px solid rgba(79, 209, 255, 0.45);
+  color: #4fd1ff;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
   cursor: pointer;
   backdrop-filter: blur(6px);
+  white-space: nowrap;
 }
-.rotate-toggle:hover {
-  background: rgba(20, 30, 50, 0.92);
-  border-color: rgba(255, 255, 255, 0.3);
+.design-launch-btn:hover {
+  background: rgba(79, 209, 255, 0.18);
+  border-color: rgba(79, 209, 255, 0.75);
 }
 
 .detail-title {
@@ -104,29 +142,76 @@ html, body, #root {
   color: #f87171;
 }
 
+/* Every floating panel shares this shell: a fixed (non-scrolling) header
+   that holds the title and CloseButton, and a separate .panel-body that
+   scrolls independently. This split is the structural fix for the
+   close-button hitbox bug -- see CloseButton.tsx for why the button must
+   never share a scrolling ancestor with position:absolute anchoring. */
 .panel {
   position: absolute;
   z-index: 20;
-  background: rgba(11, 18, 32, 0.88);
+  display: flex;
+  flex-direction: column;
+  background: rgba(11, 18, 32, 0.92);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 10px;
-  padding: 14px 16px;
   backdrop-filter: blur(6px);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
 }
 
-.panel h2 {
-  margin: 0 0 10px;
-  font-size: 13px;
+.panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 8px 8px 16px;
+  flex: none;
+}
+
+.panel-header h2,
+.ni-kicker {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  opacity: 0.75;
+  letter-spacing: 0.07em;
+  color: rgba(231, 237, 245, 0.6);
 }
 
-.legend {
+.panel-body {
+  padding: 0 16px 16px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+/* Compact toggle + transient popover -- replaces the old always-visible
+   "Layers" dashboard card. The button is the only permanent footprint. */
+.legend-root {
+  position: absolute;
   bottom: 20px;
   left: 20px;
-  width: 260px;
+  z-index: 20;
+}
+
+.legend-toggle {
+  display: block;
+}
+
+.legend-popover {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  width: 240px;
+  max-height: min(360px, calc(100vh - 160px));
+}
+
+.legend-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: 4px;
 }
 
 .legend-row {
@@ -134,7 +219,7 @@ html, body, #root {
   align-items: center;
   gap: 8px;
   padding: 5px 0;
-  font-size: 13px;
+  font-size: 12.5px;
   cursor: pointer;
 }
 
@@ -143,8 +228,8 @@ html, body, #root {
 }
 
 .swatch {
-  width: 11px;
-  height: 11px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   flex: none;
 }
@@ -152,6 +237,7 @@ html, body, #root {
 .swatch-cable { background: #4fd1ff; }
 .swatch-land { background: #5eead4; }
 .swatch-subsea { background: #fb923c; }
+.swatch-landingpoint { background: #94a3b8; }
 .swatch-connector {
   background: transparent;
   border-radius: 2px;
@@ -160,14 +246,13 @@ html, body, #root {
 }
 
 .legend-label { flex: 1; }
-.legend-count { opacity: 0.5; font-size: 11px; }
+.legend-count { opacity: 0.5; font-size: 10.5px; }
 
 .detail {
   top: 112px;
   right: 20px;
   width: 340px;
   max-height: calc(100vh - 140px);
-  overflow-y: auto;
 }
 
 .detail-section-label {
@@ -184,18 +269,33 @@ html, body, #root {
   margin-bottom: 8px;
 }
 
+/* Fixed hit area, icon centered by flex (not text-baseline) -- see
+   CloseButton.tsx for the full rationale. Never position:absolute. */
 .close-btn {
-  position: absolute;
-  top: 10px;
-  right: 12px;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: none;
   border: none;
+  border-radius: 6px;
+  padding: 0;
   color: #e7edf5;
-  font-size: 18px;
+  opacity: 0.55;
   cursor: pointer;
-  opacity: 0.6;
 }
-.close-btn:hover { opacity: 1; }
+.close-btn:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.08);
+}
+.close-btn svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+  pointer-events: none;
+}
 
 .detail-row {
   display: flex;

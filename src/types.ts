@@ -46,6 +46,8 @@ export interface LayerToggles {
   landDCs: boolean;
   subseaDCs: boolean;
   connectors: boolean;
+  /** Real cable landing points -- explore mode only (see Globe.tsx's explorePointsData). */
+  landingPoints: boolean;
 }
 
 export type Selection = { kind: "land"; data: LandDC } | { kind: "subsea"; data: SubseaDC };

@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:data": "node scripts/build-data.mjs",
+    "build:ocean-grid": "node scripts/build-ocean-grid.mjs",
     "lint": "oxlint",
     "preview": "vite preview"
   },

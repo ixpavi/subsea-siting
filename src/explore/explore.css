@@ -1,0 +1,330 @@
+/* Explore-mode cable explorer: search, directory, and inspector. Compact,
+   information-dense, self-contained (no dependency on design.css's tokens)
+   so this module works independently of Planning Mode. Positioned to keep
+   the globe dominant -- small panels, no full-height takeover. */
+
+.ex-mono {
+  font-family: ui-monospace, "JetBrains Mono", "SFMono-Regular", Menlo, monospace;
+}
+
+.ex-real-badge,
+.ni-real-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #86efac;
+  background: rgba(34, 197, 94, 0.12);
+  border: 1px solid rgba(74, 222, 128, 0.3);
+  border-radius: 4px;
+  padding: 2px 6px;
+  margin-bottom: 8px;
+}
+
+/* --- Global search --- */
+
+.network-search {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 22;
+  width: min(300px, 36vw);
+}
+
+.network-search-icon {
+  position: absolute;
+  top: 50%;
+  left: 10px;
+  transform: translateY(-50%);
+  width: 13px;
+  height: 13px;
+  color: rgba(231, 237, 245, 0.4);
+  pointer-events: none;
+}
+
+.network-search-input {
+  width: 100%;
+  box-sizing: border-box;
+  background: rgba(11, 18, 32, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #e7edf5;
+  border-radius: 6px;
+  padding: 6px 10px 6px 30px;
+  font-size: 12px;
+  backdrop-filter: blur(6px);
+}
+.network-search-input:focus {
+  outline: none;
+  border-color: rgba(79, 209, 255, 0.5);
+  background: rgba(11, 18, 32, 0.95);
+}
+.network-search-input::placeholder {
+  color: rgba(231, 237, 245, 0.4);
+}
+
+.network-search-results {
+  margin-top: 4px;
+  background: rgba(11, 18, 32, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.network-search-group-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(231, 237, 245, 0.5);
+  padding: 8px 12px 2px;
+}
+
+.network-search-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  color: #e7edf5;
+  padding: 6px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.network-search-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.network-search-item-swatch {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.network-search-item-swatch-lp {
+  background: #94a3b8;
+}
+
+.network-search-item-name {
+  display: block;
+}
+.network-search-item-id {
+  display: block;
+  font-size: 10px;
+  opacity: 0.55;
+}
+
+.network-search-empty {
+  padding: 10px 12px;
+  font-size: 11.5px;
+  opacity: 0.6;
+}
+
+/* --- Cable directory panel --- */
+
+.cable-directory {
+  top: 112px;
+  left: 20px;
+  width: 300px;
+  max-height: calc(100vh - 140px);
+  z-index: 25;
+}
+
+.cable-directory-count {
+  font-size: 10.5px;
+  opacity: 0.5;
+  margin-top: 2px;
+}
+
+.cable-directory-toolbar {
+  flex: none;
+  padding: 0 16px 10px;
+}
+
+.cable-directory-filter {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #e7edf5;
+  border-radius: 6px;
+  padding: 6px 9px;
+  font-size: 12px;
+  box-sizing: border-box;
+}
+.cable-directory-filter:focus {
+  outline: none;
+  border-color: rgba(79, 209, 255, 0.5);
+}
+
+.cable-directory-list {
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  padding: 0 16px 16px;
+}
+
+.cable-directory-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  color: #e7edf5;
+  padding: 7px 0;
+  font-size: 12px;
+  cursor: pointer;
+}
+.cable-directory-row:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.cable-directory-swatch {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.cable-directory-row-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.cable-directory-row-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cable-directory-row-id {
+  font-size: 10px;
+  opacity: 0.55;
+}
+
+/* --- Ambiguous cable-click chooser --- */
+
+.cable-chooser {
+  top: 112px;
+  left: 20px;
+  width: 280px;
+  max-height: calc(100vh - 140px);
+  z-index: 26;
+}
+
+.cable-chooser-list {
+  display: flex;
+  flex-direction: column;
+}
+
+/* --- Network inspector (selected cable / landing point) --- */
+
+.ni-panel {
+  top: 112px;
+  left: 20px;
+  width: 300px;
+  max-height: calc(100vh - 140px);
+  z-index: 25;
+}
+
+.ni-title {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+
+.ni-id {
+  font-size: 11px;
+  opacity: 0.55;
+  margin-bottom: 12px;
+}
+
+.ni-section {
+  margin-bottom: 12px;
+}
+
+.ni-label {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: rgba(231, 237, 245, 0.6);
+  margin-bottom: 4px;
+}
+
+.ni-route {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.ni-route-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ni-route-arrow {
+  opacity: 0.4;
+}
+
+.ni-link {
+  background: none;
+  border: none;
+  color: #7dd3fc;
+  font-size: 12px;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: rgba(125, 211, 252, 0.35);
+}
+.ni-link:hover {
+  text-decoration-color: #7dd3fc;
+}
+
+.ni-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.ni-chip {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #e7edf5;
+  border-radius: 4px;
+  padding: 3px 7px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.ni-chip:hover {
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.ni-unavailable {
+  font-size: 11px;
+  opacity: 0.55;
+  font-style: italic;
+  margin: 0;
+}
+
+.ni-unavailable-fields {
+  font-size: 10.5px;
+  opacity: 0.45;
+  font-style: italic;
+}
+
+.ni-source {
+  font-size: 10.5px;
+  opacity: 0.5;
+  margin: 14px 0 0;
+}

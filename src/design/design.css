@@ -1,0 +1,1296 @@
+/* Planning-mode side panel -- dark technical console aesthetic, deliberately
+   distinct from calculator.css's purple/pill treatment (see project notes on
+   reconciling that separately). Small radii, restrained motion, monospace
+   for engineering values, dashed rectangle for modeled data. The globe stays
+   visible and interactive at all times -- this is a docked panel, not a modal. */
+
+:root {
+  --dc-bg-panel: #0a0e18;
+  --dc-bg-inset: rgba(255, 255, 255, 0.03);
+  --dc-bg-inset-strong: rgba(255, 255, 255, 0.06);
+  --dc-border: rgba(255, 255, 255, 0.1);
+  --dc-border-strong: rgba(255, 255, 255, 0.22);
+  --dc-text: #e7edf5;
+  --dc-text-dim: rgba(231, 237, 245, 0.62);
+  --dc-accent: #4fd1ff;
+  --dc-modeled-border: rgba(148, 163, 184, 0.55);
+  --dc-modeled-text: #cbd5e1;
+  --dc-good: #86efac;
+  --dc-warn: #fdba74;
+  --dc-font-mono: ui-monospace, "JetBrains Mono", "SFMono-Regular", Menlo, monospace;
+  --dc-radius-sm: 4px;
+  --dc-radius-md: 6px;
+}
+
+.dc-mono {
+  font-family: var(--dc-font-mono);
+}
+
+.dc-modeled-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dc-modeled-text);
+  background: transparent;
+  border: 1px dashed var(--dc-modeled-border);
+  border-radius: var(--dc-radius-sm);
+  padding: 3px 7px;
+  margin-bottom: 8px;
+}
+
+/* --- Docked side panel shell --- */
+
+.pp-shell {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 25;
+  width: min(420px, 38vw);
+  min-width: 320px;
+  background: var(--dc-bg-panel);
+  border-left: 1px solid var(--dc-border-strong);
+  color: var(--dc-text);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: -12px 0 40px rgba(0, 0, 0, 0.45);
+  animation: pp-slide-in 200ms ease-out;
+}
+
+@keyframes pp-slide-in {
+  from { transform: translateX(24px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+.pp-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 14px 18px 10px;
+  border-bottom: 1px solid var(--dc-border);
+  flex: none;
+}
+
+.pp-header h1 {
+  margin: 2px 0 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/* Compact horizontal step indicator -- dense dots, not a giant SaaS tracker */
+
+.pp-steps {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 18px 0;
+  flex: none;
+}
+
+.pp-step-dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid var(--dc-border);
+  background: var(--dc-bg-inset);
+  color: var(--dc-text-dim);
+  font-size: 10px;
+  font-family: var(--dc-font-mono);
+  cursor: pointer;
+  flex: none;
+}
+.pp-step-dot:disabled { cursor: default; opacity: 0.35; }
+.pp-step-dot.done {
+  border-color: var(--dc-accent);
+  color: var(--dc-accent);
+}
+.pp-step-dot.active {
+  background: var(--dc-accent);
+  border-color: var(--dc-accent);
+  color: #04121a;
+  font-weight: 700;
+}
+.pp-steps::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--dc-border);
+  margin-left: 2px;
+}
+
+.pp-step-caption-inline {
+  margin-left: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--dc-text-dim);
+  white-space: nowrap;
+}
+
+/* --- Pipeline rail: the full 10-stage workflow, always visible so the
+   shape of the analysis is clear even before every stage is built.
+   Implemented stages are interactive once reached; unimplemented ones
+   render as muted, dashed "planned" chips -- never clickable, never
+   carrying real data. --- */
+
+.pp-rail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 10px 18px 0;
+  flex: none;
+}
+
+.pp-rail-chip {
+  font-family: var(--dc-font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.01em;
+  padding: 3px 7px;
+  border-radius: var(--dc-radius-sm);
+  border: 1px solid var(--dc-border);
+  background: var(--dc-bg-inset);
+  color: var(--dc-text-dim);
+  cursor: default;
+  white-space: nowrap;
+}
+
+.pp-rail-chip.done {
+  border-color: rgba(79, 209, 255, 0.4);
+  color: var(--dc-accent);
+  cursor: pointer;
+}
+
+.pp-rail-chip.current {
+  background: var(--dc-accent);
+  border-color: var(--dc-accent);
+  color: #04121a;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.pp-rail-chip.planned {
+  border-style: dashed;
+  border-color: var(--dc-modeled-border);
+  color: var(--dc-modeled-text);
+  opacity: 0.55;
+}
+
+.pp-content {
+  padding: 14px 18px 24px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.design-subsection-title {
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.7;
+  margin: 18px 0 8px;
+  font-weight: 600;
+}
+
+/* Distinct-section headers used inside a step (Proposed Site / Existing
+   Connectivity / Data Centre Design / Resilience / Economics / Recommendation) */
+.pp-section-title {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--dc-border);
+}
+
+.pp-section-title-spaced {
+  margin-top: 20px;
+}
+
+/* Lead decision card -- the answer, shown first and compact, not buried
+   under environmental efficiency metrics. */
+.pp-decision-card {
+  border: 1px solid var(--dc-accent);
+  border-radius: var(--dc-radius-md);
+  padding: 14px 16px;
+  margin: 10px 0 6px;
+  background: rgba(79, 209, 255, 0.05);
+}
+
+.pp-decision-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dc-accent);
+  margin-bottom: 6px;
+}
+
+.pp-decision-site {
+  font-size: 13px;
+  color: var(--dc-text-dim);
+  margin-bottom: 6px;
+}
+
+.pp-decision-availability {
+  font-size: 11.5px;
+  color: var(--dc-text-dim);
+  margin: 8px 0 10px;
+}
+
+.pp-decision-availability-sep {
+  margin: 0 6px;
+  opacity: 0.5;
+}
+
+/* Supporting-detail cards for the distinct backing sections
+   (Data Centre Design / Resilience / Economics) */
+.pp-detail-card {
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-md);
+  padding: 10px 12px;
+  background: var(--dc-bg-inset);
+}
+
+.pp-roadmap-note {
+  margin-top: 20px;
+  padding-top: 14px;
+  border-top: 1px solid var(--dc-border);
+}
+
+.pp-roadmap-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.pp-roadmap-chip {
+  margin-bottom: 0;
+}
+
+.pp-roadmap-inline {
+  font-style: italic;
+  color: var(--dc-modeled-text);
+}
+
+.pp-result-title {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  margin: 4px 0 2px;
+}
+
+.pp-result-location {
+  font-size: 12.5px;
+  color: var(--dc-text-dim);
+  margin-bottom: 10px;
+}
+
+.pp-why {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--dc-text-dim);
+  margin: 0;
+}
+
+.design-step-intro {
+  font-size: 11.5px;
+  color: var(--dc-text-dim);
+  margin: 0 0 14px;
+  line-height: 1.5;
+}
+
+.design-field-group {
+  margin-bottom: 16px;
+}
+
+.design-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--dc-text-dim);
+  margin-bottom: 6px;
+}
+
+.design-optional {
+  font-weight: 400;
+  opacity: 0.7;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+/* Segmented control (industry) */
+
+.design-segmented {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.design-segmented button {
+  background: var(--dc-bg-inset);
+  border: 1px solid var(--dc-border);
+  color: var(--dc-text);
+  border-radius: var(--dc-radius-sm);
+  padding: 6px 9px;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+.design-segmented button:hover { background: var(--dc-bg-inset-strong); }
+.design-segmented button.active {
+  border-color: var(--dc-accent);
+  background: rgba(79, 209, 255, 0.1);
+  color: var(--dc-accent);
+  font-weight: 600;
+}
+
+/* Option rows (availability, priorities) */
+
+.design-option-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.design-option-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 7px 9px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-sm);
+  cursor: pointer;
+}
+.design-option-row.active {
+  border-color: var(--dc-accent);
+  background: rgba(79, 209, 255, 0.06);
+}
+.design-option-row input {
+  margin-top: 2px;
+  accent-color: var(--dc-accent);
+}
+
+.design-option-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+}
+
+.design-option-caption {
+  font-size: 10.5px;
+  color: var(--dc-text-dim);
+}
+
+.design-number-input,
+.design-text-input {
+  background: var(--dc-bg-inset);
+  border: 1px solid var(--dc-border);
+  color: var(--dc-text);
+  border-radius: var(--dc-radius-sm);
+  padding: 7px 9px;
+  font-size: 12.5px;
+  width: 100%;
+}
+
+.design-number-input:focus,
+.design-text-input:focus {
+  outline: none;
+  border-color: var(--dc-accent);
+}
+
+.design-field-note {
+  font-size: 10.5px;
+  color: var(--dc-text-dim);
+  line-height: 1.5;
+  margin: 6px 0 0;
+}
+
+.design-disclosure-toggle {
+  background: none;
+  border: none;
+  color: var(--dc-accent);
+  font-size: 11.5px;
+  cursor: pointer;
+  padding: 4px 0;
+  margin-bottom: 6px;
+}
+
+/* --- Location search / geocoding --- */
+
+.pp-location-field {
+  position: relative;
+}
+
+.pp-resolved {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 9px;
+  background: rgba(79, 209, 255, 0.06);
+  border: 1px solid rgba(79, 209, 255, 0.3);
+  border-radius: var(--dc-radius-sm);
+}
+.pp-resolved-name {
+  font-size: 12px;
+  color: var(--dc-text);
+}
+.pp-resolved-coords {
+  font-size: 10.5px;
+  color: var(--dc-accent);
+}
+
+.pp-suggest {
+  position: absolute;
+  z-index: 5;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 3px;
+  background: #0d1220;
+  border: 1px solid var(--dc-border-strong);
+  border-radius: var(--dc-radius-sm);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.pp-suggest-status {
+  padding: 8px 10px;
+  font-size: 11px;
+  color: var(--dc-text-dim);
+}
+.pp-suggest-error { color: #fca5a5; }
+
+.pp-suggest-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--dc-border);
+  color: var(--dc-text);
+  font-size: 12px;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+.pp-suggest-item:last-child { border-bottom: none; }
+.pp-suggest-item:hover { background: var(--dc-bg-inset-strong); }
+
+/* --- Nav buttons --- */
+
+.design-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--dc-border);
+}
+
+.design-btn-primary,
+.design-btn-secondary {
+  border-radius: var(--dc-radius-sm);
+  padding: 7px 14px;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.design-btn-primary {
+  background: var(--dc-accent);
+  border: 1px solid var(--dc-accent);
+  color: #04121a;
+  font-weight: 600;
+}
+.design-btn-primary:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.design-btn-secondary {
+  background: none;
+  border: 1px solid var(--dc-border);
+  color: var(--dc-text);
+}
+.design-btn-secondary:hover { border-color: var(--dc-border-strong); }
+
+/* --- Review step --- */
+
+.design-review-block {
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-md);
+  overflow: hidden;
+}
+
+.design-review-row {
+  display: grid;
+  grid-template-columns: 1fr auto 34px;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  font-size: 11.5px;
+  border-bottom: 1px solid var(--dc-border);
+}
+.design-review-row:last-child { border-bottom: none; }
+.design-review-key { color: var(--dc-text-dim); }
+.design-edit-link {
+  background: none;
+  border: none;
+  color: var(--dc-accent);
+  font-size: 11px;
+  cursor: pointer;
+  justify-self: end;
+}
+
+/* --- Recommendation result --- */
+
+.design-result-hero {
+  border: 1px solid var(--dc-border-strong);
+  border-radius: var(--dc-radius-md);
+  padding: 12px 14px;
+  margin: 10px 0 12px;
+  background: var(--dc-bg-inset);
+}
+
+.design-result-config {
+  font-size: 15px;
+  margin-bottom: 8px;
+}
+.design-result-tier { color: var(--dc-accent); font-weight: 700; }
+.design-result-sep { opacity: 0.4; margin: 0 5px; }
+
+.design-result-availability {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.design-result-availability-value {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--dc-good);
+}
+
+.design-metrics-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.design-metric {
+  background: var(--dc-bg-inset);
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-sm);
+  padding: 7px 9px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* --- Connectivity chain --- */
+
+.pp-connectivity {
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-md);
+  padding: 12px 14px;
+  background: var(--dc-bg-inset);
+}
+
+.pp-connectivity-chain {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  font-size: 12.5px;
+  text-align: center;
+}
+
+.pp-connectivity-arrow {
+  color: var(--dc-text-dim);
+  font-size: 12px;
+}
+
+.pp-connectivity-req {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--dc-modeled-text);
+  border: 1px dashed var(--dc-modeled-border);
+  border-radius: var(--dc-radius-sm);
+  padding: 2px 8px;
+  margin: 2px 0;
+}
+
+/* --- Comparison table (kept for potential reuse) --- */
+
+.design-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-md);
+}
+
+.design-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.design-table th {
+  text-align: left;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--dc-text-dim);
+  background: var(--dc-bg-inset);
+  padding: 7px 9px;
+  border-bottom: 1px solid var(--dc-border);
+}
+
+.design-table td {
+  padding: 7px 9px;
+  border-bottom: 1px solid var(--dc-border);
+}
+.design-table tr:last-child td { border-bottom: none; }
+.design-table tr.recommended { background: rgba(79, 209, 255, 0.05); }
+
+.design-recommended-flag {
+  margin-left: 8px;
+  font-family: system-ui, sans-serif;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--dc-accent);
+  border: 1px solid var(--dc-accent);
+  border-radius: var(--dc-radius-sm);
+  padding: 1px 5px;
+}
+
+/* ============================================================
+   Planning-mode markers rendered ON the globe (htmlElementsData).
+   Real DOM elements, deliberately unlike the WebGL point layer used
+   for real facilities -- must be visually impossible to confuse.
+   ============================================================ */
+
+/*
+ * IMPORTANT geo-anchoring contract: three.js's CSS2DObject centers the
+ * marker's outer element on the projected lat/lng via
+ * `translate(-50%,-50%)` applied to that element's OWN bounding box. So the
+ * outer `.planning-marker` element must be EXACTLY the glyph's size and
+ * contain nothing else in normal flow -- if the label text were inside this
+ * box (e.g. a flex row), the box would grow to fit the label and the glyph
+ * would visually drift away from the true coordinate as the label's width
+ * changed (this was the marker's original bug). The label is positioned
+ * with `position: absolute`, which removes it from normal flow entirely, so
+ * it can render arbitrarily long text without ever affecting the glyph's
+ * anchored position. Do not add margin/padding/border to `.planning-marker`
+ * itself, and do not add flow siblings to the glyph inside it.
+ */
+.planning-marker {
+  position: relative;
+  width: 16px;
+  height: 16px;
+  pointer-events: none;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.planning-marker-glyph {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  box-sizing: border-box;
+}
+
+.planning-marker-location .planning-marker-glyph {
+  background: #38bdf8;
+  border: 2px solid #e0f2fe;
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.25);
+}
+
+.planning-marker-destination .planning-marker-glyph {
+  background: #f472b6;
+  border: 2px solid #fce7f3;
+  box-shadow: 0 0 0 3px rgba(244, 114, 182, 0.25);
+}
+
+.planning-marker-proposed {
+  width: 28px;
+  height: 28px;
+}
+
+.planning-marker-proposed .planning-marker-glyph {
+  background: transparent;
+  border: 3px solid #facc15;
+  box-shadow: 0 0 0 4px rgba(250, 204, 21, 0.15);
+}
+.planning-marker-proposed .planning-marker-glyph::before,
+.planning-marker-proposed .planning-marker-glyph::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 2px solid rgba(250, 204, 21, 0.8);
+  animation: pp-pulse-ring 2.2s ease-out infinite;
+}
+.planning-marker-proposed .planning-marker-glyph::after {
+  animation-delay: 1.1s;
+}
+
+@keyframes pp-pulse-ring {
+  0% { transform: scale(1); opacity: 0.9; }
+  100% { transform: scale(2.6); opacity: 0; }
+}
+
+/* Label: absolutely positioned relative to the glyph box (see contract
+   above) -- anchored to the glyph's right edge, vertically centered. Free
+   to grow with arbitrarily long place names without moving the glyph. */
+.planning-marker-label {
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  margin-left: 8px;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.planning-marker-label-text {
+  pointer-events: none;
+  background: rgba(10, 14, 24, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: var(--dc-radius-sm);
+  padding: 4px 8px;
+  font-size: 11px;
+  color: var(--dc-text);
+  line-height: 1.35;
+}
+
+.planning-marker-name {
+  font-weight: 600;
+}
+
+.planning-marker-sub {
+  font-family: var(--dc-font-mono);
+  font-size: 10px;
+  color: var(--dc-accent);
+  margin-top: 2px;
+}
+
+.planning-marker-tags {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 3px;
+}
+
+.planning-marker-tag {
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(250, 204, 21, 0.18);
+  color: #facc15;
+  border: 1px solid rgba(250, 204, 21, 0.4);
+}
+
+.planning-marker-tag-modeled {
+  background: transparent;
+  color: var(--dc-modeled-text);
+  border: 1px dashed var(--dc-modeled-border);
+}
+
+.planning-marker-dismiss {
+  pointer-events: auto;
+  flex: none;
+  background: rgba(10, 14, 24, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: var(--dc-text);
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.7;
+  margin-top: 1px;
+}
+.planning-marker-dismiss:hover { opacity: 1; }
+
+/* ============================================================
+   Hypothetical-route markers: SOURCE/DESTINATION MARINE ACCESS
+   endpoints + the selected candidate's floating label. Same
+   CSS2DObject anchoring contract as .planning-marker above (outer
+   element = exactly the glyph, label positioned absolute so it never
+   affects the anchor point) -- see Globe.tsx's buildPlanningMarkerElement
+   comment for why that matters.
+   ============================================================ */
+
+.route-endpoint-marker {
+  position: relative;
+  width: 18px;
+  height: 18px;
+  pointer-events: none;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.route-endpoint-marker-glyph {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  box-sizing: border-box;
+  background: #0a0e18;
+  border: 3px solid #ffffff;
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.22), 0 0 14px 3px rgba(255, 255, 255, 0.55);
+}
+
+.route-endpoint-marker-destination .route-endpoint-marker-glyph {
+  border-color: #f472b6;
+  box-shadow: 0 0 0 4px rgba(244, 114, 182, 0.22), 0 0 14px 3px rgba(244, 114, 182, 0.5);
+}
+
+.route-endpoint-marker-source .route-endpoint-marker-glyph {
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.22), 0 0 14px 3px rgba(56, 189, 248, 0.5);
+}
+
+.route-endpoint-marker-label {
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  margin-left: 8px;
+  pointer-events: none;
+  white-space: nowrap;
+  background: rgba(10, 14, 24, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: var(--dc-radius-sm);
+  padding: 5px 9px;
+  line-height: 1.4;
+}
+
+.route-endpoint-marker-tag {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #ffffff;
+}
+
+.route-endpoint-marker-destination .route-endpoint-marker-tag { color: #f472b6; }
+.route-endpoint-marker-source .route-endpoint-marker-tag { color: #38bdf8; }
+
+.route-endpoint-marker-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--dc-text);
+  margin-top: 2px;
+}
+
+.route-endpoint-marker-badge {
+  display: inline-block;
+  margin-top: 3px;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+.route-endpoint-marker-badge.real {
+  color: #86efac;
+  background: rgba(34, 197, 94, 0.14);
+  border: 1px solid rgba(74, 222, 128, 0.32);
+}
+.route-endpoint-marker-badge.modeled {
+  color: var(--dc-modeled-text);
+  background: transparent;
+  border: 1px dashed var(--dc-modeled-border);
+}
+
+/* Route label: a single small chip, no glyph -- it marks a point ON the
+   line itself (see Globe.tsx's routeLabelMarker), not an endpoint. */
+.route-path-label {
+  position: relative;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+}
+
+.route-path-label-chip {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
+  background: rgba(10, 14, 24, 0.95);
+  border: 1.5px solid #ffffff;
+  border-radius: 5px;
+  padding: 4px 10px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: #ffffff;
+  box-shadow: 0 0 16px 2px rgba(255, 255, 255, 0.4);
+}
+
+/* --- Connectivity inspector: floating detail card for a selected real
+   cable/landing point, top-left so it never collides with the right-docked
+   planning panel. Reuses .panel/.detail-* from App.css for visual
+   consistency with the explore-mode facility detail card. --- */
+.ci-panel {
+  top: 112px;
+  left: 20px;
+  width: 300px;
+  max-height: calc(100vh - 140px);
+  z-index: 25;
+}
+
+/* --- Existing Connectivity analysis rendered inside the planning panel --- */
+
+.pp-conn-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.pp-explore-cables-btn {
+  background: none;
+  border: 1px solid rgba(79, 209, 255, 0.4);
+  color: var(--dc-accent);
+  border-radius: var(--dc-radius-sm);
+  padding: 4px 9px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.pp-explore-cables-btn:hover {
+  background: rgba(79, 209, 255, 0.1);
+  border-color: rgba(79, 209, 255, 0.7);
+}
+
+.pp-conn-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.pp-conn-stat {
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-sm);
+  padding: 7px 9px;
+  background: var(--dc-bg-inset);
+}
+
+.pp-conn-stat-value {
+  display: block;
+  font-family: var(--dc-font-mono);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--dc-accent);
+}
+
+.pp-conn-stat-label {
+  font-size: 10px;
+  color: var(--dc-text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.pp-real-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #86efac;
+  background: rgba(34, 197, 94, 0.12);
+  border: 1px solid rgba(74, 222, 128, 0.3);
+  border-radius: var(--dc-radius-sm);
+  padding: 3px 7px;
+  margin-bottom: 8px;
+}
+
+.pp-cable-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 260px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.pp-cable-row {
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-sm);
+  padding: 7px 9px;
+  background: var(--dc-bg-inset);
+}
+
+.pp-cable-row-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 3px;
+}
+
+.pp-cable-name {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.pp-cable-relevance {
+  flex: none;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 3px;
+  border: 1px solid;
+}
+
+.pp-cable-relevance-direct {
+  color: #86efac;
+  border-color: rgba(74, 222, 128, 0.4);
+  background: rgba(34, 197, 94, 0.1);
+}
+
+.pp-cable-relevance-source-side,
+.pp-cable-relevance-destination-side {
+  color: var(--dc-text-dim);
+  border-color: var(--dc-border-strong);
+}
+
+.pp-cable-landings {
+  font-size: 10.5px;
+  color: var(--dc-text-dim);
+  line-height: 1.4;
+}
+
+.pp-conn-unavailable {
+  font-size: 11.5px;
+  color: var(--dc-modeled-text);
+  border: 1px dashed var(--dc-modeled-border);
+  border-radius: var(--dc-radius-sm);
+  padding: 8px 10px;
+  line-height: 1.5;
+}
+
+/* --- Hypothetical Routes (RouteInspector.tsx) --- */
+
+.ri-endpoint-card {
+  margin-bottom: 10px;
+}
+
+.ri-endpoint-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.ri-endpoint-metric {
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+.ri-weight-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.ri-weight-row-disabled {
+  opacity: 0.55;
+}
+
+.ri-weight-label {
+  font-size: 11.5px;
+  color: var(--dc-text-dim);
+  flex: none;
+  width: 130px;
+}
+
+.ri-weight-segmented {
+  flex: 1;
+}
+
+.ri-weight-unavailable {
+  font-style: italic;
+  margin: 0;
+}
+
+.ri-candidate-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.ri-candidate-row {
+  text-align: left;
+  background: var(--dc-bg-inset);
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-md);
+  padding: 8px 10px;
+  cursor: pointer;
+  color: var(--dc-text);
+}
+.ri-candidate-row:hover {
+  border-color: var(--dc-border-strong);
+}
+.ri-candidate-row.active {
+  border-color: var(--dc-accent);
+  background: rgba(79, 209, 255, 0.08);
+}
+
+.ri-candidate-row-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.ri-candidate-rank {
+  color: var(--dc-text-dim);
+  font-size: 11px;
+}
+
+.ri-candidate-name {
+  font-size: 12.5px;
+  font-weight: 700;
+  font-family: var(--dc-font-mono);
+  letter-spacing: 0.02em;
+}
+
+.ri-candidate-shortname {
+  font-weight: 600;
+  color: var(--dc-text-dim);
+}
+
+.ri-recommended-badge {
+  margin-bottom: 0;
+  margin-left: auto;
+}
+
+.ri-candidate-row-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 11px;
+  color: var(--dc-text-dim);
+}
+
+.ri-candidate-row-score {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 5px;
+  padding-top: 5px;
+  border-top: 1px solid var(--dc-border);
+  font-size: 11px;
+}
+.ri-candidate-row-score .dc-mono {
+  color: var(--dc-accent);
+  font-weight: 700;
+}
+
+.ri-detail-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.ri-detail-heading .design-label {
+  font-family: var(--dc-font-mono);
+  font-size: 12px;
+  color: var(--dc-text);
+}
+
+.ri-dominant-band {
+  font-size: 11.5px;
+  color: var(--dc-text-dim);
+  font-style: italic;
+  margin: 8px 0;
+}
+
+.ri-prototype-notice {
+  border: 1px dashed var(--dc-modeled-border);
+  border-radius: var(--dc-radius-md);
+  padding: 9px 11px;
+  margin-bottom: 14px;
+}
+.ri-prototype-notice-title {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--dc-modeled-text);
+  margin-bottom: 5px;
+}
+.ri-prototype-notice p {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--dc-text-dim);
+  margin: 0;
+}
+
+.ri-difficulty-low {
+  color: var(--dc-good);
+}
+.ri-difficulty-medium {
+  color: var(--dc-warn);
+}
+.ri-difficulty-high {
+  color: #fca5a5;
+}
+
+.ri-detail-card {
+  margin-bottom: 10px;
+}
+
+.ri-metrics-grid {
+  margin: 10px 0;
+}
+
+.ri-chart-label {
+  display: block;
+  margin: 10px 0 4px;
+}
+
+.ri-depth-chart {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.ri-chart-axis-label {
+  font-size: 8px;
+  fill: var(--dc-text-dim);
+  font-family: var(--dc-font-mono);
+}
+
+.ri-cost-breakdown {
+  margin-top: 6px;
+}
+
+/* --- Responsive --- */
+
+@media (max-width: 900px) {
+  .pp-shell {
+    width: min(360px, 46vw);
+  }
+  .design-metrics-grid {
+    grid-template-columns: 1fr;
+  }
+}
