@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { runHypotheticalRouting, buildCriterion } from "./hypotheticalRouting";
+import { runHypotheticalRouting, buildCriterion, findDegeneratePairs } from "./hypotheticalRouting";
 import type { OceanGrid } from "./oceanGrid";
 import type { RouteEngineResult } from "./routingTypes";
 import type { CableFeature, LandingPoint } from "../types";
@@ -221,4 +221,83 @@ describe("runHypotheticalRouting (real data)", () => {
     expect(inland.sourceEndpoint.landingPointName).toBeNull();
     expect(inland.sourceEndpoint.note).toMatch(/not a surveyed or verified/i);
   }, 120_000);
+});
+
+// --- Degeneracy detection ---------------------------------------------------
+// These build geometry by hand, because the shape that broke the original rule
+// does not turn up often in live results: two routes sharing almost all of
+// their length, with one making a narrow excursion away and back.
+//
+// Each "must not flag" case below is verified to be a case the OLD rule got
+// WRONG (see scripts/_degencheck comparison during development):
+//
+//   case                            old mean   old max   new max   old / new
+//   narrow spike off shared path         0.8      22.2    2779.9   FLAG / ok
+//   long shared path, tiny spike         0.4      10.6    2000.9   FLAG / ok
+//
+// The old max column is the point: measuring only from A to B, the spike was
+// never observed at all -- every one of A's points sat on B. So switching the
+// decision from mean to max would NOT have fixed this on its own. Both the
+// statistic and the direction had to change together.
+describe("findDegeneratePairs", () => {
+  /** Minimal RouteCandidate shaped enough for the separation maths. */
+  const cand = (id: string, path: [number, number][]) =>
+    ({ id, path } as unknown as Parameters<typeof findDegeneratePairs>[0][number]);
+
+  const THRESHOLD = 55.66; // one 0.5 deg grid cell, as the engine derives it
+
+  it("flags two genuinely coincident routes", () => {
+    const a = cand("a", [[0, 0], [0, 5], [0, 10]]);
+    // ~11 km apart throughout -- well inside one grid cell.
+    const b = cand("b", [[0.1, 0], [0.1, 5], [0.1, 10]]);
+    const pairs = findDegeneratePairs([a, b], THRESHOLD);
+    expect(pairs).toHaveLength(1);
+    expect(pairs[0].maxSeparationKm).toBeLessThan(THRESHOLD);
+  });
+
+  it("does NOT flag a narrow spike off an otherwise shared path", () => {
+    // The false positive that motivated the fix. b leaves the shared corridor,
+    // reaches ~2,800 km away, and rejoins. Forward-only mean separation is
+    // 0.8 km, so the old rule called these interchangeable and would have
+    // suppressed a genuinely different route.
+    const a = cand("a", [[0, 0], [0, 50], [0, 100]]);
+    const b = cand("b", [[0, 0], [0, 49.8], [25, 50], [0, 50.2], [0, 100]]);
+    const pairs = findDegeneratePairs([a, b], THRESHOLD);
+    expect(pairs).toHaveLength(0);
+  });
+
+  it("does NOT flag a tiny spike on a very long shared path", () => {
+    // Harder version: the excursion is a smaller fraction of a longer route,
+    // which is what drives the mean toward zero.
+    const a = cand("a", [[0, 0], [0, 90], [0, 179]]);
+    const b = cand("b", [[0, 0], [0, 89.9], [18, 90], [0, 90.1], [0, 179]]);
+    expect(findDegeneratePairs([a, b], THRESHOLD)).toHaveLength(0);
+  });
+
+  it("detects the excursion whichever route makes it", () => {
+    // Argument order must not change the answer. Under a one-directional
+    // measure it did: measured from the straight route, the detouring route
+    // passes through every one of its points and looks identical.
+    const a = cand("a", [[0, 0], [0, 50], [0, 100]]);
+    const b = cand("b", [[0, 0], [0, 49.8], [25, 50], [0, 50.2], [0, 100]]);
+    expect(findDegeneratePairs([a, b], THRESHOLD)).toHaveLength(0);
+    expect(findDegeneratePairs([b, a], THRESHOLD)).toHaveLength(0);
+  });
+
+  it("reports separation symmetrically regardless of argument order", () => {
+    const a = cand("a", [[0, 0], [0, 5], [0, 10]]);
+    const b = cand("b", [[0.15, 0], [0.15, 5], [0.15, 10]]);
+    const [ab] = findDegeneratePairs([a, b], THRESHOLD);
+    const [ba] = findDegeneratePairs([b, a], THRESHOLD);
+    expect(ab.maxSeparationKm).toBeCloseTo(ba.maxSeparationKm, 6);
+    expect(ab.meanSeparationKm).toBeCloseTo(ba.meanSeparationKm, 6);
+  });
+
+  it("never reports a maximum below its own mean", () => {
+    const a = cand("a", [[0, 0], [0, 5], [0, 10]]);
+    const b = cand("b", [[0.2, 0], [0.2, 5], [0.2, 10]]);
+    const [pair] = findDegeneratePairs([a, b], THRESHOLD);
+    expect(pair).toBeDefined();
+    expect(pair.maxSeparationKm).toBeGreaterThanOrEqual(pair.meanSeparationKm);
+  });
 });

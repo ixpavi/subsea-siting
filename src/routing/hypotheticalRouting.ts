@@ -248,8 +248,27 @@ function minDistanceToSampledPath(lat: number, lng: number, other: [number, numb
  * Chennai->Singapore's "shortest" and "depth-favorable" candidates were a mean
  * of 13km apart -- roughly a quarter of one cell -- yet were shown as two
  * options with distinct scores.)
+ *
+ * SEPARATION IS THE MAXIMUM, NOT THE MEAN. The first version tested the mean
+ * and produced a false positive that matters: a pair sharing most of their
+ * length but diverging by 2,533 km at the widest point averaged below the
+ * threshold and was reported as indistinguishable. Those are emphatically
+ * different routes -- different waters, different landfall approaches,
+ * different failure modes -- and suppressing one of them would have hidden a
+ * real alternative from the user. Two routes are only interchangeable if they
+ * stay together for their WHOLE length, which is what the maximum measures.
+ * The mean is still reported, because it is informative, but it does not
+ * decide anything.
+ *
+ * SEPARATION IS ALSO SYMMETRIC. Measuring only from A's samples to B's path
+ * misses an excursion that B makes and A does not: every one of A's points can
+ * sit on B while B swings hundreds of km away in between. This computes both
+ * directions and takes the larger -- the Hausdorff distance -- so a detour by
+ * either route counts.
  */
-function findDegeneratePairs(
+/** Exported for testing: the false-positive this guards against needs
+ *  hand-built geometry to reproduce, which real routing results rarely give. */
+export function findDegeneratePairs(
   candidates: RouteCandidate[],
   thresholdKm: number
 ): DegeneratePair[] {
@@ -257,11 +276,13 @@ function findDegeneratePairs(
   const pairs: DegeneratePair[] = [];
   for (let i = 0; i < candidates.length; i++) {
     for (let j = i + 1; j < candidates.length; j++) {
-      const seps = sampled[i].map(([la, ln]) => minDistanceToSampledPath(la, ln, sampled[j]));
-      if (seps.length === 0) continue;
-      const meanSeparationKm = seps.reduce((a, b) => a + b, 0) / seps.length;
-      const maxSeparationKm = Math.max(...seps);
-      if (meanSeparationKm < thresholdKm) {
+      const forward = sampled[i].map(([la, ln]) => minDistanceToSampledPath(la, ln, sampled[j]));
+      const backward = sampled[j].map(([la, ln]) => minDistanceToSampledPath(la, ln, sampled[i]));
+      if (forward.length === 0 || backward.length === 0) continue;
+      const all = forward.concat(backward);
+      const meanSeparationKm = all.reduce((a, b) => a + b, 0) / all.length;
+      const maxSeparationKm = Math.max(...all);
+      if (maxSeparationKm < thresholdKm) {
         pairs.push({ a: candidates[i].id, b: candidates[j].id, meanSeparationKm, maxSeparationKm });
       }
     }
