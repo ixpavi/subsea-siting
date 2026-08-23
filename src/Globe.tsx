@@ -7,6 +7,7 @@ import type { CableNetworkIndex, NetworkSelection } from "./cableNetwork";
 import { findCablesNearScreenPoint, CABLE_HIT_TOLERANCE_PX, CABLE_HIT_AMBIGUITY_MARGIN_PX } from "./cableHitTest";
 import type { CableHitCandidate } from "./cableHitTest";
 import { findRoutesNearScreenPoint } from "./routing/routeHitTest";
+import { clusterPoints, clusterCellDeg, clusterRadiusScale } from "./markerClustering";
 import type { RouteEngineResult, RoutingProfileId } from "./routing/routingTypes";
 
 const LAND_DC_COLOR = "#5eead4";
@@ -545,18 +546,38 @@ const Globe = forwardRef<GlobeApi, Props>(function Globe(
     [camera.lat, camera.lng, visibleCapDeg]
   );
 
+  // Cluster the bulk facility layer after culling. At default zoom 5,260
+  // markers are geometry the GPU builds and the user cannot read -- London,
+  // Frankfurt and Northern Virginia are each a solid blob long before the
+  // individual points stop being drawn. Clusters carry their member count, so
+  // the abstraction states what it is standing for rather than pretending to
+  // be one facility. Cell size shrinks with altitude and reaches zero close
+  // in, where every facility is its own marker again.
+  const landClusters = useMemo(
+    () =>
+      toggles.landDCs && !connectivityAnalysis
+        ? clusterPoints(cullToVisible(landDCs), clusterCellDeg(camera.altitude))
+        : [],
+    [toggles.landDCs, connectivityAnalysis, landDCs, cullToVisible, camera.altitude]
+  );
+
   const pointsData = useMemo(
     () => [
-      ...(toggles.landDCs && !connectivityAnalysis
-        ? cullToVisible(landDCs).map((d) => ({ kind: "land" as const, data: d }))
-        : []),
+      ...landClusters.map((c) => ({
+        kind: "land" as const,
+        // A single-member cluster IS the facility, so it keeps every property
+        // the tooltip and click handler expect.
+        data: c.members.length === 1 ? c.members[0] : { ...c.members[0], lat: c.lat, lng: c.lng },
+        clusterCount: c.members.length,
+        clusterKey: c.key,
+      })),
       ...(toggles.subseaDCs && !connectivityAnalysis
         ? cullToVisible(subseaDCs).map((d) => ({ kind: "subsea" as const, data: d }))
         : []),
       ...connectivityLandingPoints.map((lp) => ({ kind: "landingPoint" as const, data: lp })),
       ...explorePointsData,
     ],
-    [toggles.landDCs, toggles.subseaDCs, connectivityAnalysis, landDCs, subseaDCs, connectivityLandingPoints, explorePointsData, cullToVisible]
+    [landClusters, toggles.subseaDCs, connectivityAnalysis, subseaDCs, connectivityLandingPoints, explorePointsData, cullToVisible]
   );
 
   // Custom cable click/hover hit-testing -- see cableHitTest.ts for why
@@ -1042,7 +1063,8 @@ const Globe = forwardRef<GlobeApi, Props>(function Globe(
           if (id && exploreSelectedCableLandingPointIds?.has(id)) return 0.3 * s;
           return 0.16 * s;
         }
-        return (item.kind === "subsea" ? 0.44 : 0.2) * s;
+        const cluster = (p as { clusterCount?: number }).clusterCount ?? 1;
+        return (item.kind === "subsea" ? 0.44 : 0.2) * s * clusterRadiusScale(cluster);
       }}
       // Back to 8. Raising this to 14 to smooth the octagon edge was the wrong
       // trade: it added ~75% more geometry across thousands of markers to fix
@@ -1050,6 +1072,18 @@ const Globe = forwardRef<GlobeApi, Props>(function Globe(
       // Now that they are sized correctly the facet count is imperceptible.
       pointResolution={8}
       pointLabel={(p: unknown) => {
+        // A cluster stands for several facilities and must say so. Showing one
+        // member's name would attribute a specific operator and address to a
+        // marker drawn at an averaged position -- a fabricated fact, and
+        // exactly the kind this project refuses to produce elsewhere.
+        const clusterCount = (p as { clusterCount?: number }).clusterCount ?? 1;
+        if (clusterCount > 1) {
+          return `<div class="globe-tooltip">
+            <div style="font-weight:600">${clusterCount} data centre facilities</div>
+            <div class="detail-section-label" style="margin:4px 0">CLUSTERED VIEW</div>
+            <div class="globe-tooltip-hint">zoom in to see them individually</div>
+          </div>`;
+        }
         const point = p as
           | Selection
           | { kind: "landingPoint"; data: ConnectivityLandingPointDatum }
@@ -1103,7 +1137,19 @@ const Globe = forwardRef<GlobeApi, Props>(function Globe(
           </div>`;
       }}
       onPointClick={(p: unknown) => {
-        const item = p as { kind: string; data: unknown };
+        const item = p as { kind: string; data: unknown; clusterCount?: number };
+        // Clicking a cluster zooms toward it rather than selecting one of its
+        // members. Opening the detail panel for an arbitrary facility the user
+        // did not choose would be a guess presented as their selection.
+        if ((item.clusterCount ?? 1) > 1) {
+          const d = item.data as { lat: number; lng: number };
+          onUserInteracted();
+          globeRef.current?.pointOfView(
+            { lat: d.lat, lng: d.lng, altitude: Math.max(0.3, camera.altitude * 0.45) },
+            900
+          );
+          return;
+        }
         if (item.kind === "landingPoint") {
           onSelectConnectivityItem?.({ kind: "landingPoint", data: item.data as ConnectivityLandingPointDatum });
           return;
