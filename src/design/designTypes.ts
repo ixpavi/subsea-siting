@@ -29,6 +29,8 @@ export interface LocationRequirement {
   query: string;
   name?: string;
   country?: string;
+  /** ISO 3166-1 alpha-2, lowercase. Joins this location to national indicators (water stress, grid carbon). */
+  countryCode?: string;
   lat?: number;
   lng?: number;
 }

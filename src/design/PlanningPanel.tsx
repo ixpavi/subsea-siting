@@ -32,6 +32,7 @@ import { PIPELINE_STAGES, PLANNING_STEPS } from "./designTypes";
 import type { ConnectivityAnalysis, RelevantCable } from "./connectivityAnalysis";
 import RouteInspector from "./RouteInspector";
 import ClimateAdjustedPue from "./ClimateAdjustedPue";
+import CoolingAdvisor from "./CoolingAdvisor";
 import type { RouteEngineResult, RoutingProfileId } from "../routing/routingTypes";
 import CloseButton from "../CloseButton";
 import "./design.css";
@@ -624,6 +625,16 @@ export default function PlanningPanel({
                 </p>
               </div>
 
+              {location.lat != null && location.lng != null && (
+                <CoolingAdvisor
+                  key={`${location.lat},${location.lng},${location.countryCode ?? ""}`}
+                  lat={location.lat}
+                  lng={location.lng}
+                  countryCode={location.countryCode}
+                  selectedCooling={result.top.config.cooling}
+                />
+              )}
+
               <h2 className="pp-section-title pp-section-title-spaced">Resilience</h2>
               <div className="pp-detail-card">
                 <div className="design-metrics-grid">
@@ -932,7 +943,14 @@ function LocationSearchField({
     setQuery(r.displayName);
     setOpen(false);
     setResults([]);
-    onResolved({ query: r.displayName, name: r.displayName, country: r.country, lat: r.lat, lng: r.lng });
+    onResolved({
+      query: r.displayName,
+      name: r.displayName,
+      country: r.country,
+      countryCode: r.countryCode,
+      lat: r.lat,
+      lng: r.lng,
+    });
   }
 
   return (

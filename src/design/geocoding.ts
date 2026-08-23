@@ -9,6 +9,8 @@ export interface GeocodeResult {
   /** Human-readable "City, Region, Country" style name -- not the raw Nominatim display_name. */
   displayName: string;
   country?: string;
+  /** ISO 3166-1 alpha-2, lowercase, as Nominatim returns it. Used to join national indicators (water stress, grid carbon) -- see siting/countryFactors.ts. */
+  countryCode?: string;
   lat: number;
   lng: number;
 }
@@ -21,6 +23,7 @@ interface NominatimAddress {
   state?: string;
   state_district?: string;
   country?: string;
+  country_code?: string;
 }
 
 interface NominatimResult {
@@ -72,7 +75,13 @@ export async function geocodeLocation(query: string, opts?: { signal?: AbortSign
     // that resolve to the same human-readable name -- keep the first.
     if (seen.has(displayName)) continue;
     seen.add(displayName);
-    results.push({ displayName, country: d.address?.country, lat, lng });
+    results.push({
+      displayName,
+      country: d.address?.country,
+      countryCode: d.address?.country_code?.toLowerCase(),
+      lat,
+      lng,
+    });
   }
 
   cache.set(trimmed, results);
