@@ -1355,6 +1355,47 @@
   font-weight: 700;
 }
 
+/* --- Climate-adjusted PUE (ClimateAdjustedPue.tsx) --- */
+
+.cap-block {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--dc-border);
+}
+.cap-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.cap-value {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--dc-accent);
+}
+.cap-detail {
+  font-size: 11.5px;
+  color: var(--dc-text-dim);
+  margin-top: 3px;
+  line-height: 1.5;
+}
+.cap-delta {
+  font-family: var(--dc-font-mono);
+  font-weight: 700;
+  margin: 0 5px;
+}
+.cap-better { color: var(--dc-good); }
+.cap-worse { color: var(--dc-warn); }
+.cap-warning {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--dc-warn);
+  border: 1px dashed var(--dc-warn);
+  border-radius: var(--dc-radius-sm);
+  padding: 6px 8px;
+  margin: 7px 0 0;
+}
+
 /* --- Degeneracy notice --- */
 
 .ri-degeneracy-notice {

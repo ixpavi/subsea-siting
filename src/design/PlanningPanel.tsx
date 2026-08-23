@@ -31,6 +31,7 @@ import type {
 import { PIPELINE_STAGES, PLANNING_STEPS } from "./designTypes";
 import type { ConnectivityAnalysis, RelevantCable } from "./connectivityAnalysis";
 import RouteInspector from "./RouteInspector";
+import ClimateAdjustedPue from "./ClimateAdjustedPue";
 import type { RouteEngineResult, RoutingProfileId } from "../routing/routingTypes";
 import CloseButton from "../CloseButton";
 import "./design.css";
@@ -590,7 +591,7 @@ export default function PlanningPanel({
               <div className="pp-detail-card">
                 <div className="design-metrics-grid">
                   <div className="design-metric">
-                    <span className="design-label">PUE</span>
+                    <span className="design-label">PUE (baseline)</span>
                     <span className="dc-mono">{result.top.profile.pue}</span>
                   </div>
                   <div className="design-metric">
@@ -606,6 +607,17 @@ export default function PlanningPanel({
                     <span className="dc-mono">{result.top.deploymentComplexity}</span>
                   </div>
                 </div>
+                {location.lat != null && location.lng != null && (
+                  <ClimateAdjustedPue
+                    // Remount on any input change so the previous site's
+                    // figure is never briefly shown against a new site.
+                    key={`${location.lat},${location.lng},${result.top.profile.pue}`}
+                    lat={location.lat}
+                    lng={location.lng}
+                    baselinePue={result.top.profile.pue}
+                    coolingLabel={COOLING_SPECS[result.top.config.cooling].label}
+                  />
+                )}
                 <p className="design-field-note">
                   IT capacity: <span className="dc-mono">{requirement.businessContext.capacityMW} MW</span> -- captured
                   for context; does not yet affect this recommendation's score.
