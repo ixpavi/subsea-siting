@@ -22,5 +22,9 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  /* Tests live alongside the code they cover but are checked by
+     tsconfig.test.json, which grants them Node types. Excluding them here
+     keeps the application project browser-only. */
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx"]
 }

@@ -126,7 +126,7 @@ const CRITERION_LABELS: Record<RoutingCriterionId, string> = {
   environmental: "environmental exposure",
 };
 
-interface CriterionState {
+export interface CriterionState {
   id: RoutingCriterionId;
   weight: number;
   available: boolean;
@@ -138,7 +138,14 @@ interface CriterionState {
   uniqueWinner: number | null;
 }
 
-function buildCriterion(
+/**
+ * Exported for testing. The uniqueness rule below cannot be exercised through
+ * runHypotheticalRouting with real data, because live candidates never
+ * produce exactly equal floating-point criterion values -- yet a tie is
+ * precisely the case that caused every candidate to claim "lowest modeled
+ * seabed difficulty" simultaneously. Ties have to be constructed deliberately.
+ */
+export function buildCriterion(
   id: RoutingCriterionId,
   raw: number[],
   higherIsBetter: boolean,
