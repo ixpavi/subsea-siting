@@ -11,6 +11,7 @@ import { useEffect, useState } from "react";
 import { useHypotheticalRoute } from "../routing/useHypotheticalRoute";
 import { DEFAULT_ROUTING_WEIGHTS } from "../routing/hypotheticalRouting";
 import { PROVENANCE_LABEL, ROUTE_METRIC_PROVENANCE } from "../routing/provenance";
+import { analyzeWeightSensitivity, SELECTABLE_WEIGHT_LEVELS } from "../routing/weightSensitivity";
 import type { RouteMetricId } from "../routing/provenance";
 import type {
   CriterionOutcome,
@@ -21,7 +22,10 @@ import type {
 } from "../routing/routingTypes";
 import "./design.css";
 
-const WEIGHT_LEVELS = [0.5, 1, 1.5, 2];
+// Single source of truth lives with the sensitivity analysis, which sweeps
+// exactly these levels -- two copies would silently drift apart and the
+// analysis would then describe weightings the UI cannot produce.
+const WEIGHT_LEVELS = SELECTABLE_WEIGHT_LEVELS;
 const WEIGHT_LEVEL_LABELS: Record<number, string> = { 0.5: "Low", 1: "Normal", 1.5: "High", 2: "Highest" };
 
 function fmtKm(km: number): string {
@@ -194,6 +198,7 @@ export default function RouteInspector({
 
               <RiCriteriaNotice criteria={result.criteria} />
               <RiDegeneracyNotice result={result} />
+              <RiSensitivityNotice result={result} weights={weights} />
 
               <div className="ri-candidate-list">
                 {result.candidates.map((rc) => (
@@ -303,6 +308,73 @@ function RiEndpointCard({ label, endpoint }: { label: string; endpoint: RouteEng
         </div>
       )}
       <p className="design-field-note">{endpoint.note}</p>
+    </div>
+  );
+}
+
+/**
+ * How much the recommendation depends on where the sliders happen to sit.
+ *
+ * Without this the panel presents "ROUTE 1 is recommended" identically whether
+ * that holds under every weighting the UI can produce or flips the moment one
+ * slider moves. Those are completely different findings, and a planner has no
+ * way to tell them apart from the ranking alone.
+ */
+function RiSensitivityNotice({
+  result,
+  weights,
+}: {
+  result: RouteEngineResult;
+  weights: RoutingWeights;
+}) {
+  const applicable = result.criteria.filter((c) => c.discriminates && c.available).map((c) => c.id);
+  const candidates = result.candidates.map((rc) => ({
+    id: rc.candidate.id,
+    label: rc.candidate.shortName,
+    normalized: rc.normalized,
+  }));
+  if (candidates.length < 2 || applicable.length === 0) return null;
+
+  const s = analyzeWeightSensitivity(candidates, weights, applicable);
+  const nameOf = (id: string) =>
+    result.candidates.find((rc) => rc.candidate.id === id)?.candidate.shortName ?? id;
+
+  const flips = s.perCriterion.filter((c) => c.applicable && c.flipsAt !== null);
+
+  return (
+    <div className={`ri-sensitivity ${s.unconditional ? "is-robust" : s.winShare < 0.4 ? "is-fragile" : ""}`}>
+      <div className="ri-sensitivity-head">
+        <span className="design-label">Does this depend on the weights?</span>
+        <span className="ri-sensitivity-share dc-mono">
+          {Math.round(s.winShare * 100)}% of {s.gridPoints}
+        </span>
+      </div>
+      <p className="design-field-note">{s.summary}</p>
+
+      {flips.length > 0 && (
+        <ul className="ri-sensitivity-flips">
+          {flips.map((c) => {
+            const label = result.criteria.find((x) => x.id === c.id)?.label ?? c.id;
+            return (
+              <li key={c.id}>
+                Set <strong>{label}</strong> to{" "}
+                <span className="dc-mono">{WEIGHT_LEVEL_LABELS[c.flipsAt!] ?? c.flipsAt}</span> and{" "}
+                <strong>{nameOf(c.flipsTo!)}</strong> becomes the recommendation instead.
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      {s.contenders.length > 1 && (
+        <p className="design-field-note ri-sensitivity-contenders">
+          Across every weighting available here:{" "}
+          {s.contenders
+            .map((c) => `${nameOf(c.id)} wins ${Math.round(c.share * 100)}%`)
+            .join(", ")}
+          .
+        </p>
+      )}
     </div>
   );
 }
