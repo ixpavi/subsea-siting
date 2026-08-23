@@ -3,6 +3,7 @@ import Globe from "./Globe";
 import type { GlobeApi, PlanningMarker, ConnectivitySelection } from "./Globe";
 import Legend from "./Legend";
 import LaunchScreen from "./LaunchScreen";
+import SiteComparisonPanel from "./siting/SiteComparisonPanel";
 import type { LoadStep } from "./LaunchScreen";
 import DetailPanel from "./DetailPanel";
 import PlanningPanel from "./design/PlanningPanel";
@@ -63,6 +64,7 @@ export default function App() {
   const [directoryOpen, setDirectoryOpen] = useState(false);
   const [explorerScope, setExplorerScope] = useState<Set<string> | null>(null);
   const [cableChoices, setCableChoices] = useState<CableHitCandidate[] | null>(null);
+  const [compareOpen, setCompareOpen] = useState(false);
 
   // Each dataset marks its own step complete as it lands, so the launch
   // screen's progress reflects work that actually finished rather than a
@@ -354,6 +356,17 @@ export default function App() {
                 Directory
               </button>
               <button
+                className={`toolbar-btn ${compareOpen ? "active" : ""}`}
+                onClick={() => {
+                  setDirectoryOpen(false);
+                  setCableChoices(null);
+                  setCompareOpen((v) => !v);
+                }}
+                title="Rank several candidate data centre sites against each other"
+              >
+                Compare Sites
+              </button>
+              <button
                 className="design-launch-btn"
                 onClick={() => {
                   setSelected(null);
@@ -361,6 +374,7 @@ export default function App() {
                   setExplorerScope(null);
                   setDirectoryOpen(false);
                   setCableChoices(null);
+                  setCompareOpen(false);
                   setRotating(false);
                   setPlanningMode(true);
                 }}
@@ -368,6 +382,18 @@ export default function App() {
                 Design a Data Centre
               </button>
             </div>
+          )}
+
+          {!planningMode && compareOpen && (
+            <SiteComparisonPanel
+              cables={cables}
+              landingPoints={landingPoints}
+              onClose={() => setCompareOpen(false)}
+              onFocusSite={(lat, lng) => {
+                setRotating(false);
+                globeApiRef.current?.flyTo(lat, lng, 1.3);
+              }}
+            />
           )}
 
           {!planningMode && (
