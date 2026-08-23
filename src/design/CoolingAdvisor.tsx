@@ -15,11 +15,19 @@ interface Props {
   countryCode?: string;
   /** Cooling type the MCDA recommendation already selected, highlighted for comparison. */
   selectedCooling?: string;
+  /**
+   * Condensed form for the site-selection step: the measured climate, the
+   * national context and the single best-fit technology, without the full
+   * ranked comparison. The point there is to tell the user something about
+   * the place they just typed -- the detailed ranking belongs later, once a
+   * design has actually been generated.
+   */
+  compact?: boolean;
 }
 
 type State = { status: "loading" } | { status: "error"; message: string } | { status: "ready"; advice: CoolingAdvice };
 
-export default function CoolingAdvisor({ lat, lng, countryCode, selectedCooling }: Props) {
+export default function CoolingAdvisor({ lat, lng, countryCode, selectedCooling, compact = false }: Props) {
   const [state, setState] = useState<State>({ status: "loading" });
 
   useEffect(() => {
@@ -47,6 +55,52 @@ export default function CoolingAdvisor({ lat, lng, countryCode, selectedCooling 
 
   const { advice } = state;
   const c = advice.climate;
+
+  if (compact) {
+    const best = advice.recommended;
+    const f = advice.countryFactors;
+    return (
+      <div className="pp-detail-card ca-card ca-compact">
+        <span className="design-label">
+          Site conditions <span className="prov-chip prov-derived">DERIVED</span>
+        </span>
+        <div className="ca-climate-grid">
+          <div>
+            <span className="dc-mono">{(c.freeCoolingFractionAt24C * 100).toFixed(0)}%</span> of year below{" "}
+            {ECONOMISER_SUPPLY_AIR_C}°C dry bulb
+          </div>
+          <div>
+            <span className="dc-mono">{(c.evaporativeFractionAt20C * 100).toFixed(0)}%</span> of year below{" "}
+            {EVAPORATIVE_WET_BULB_C}°C wet bulb
+          </div>
+          <div>
+            Mean <span className="dc-mono">{c.meanDryBulbC.toFixed(1)}°C</span>, design wet bulb{" "}
+            <span className="dc-mono">{c.designWetBulbC.toFixed(1)}°C</span>
+          </div>
+          <div>
+            Water stress{" "}
+            <span className="dc-mono">{f?.waterStressScore != null ? `${f.waterStressScore.toFixed(2)}/5` : "n/a"}</span>
+            {f?.waterStressCategory ? ` — ${f.waterStressCategory}` : ""}
+          </div>
+        </div>
+        {best && (
+          <p className="ca-compact-best">
+            Best-fit cooling here: <strong>{best.label}</strong>{" "}
+            <span className="dc-mono">(PUE {best.adjustedPue.toFixed(3)})</span>
+          </p>
+        )}
+        {best?.warnings.slice(0, 1).map((w) => (
+          <p key={w} className="ca-warning">
+            {w}
+          </p>
+        ))}
+        <p className="design-field-note">
+          Measured from {c.hoursSampled.toLocaleString()} hourly observations ({c.source}) plus national water-stress
+          data. Full cooling comparison appears with the recommendation.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="pp-detail-card ca-card">

@@ -1456,6 +1456,23 @@
   color: var(--dc-text-dim);
 }
 .ca-note { margin-top: 5px; }
+
+.ca-compact { margin: 10px 0 4px; }
+.ca-compact .ca-climate-grid { margin: 6px 0 8px; }
+.ca-compact-best {
+  font-size: 12px;
+  color: var(--dc-text);
+  margin: 0 0 4px;
+}
+.ca-compact-best .dc-mono { color: var(--dc-accent); }
+
+/* Opted-out pipeline stages: visible but clearly excluded. */
+.pp-rail-chip.not-applicable {
+  text-decoration: line-through;
+  opacity: 0.35;
+}
+
+.pp-mode-toggle { margin-bottom: 10px; }
 .ca-warning {
   font-size: 11px;
   line-height: 1.5;

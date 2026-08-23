@@ -140,22 +140,41 @@ export default function PlanningPanel({
   const [result, setResult] = useState<DesignResult | null>(null);
   const [expandedDesign, setExpandedDesign] = useState(false);
   const [expandedWeights, setExpandedWeights] = useState(false);
+  /** False = build-only: site and specify a facility, no subsea connection planned. */
+  const [connectivityPlanning, setConnectivityPlanning] = useState(true);
 
-  const stepIndex = PLANNING_STEPS.indexOf(step);
+  // BUILD-ONLY MODE. Not every user is planning a subsea connection -- plenty
+  // simply want to site and specify a facility. Everything except the route
+  // stage is site-local (climate, water, grid carbon, tier, cooling), so that
+  // journey is fully supported; it was just being walked through a route step
+  // that could only tell them to go back and add a destination. Turning the
+  // stage off makes build-only a declared mode rather than an incomplete run.
+  // Annotated explicitly: filtering a readonly tuple narrows the element type
+  // to exclude the filtered literal, which would make every downstream
+  // comparison against "routes" a type error.
+  const activeSteps: PlanningStep[] = connectivityPlanning
+    ? [...PLANNING_STEPS]
+    : PLANNING_STEPS.filter((s) => s !== "routes");
+  const stepIndex = activeSteps.indexOf(step);
 
   // Stages covered by steps strictly before the current one are "done";
   // stages covered by the current step are "current". Everything else in the
   // pipeline is either "upcoming" (implemented, not reached yet) or
   // "planned" (not implemented -- see PIPELINE_STAGES).
   const doneStageIds = new Set<PipelineStageId>();
-  for (let i = 0; i < stepIndex; i++) STEP_STAGES[PLANNING_STEPS[i]].forEach((s) => doneStageIds.add(s));
+  for (let i = 0; i < stepIndex; i++) STEP_STAGES[activeSteps[i]].forEach((s) => doneStageIds.add(s));
   const currentStageIds = new Set(STEP_STAGES[step]);
+  // Shown struck through in the rail rather than hidden, so the user can see
+  // what they opted out of and that the pipeline itself is unchanged.
+  const notApplicableStageIds = new Set<PipelineStageId>(
+    connectivityPlanning ? [] : (["hypothetical-routes", "environmental-analysis"] as PipelineStageId[])
+  );
 
   function jumpToStage(stageId: PipelineStageId) {
     const target = reverseStageToStep(stageId);
     if (!target) return;
-    const targetIndex = PLANNING_STEPS.indexOf(target);
-    if (targetIndex <= stepIndex) setStep(target);
+    const targetIndex = activeSteps.indexOf(target);
+    if (targetIndex >= 0 && targetIndex <= stepIndex) setStep(target);
   }
 
   function updateBusinessContext(patch: Partial<BusinessContext>) {
@@ -189,12 +208,12 @@ export default function PlanningPanel({
   const canLeaveSiteConnectivity = locationResolved && (!destinationTyped || destinationResolved);
 
   function next() {
-    const idx = PLANNING_STEPS.indexOf(step);
-    if (idx < PLANNING_STEPS.length - 1) setStep(PLANNING_STEPS[idx + 1]);
+    const idx = activeSteps.indexOf(step);
+    if (idx >= 0 && idx < activeSteps.length - 1) setStep(activeSteps[idx + 1]);
   }
   function back() {
-    const idx = PLANNING_STEPS.indexOf(step);
-    if (idx > 0) setStep(PLANNING_STEPS[idx - 1]);
+    const idx = activeSteps.indexOf(step);
+    if (idx > 0) setStep(activeSteps[idx - 1]);
   }
 
   function generateRecommendation() {
@@ -217,11 +236,12 @@ export default function PlanningPanel({
       <PipelineRail
         doneStageIds={doneStageIds}
         currentStageIds={currentStageIds}
+        notApplicableStageIds={notApplicableStageIds}
         onSelectStage={jumpToStage}
       />
 
       <nav className="pp-steps" aria-label="Workflow steps">
-        {PLANNING_STEPS.map((s, i) => (
+        {activeSteps.map((s, i) => (
           <button
             key={s}
             className={`pp-step-dot ${i === stepIndex ? "active" : ""} ${i < stepIndex ? "done" : ""}`}
@@ -389,27 +409,79 @@ export default function PlanningPanel({
               }}
             />
 
-            <h2 className="pp-section-title pp-section-title-spaced">Existing Connectivity</h2>
-            <p className="design-step-intro">
-              Where this site needs strong connectivity to, analyzed against real submarine cable and landing-point
-              data. A modeled new-cable route between the two is generated on the next step.
-            </p>
-            <LocationSearchField
-              label="Connectivity destination"
-              optional
-              placeholder="e.g. Singapore"
-              value={destination}
-              onResolved={(loc) => {
-                setRequirement((r) => ({
-                  ...r,
-                  locationConnectivity: { ...r.locationConnectivity, connectivityDestination: loc },
-                }));
-                onDestinationResolved(loc);
-              }}
-            />
+            {/* Site conditions appear the moment a location resolves, not at
+                the end of the wizard. For a build-only user this IS the
+                product, and deferring it to the recommendation screen meant
+                answering four screens of questions before the tool said
+                anything about the place they had chosen. */}
+            {location.lat != null && location.lng != null && (
+              <CoolingAdvisor
+                key={`site-${location.lat},${location.lng},${location.countryCode ?? ""}`}
+                lat={location.lat}
+                lng={location.lng}
+                countryCode={location.countryCode}
+                compact
+              />
+            )}
 
-            {connectivityAnalysis && (
-              <ConnectivityAnalysisPanel analysis={connectivityAnalysis} onExploreCables={onExploreCables} />
+            <h2 className="pp-section-title pp-section-title-spaced">Subsea Connectivity</h2>
+            <label className="design-option-row pp-mode-toggle">
+              <input
+                type="checkbox"
+                checked={connectivityPlanning}
+                onChange={(e) => {
+                  const on = e.target.checked;
+                  setConnectivityPlanning(on);
+                  if (!on) {
+                    // Clear the destination rather than merely hiding it --
+                    // otherwise a previously typed city would keep driving the
+                    // connectivity analysis, the globe marker and the route
+                    // summary while the user believes it is switched off.
+                    setRequirement((r) => ({
+                      ...r,
+                      locationConnectivity: { ...r.locationConnectivity, connectivityDestination: { query: "" } },
+                    }));
+                    onDestinationResolved({ query: "" });
+                    onSelectRouteCandidate(null);
+                    onRouteResult(null);
+                    // No need to move the user off the routes step: this
+                    // toggle only renders on site-connectivity.
+                  }
+                }}
+              />
+              <span className="design-option-text">
+                <strong>Plan a new subsea cable connection</strong>
+                <span className="design-option-caption">
+                  Leave unticked to size and specify the facility only. Everything else -- climate, water, grid carbon,
+                  tier and cooling -- is site-local and works either way.
+                </span>
+              </span>
+            </label>
+
+            {connectivityPlanning && (
+              <>
+                <p className="design-step-intro">
+                  Where this site needs strong connectivity to, analyzed against real submarine cable and landing-point
+                  data. A modeled new-cable route between the two is generated on the next step.
+                </p>
+                <LocationSearchField
+                  label="Connectivity destination"
+                  optional
+                  placeholder="e.g. Singapore"
+                  value={destination}
+                  onResolved={(loc) => {
+                    setRequirement((r) => ({
+                      ...r,
+                      locationConnectivity: { ...r.locationConnectivity, connectivityDestination: loc },
+                    }));
+                    onDestinationResolved(loc);
+                  }}
+                />
+
+                {connectivityAnalysis && (
+                  <ConnectivityAnalysisPanel analysis={connectivityAnalysis} onExploreCables={onExploreCables} />
+                )}
+              </>
             )}
 
             <div className="design-nav">
@@ -519,6 +591,11 @@ export default function PlanningPanel({
                 <p className="pp-why">{buildExplanation(result)}</p>
               </div>
 
+              {/* Connectivity sections only when the user is actually
+                  planning a connection. A build-only recommendation should not
+                  end with two sections telling them to add a destination. */}
+              {connectivityPlanning && (
+                <>
               <h2 className="pp-section-title pp-section-title-spaced">Existing Connectivity</h2>
               {connectivityAnalysis && (
               <ConnectivityAnalysisPanel analysis={connectivityAnalysis} onExploreCables={onExploreCables} />
@@ -586,6 +663,8 @@ export default function PlanningPanel({
                     ? "No hypothetical route was generated -- see the Hypothetical Routes step for details."
                     : "Add a connectivity destination to generate hypothetical marine cable routes."}
                 </p>
+              )}
+                </>
               )}
 
               <h2 className="pp-section-title pp-section-title-spaced">Data Centre Design</h2>
@@ -711,24 +790,29 @@ export default function PlanningPanel({
 function PipelineRail({
   doneStageIds,
   currentStageIds,
+  notApplicableStageIds,
   onSelectStage,
 }: {
   doneStageIds: Set<PipelineStageId>;
   currentStageIds: Set<PipelineStageId>;
+  /** Stages the user has opted out of. Rendered struck through rather than removed, so the pipeline's shape stays legible and the opt-out is visible. */
+  notApplicableStageIds: Set<PipelineStageId>;
   onSelectStage: (id: PipelineStageId) => void;
 }) {
   return (
     <div className="pp-rail" aria-label="Full analysis pipeline">
       {PIPELINE_STAGES.map((stage) => {
-        const isDone = doneStageIds.has(stage.id);
-        const isCurrent = currentStageIds.has(stage.id);
+        const isNotApplicable = notApplicableStageIds.has(stage.id);
+        const isDone = !isNotApplicable && doneStageIds.has(stage.id);
+        const isCurrent = !isNotApplicable && currentStageIds.has(stage.id);
         const isPlanned = !stage.implemented;
-        const clickable = stage.implemented && (isDone || isCurrent);
+        const clickable = stage.implemented && !isNotApplicable && (isDone || isCurrent);
         const cls = [
           "pp-rail-chip",
           isCurrent ? "current" : "",
           isDone && !isCurrent ? "done" : "",
           isPlanned ? "planned" : "",
+          isNotApplicable ? "not-applicable" : "",
         ]
           .filter(Boolean)
           .join(" ");
@@ -736,7 +820,13 @@ function PipelineRail({
           <button
             key={stage.id}
             className={cls}
-            title={isPlanned ? `${stage.label} -- planned, not yet implemented` : stage.label}
+            title={
+              isNotApplicable
+                ? `${stage.label} -- not applicable: no subsea connection is being planned`
+                : isPlanned
+                  ? `${stage.label} -- planned, not yet implemented`
+                  : stage.label
+            }
             onClick={() => (clickable ? onSelectStage(stage.id) : undefined)}
             disabled={!clickable}
           >
