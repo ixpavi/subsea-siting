@@ -151,6 +151,10 @@ interface Props {
   routeEngineResult?: RouteEngineResult | null;
   selectedRouteCandidateId?: RoutingProfileId | null;
   onSelectRouteCandidate?: (id: RoutingProfileId | null) => void;
+  /** Fires once the globe has built its geometry and painted a frame. Used by
+   *  the launch screen to hold the overlay until there is something finished
+   *  underneath it, rather than revealing a globe that is still assembling. */
+  onReady?: () => void;
 }
 
 function hexToRgba(hex: string, alpha: number): string {
@@ -195,6 +199,7 @@ const Globe = forwardRef<GlobeApi, Props>(function Globe(
     routeEngineResult = null,
     selectedRouteCandidateId = null,
     onSelectRouteCandidate,
+    onReady,
   },
   ref
 ) {
@@ -877,6 +882,20 @@ const Globe = forwardRef<GlobeApi, Props>(function Globe(
       globeImageUrl={earthTextureUrl}
       bumpImageUrl="/textures/earth-topology.png"
       backgroundImageUrl="/textures/night-sky.png"
+      onGlobeReady={() => {
+        // three-globe signals readiness once ITS setup is done, but the
+        // expensive part here is our own layer geometry -- 724 cable paths and
+        // several hundred markers -- built over the renders that follow.
+        // Reporting ready immediately would hand the launch screen a globe
+        // that is still assembling, which is the stutter this exists to remove.
+        //
+        // Deliberately setTimeout and NOT requestAnimationFrame. rAF does not
+        // fire in a hidden or backgrounded tab, so a user who switched tabs
+        // while loading would never be told the globe was ready and would sit
+        // on the launch screen indefinitely. setTimeout still fires when
+        // backgrounded (throttled, but it fires).
+        window.setTimeout(() => onReady?.(), 150);
+      }}
       showAtmosphere
       atmosphereColor="#4fd1ff"
       atmosphereAltitude={0.22}

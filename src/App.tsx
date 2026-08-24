@@ -35,10 +35,17 @@ export default function App() {
   const [subseaDCs, setSubseaDCs] = useState<SubseaDC[]>([]);
   const [landingPoints, setLandingPoints] = useState<LandingPoint[]>([]);
   const [loading, setLoading] = useState(true);
-  // Gate on an explicit user action: the globe is heavy to initialise, and
-  // starting that work while the user is still reading is what made the first
-  // seconds feel broken.
+  // The globe mounts IMMEDIATELY, behind the launch overlay, and the overlay
+  // only fades once the globe reports it has finished building. An earlier
+  // version deferred mounting until Launch was pressed, which moved the whole
+  // geometry burst to the moment the user clicked -- so the screen went from
+  // "loading" straight into several seconds of stutter. Building behind the
+  // curtain and then revealing something already finished is the difference
+  // between hiding the wait and actually filling it.
   const [launched, setLaunched] = useState(false);
+  const [globeReady, setGlobeReady] = useState(false);
+  const handleGlobeReady = useCallback(() => setGlobeReady(true), []);
+
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Selection | null>(null);
   const [rotating, setRotating] = useState(true);
@@ -108,6 +115,18 @@ export default function App() {
     img.src = "/textures/earth-8k.jpg";
   }, [markLoaded]);
 
+  // Failsafe. Gating the Launch button on a callback means that if the
+  // callback never arrives -- a WebGL context that fails to initialise, a
+  // driver quirk, anything unforeseen -- the user is trapped on a loading
+  // screen with no way forward. Nothing about a loading overlay is important
+  // enough to justify that, so after this long the button unlocks regardless
+  // and the worst case is the stutter that existed before.
+  useEffect(() => {
+    if (globeReady || loading || error) return;
+    const t = window.setTimeout(() => setGlobeReady(true), 12000);
+    return () => window.clearTimeout(t);
+  }, [globeReady, loading, error]);
+
   const loadSteps: LoadStep[] = useMemo(
     () => [
       { id: "cables", label: "Submarine cable geometry (TeleGeography)", done: !!loadedSteps.cables },
@@ -115,8 +134,10 @@ export default function App() {
       { id: "landings", label: "Cable landing points", done: !!loadedSteps.landings },
       { id: "subsea", label: "Subsea data centre sites", done: !!loadedSteps.subsea },
       { id: "texture", label: "Earth imagery (NASA Blue Marble, 8K)", done: !!loadedSteps.texture },
+      // Real work, and the step that used to happen AFTER the user clicked.
+      { id: "globe", label: "Building globe geometry", done: globeReady },
     ],
-    [loadedSteps]
+    [loadedSteps, globeReady]
   );
 
   function focusCamera(loc: LocationRequirement | null, dest: LocationRequirement | null) {
@@ -301,10 +322,10 @@ export default function App() {
       )}
       {error && launched && <div className="error-overlay">{error}</div>}
 
-      {/* The globe is only mounted after Launch. Building it costs a large
-          burst of geometry work, and doing that behind the loading screen
-          just moved the stutter to the moment the user started interacting. */}
-      {launched && !loading && !error && (
+      {/* Mounted as soon as the data is in, underneath the launch overlay, so
+          the geometry burst happens while the user is still reading rather
+          than after they click. */}
+      {!loading && !error && (
         <>
           <Globe
             ref={globeApiRef}
@@ -312,7 +333,7 @@ export default function App() {
             landDCs={landDCs}
             subseaDCs={subseaDCs}
             toggles={toggles}
-            rotating={rotating}
+            rotating={rotating && launched}
             onUserInteracted={() => setRotating(false)}
             onSelect={handleSelectFacility}
             planningMode={planningMode}
@@ -322,6 +343,7 @@ export default function App() {
             routeEngineResult={routeEngineResult}
             selectedRouteCandidateId={selectedRouteCandidateId}
             onSelectRouteCandidate={setSelectedRouteCandidateId}
+            onReady={handleGlobeReady}
             connectivityAnalysis={connectivityAnalysis}
             onSelectConnectivityItem={setConnectivitySelection}
             landingPoints={landingPoints}
