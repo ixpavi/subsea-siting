@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Globe from "./Globe";
+import CesiumGlobe from "./CesiumGlobe";
 import type { GlobeApi, PlanningMarker, ConnectivitySelection } from "./Globe";
 import Legend from "./Legend";
 import SiteComparisonPanel from "./siting/SiteComparisonPanel";
@@ -27,6 +28,13 @@ async function fetchJSON<T>(path: string): Promise<T> {
   if (!res.ok) throw new Error(`Failed to load ${path}: ${res.status}`);
   return res.json();
 }
+
+/** Renderer comparison switch. `?cesium` selects the Cesium build.
+ *  Read once at module load -- switching renderers mid-session would mean
+ *  tearing down a WebGL context and rebuilding every layer, which is not what
+ *  this comparison is measuring. */
+const USE_CESIUM =
+  typeof window !== "undefined" && new URLSearchParams(window.location.search).has("cesium");
 
 export default function App() {
   const [cables, setCables] = useState<CableFeature[]>([]);
@@ -259,7 +267,15 @@ export default function App() {
       {loading && <div className="loading-overlay">Loading globe data…</div>}
       {error && <div className="error-overlay">{error}</div>}
 
-      {!loading && !error && (
+      {!loading && !error && USE_CESIUM && (
+        <CesiumGlobe
+          cables={cables}
+          landDCs={landDCs}
+          onSelectCable={(cableId) => handleSelectNetworkItem({ kind: "cable", cableId })}
+        />
+      )}
+
+      {!loading && !error && !USE_CESIUM && (
         <>
           <Globe
             ref={globeApiRef}
