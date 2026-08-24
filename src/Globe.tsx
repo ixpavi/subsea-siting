@@ -7,7 +7,6 @@ import type { CableNetworkIndex, NetworkSelection } from "./cableNetwork";
 import { findCablesNearScreenPoint, CABLE_HIT_TOLERANCE_PX, CABLE_HIT_AMBIGUITY_MARGIN_PX } from "./cableHitTest";
 import type { CableHitCandidate } from "./cableHitTest";
 import { findRoutesNearScreenPoint } from "./routing/routeHitTest";
-import { clusterPoints, clusterCellDeg, clusterRadiusScale } from "./markerClustering";
 import type { RouteEngineResult, RoutingProfileId } from "./routing/routingTypes";
 
 const LAND_DC_COLOR = "#5eead4";
@@ -61,8 +60,7 @@ const SELECTED_ROUTE_COLOR = "#ffffff";
 const EARTH_TEXTURE_SMALL = "/textures/earth-2k.jpg";
 const EARTH_TEXTURE_FULL = "/textures/earth-8k.jpg";
 
-/** Starting camera altitude, and the reference point for marker scaling --
- *  markerScale is 1 here and shrinks as the camera moves closer. */
+/** Starting camera altitude. */
 const DEFAULT_ALTITUDE = 2.2;
 
 type ArcDatum =
@@ -151,10 +149,6 @@ interface Props {
   routeEngineResult?: RouteEngineResult | null;
   selectedRouteCandidateId?: RoutingProfileId | null;
   onSelectRouteCandidate?: (id: RoutingProfileId | null) => void;
-  /** Fires once the globe has built its geometry and painted a frame. Used by
-   *  the launch screen to hold the overlay until there is something finished
-   *  underneath it, rather than revealing a globe that is still assembling. */
-  onReady?: () => void;
 }
 
 function hexToRgba(hex: string, alpha: number): string {
@@ -199,7 +193,6 @@ const Globe = forwardRef<GlobeApi, Props>(function Globe(
     routeEngineResult = null,
     selectedRouteCandidateId = null,
     onSelectRouteCandidate,
-    onReady,
   },
   ref
 ) {
@@ -364,29 +357,7 @@ const Globe = forwardRef<GlobeApi, Props>(function Globe(
   const hasFocusedSelection =
     planningMode || exploreSelectedCableId !== null || exploreSelectedLandingPointId !== null;
 
-  // --- Zoom-aware marker scale ----------------------------------------------
-  // pointRadius is an ANGULAR radius in degrees, so a fixed value draws a
-  // fixed patch of the Earth regardless of zoom. At the previous 0.42 deg a
-  // land facility was a 93 km blob and a subsea site 190 km -- for buildings
-  // that are ~100 m across. Zoomed out that reads as a smear of overlapping
-  // dots; zoomed in it makes it impossible to see WHERE a facility actually
-  // is, which is the whole point of zooming.
-  //
-  // Scaling the radius with camera altitude keeps markers roughly constant on
-  // SCREEN: visible when zoomed out, and shrinking onto their true position as
-  // you approach. Clamped at both ends so they never vanish or swell.
-  //
-  // PERFORMANCE: this state must only change when the camera SETTLES, never
-  // while it is moving. Changing it re-runs the point accessors and rebuilds
-  // the geometry for every marker; doing that mid-drag is a rebuild of
-  // thousands of markers on a frame the user is trying to interact with. The
-  // first version of this quantized to 1/20 steps and updated live, which
-  // meant a single zoom gesture triggered ~20 full rebuilds -- stutter
-  // introduced by the very change that was supposed to improve things.
-  // Debouncing instead means one rebuild per gesture, and the markers being
-  // momentarily the wrong size mid-zoom is imperceptible.
-  const [camera, setCamera] = useState<{ scale: number; lat: number; lng: number; altitude: number }>({
-    scale: 1,
+  const [camera, setCamera] = useState<{ lat: number; lng: number; altitude: number }>({
     lat: 20,
     lng: 10,
     altitude: DEFAULT_ALTITUDE,
@@ -399,13 +370,12 @@ const Globe = forwardRef<GlobeApi, Props>(function Globe(
     const commit = () => {
       const pov = g.pointOfView?.();
       if (!pov || typeof pov.altitude !== "number") return;
-      const clamped = Math.min(1.3, Math.max(0.16, pov.altitude / DEFAULT_ALTITUDE));
       setCamera((prev) =>
-        Math.abs(prev.scale - clamped) < 0.02 &&
+        Math.abs(prev.altitude - pov.altitude) < 0.05 &&
         Math.abs(prev.lat - pov.lat) < 2 &&
         Math.abs(prev.lng - pov.lng) < 2
           ? prev
-          : { scale: clamped, lat: pov.lat, lng: pov.lng, altitude: pov.altitude }
+          : { lat: pov.lat, lng: pov.lng, altitude: pov.altitude }
       );
     };
     const update = () => {
@@ -419,8 +389,6 @@ const Globe = forwardRef<GlobeApi, Props>(function Globe(
       controls.removeEventListener("change", update);
     };
   }, []);
-
-  const markerScale = camera.scale;
 
   /** Angular radius of the visible cap, in degrees, plus a margin.
    *  From altitude h (in globe radii) the horizon is at acos(1/(1+h)) -- 72
@@ -551,38 +519,18 @@ const Globe = forwardRef<GlobeApi, Props>(function Globe(
     [camera.lat, camera.lng, visibleCapDeg]
   );
 
-  // Cluster the bulk facility layer after culling. At default zoom 5,260
-  // markers are geometry the GPU builds and the user cannot read -- London,
-  // Frankfurt and Northern Virginia are each a solid blob long before the
-  // individual points stop being drawn. Clusters carry their member count, so
-  // the abstraction states what it is standing for rather than pretending to
-  // be one facility. Cell size shrinks with altitude and reaches zero close
-  // in, where every facility is its own marker again.
-  const landClusters = useMemo(
-    () =>
-      toggles.landDCs && !connectivityAnalysis
-        ? clusterPoints(cullToVisible(landDCs), clusterCellDeg(camera.altitude))
-        : [],
-    [toggles.landDCs, connectivityAnalysis, landDCs, cullToVisible, camera.altitude]
-  );
-
   const pointsData = useMemo(
     () => [
-      ...landClusters.map((c) => ({
-        kind: "land" as const,
-        // A single-member cluster IS the facility, so it keeps every property
-        // the tooltip and click handler expect.
-        data: c.members.length === 1 ? c.members[0] : { ...c.members[0], lat: c.lat, lng: c.lng },
-        clusterCount: c.members.length,
-        clusterKey: c.key,
-      })),
+      ...(toggles.landDCs && !connectivityAnalysis
+        ? cullToVisible(landDCs).map((d) => ({ kind: "land" as const, data: d }))
+        : []),
       ...(toggles.subseaDCs && !connectivityAnalysis
         ? cullToVisible(subseaDCs).map((d) => ({ kind: "subsea" as const, data: d }))
         : []),
       ...connectivityLandingPoints.map((lp) => ({ kind: "landingPoint" as const, data: lp })),
       ...explorePointsData,
     ],
-    [landClusters, toggles.subseaDCs, connectivityAnalysis, subseaDCs, connectivityLandingPoints, explorePointsData, cullToVisible]
+    [toggles.landDCs, toggles.subseaDCs, connectivityAnalysis, landDCs, subseaDCs, connectivityLandingPoints, explorePointsData, cullToVisible]
   );
 
   // Custom cable click/hover hit-testing -- see cableHitTest.ts for why
@@ -710,9 +658,22 @@ const Globe = forwardRef<GlobeApi, Props>(function Globe(
     // "hover says yes, click says no" symptom this was causing.
     function handlePointerMove(e: PointerEvent) {
       const now = performance.now();
-      if (now - lastHoverAt < 50) return;
+      if (now - lastHoverAt < 90) return;
       lastHoverAt = now;
       const pos = canvasPos(e);
+
+      // Hover is advisory -- it only sets the cursor. When the pointer is not
+      // over the globe at all there is nothing to hit, so skip the scan
+      // entirely rather than projecting cable geometry against empty space.
+      // Most pointer movement in a session is over space, and this was running
+      // a full scan for all of it. Clicking still runs the authoritative scan
+      // in handlePointerUp, so nothing about hit accuracy changes.
+      const g = globeRef.current;
+      if (g?.toGlobeCoords && !g.toGlobeCoords(pos.x, pos.y)) {
+        canvas.style.cursor = "default";
+        return;
+      }
+
       if (resolveCandidates(pos.x, pos.y).length > 0) {
         canvas.style.cursor = "pointer";
         return;
@@ -882,20 +843,6 @@ const Globe = forwardRef<GlobeApi, Props>(function Globe(
       globeImageUrl={earthTextureUrl}
       bumpImageUrl="/textures/earth-topology.png"
       backgroundImageUrl="/textures/night-sky.png"
-      onGlobeReady={() => {
-        // three-globe signals readiness once ITS setup is done, but the
-        // expensive part here is our own layer geometry -- 724 cable paths and
-        // several hundred markers -- built over the renders that follow.
-        // Reporting ready immediately would hand the launch screen a globe
-        // that is still assembling, which is the stutter this exists to remove.
-        //
-        // Deliberately setTimeout and NOT requestAnimationFrame. rAF does not
-        // fire in a hidden or backgrounded tab, so a user who switched tabs
-        // while loading would never be told the globe was ready and would sit
-        // on the launch screen indefinitely. setTimeout still fires when
-        // backgrounded (throttled, but it fires).
-        window.setTimeout(() => onReady?.(), 150);
-      }}
       showAtmosphere
       atmosphereColor="#4fd1ff"
       atmosphereAltitude={0.22}
@@ -1057,33 +1004,31 @@ const Globe = forwardRef<GlobeApi, Props>(function Globe(
       }}
       pointAltitude={(p: unknown) => {
         const item = p as { kind: string; data?: { id?: string } };
-        // Altitude is the column height above the surface. It scales with the
-        // same factor as radius, or markers become tall spikes when zoomed in.
-        const s = markerScale;
-        if (item.kind === "landingPoint") return 0.012 * s;
+        if (item.kind === "landingPoint") return 0.012;
         if (item.kind === "exploreLandingPoint") {
           const id = item.data?.id;
           const emphasized =
             (id && exploreSelectedLandingPointId === id) || (id && exploreSelectedCableLandingPointIds?.has(id));
-          return (emphasized ? 0.014 : 0.006) * s;
+          return emphasized ? 0.014 : 0.006;
         }
-        return (item.kind === "subsea" ? 0.018 : 0.006) * s;
+        return item.kind === "subsea" ? 0.018 : 0.006;
       }}
+      // Fixed angular sizes, tuned for legibility at the zoom levels this globe
+      // is actually used at. An earlier version scaled these with camera
+      // altitude to make markers pinpoint-accurate when zoomed in; that was the
+      // wrong trade. The Earth texture is 8K, so there is no satellite-level
+      // detail to pinpoint AGAINST -- shrinking the markers only made them
+      // harder to see and bought precision the imagery cannot support.
       pointRadius={(p: unknown) => {
         const item = p as { kind: string; data?: { id?: string } };
-        // Base radii roughly halved from the originals AND scaled by zoom.
-        // The old land-facility value of 0.42 deg drew a 93 km circle for a
-        // building; 0.2 deg at full zoom-out is ~22 km and shrinks from there.
-        const s = markerScale;
-        if (item.kind === "landingPoint") return 0.3 * s;
+        if (item.kind === "landingPoint") return 0.55;
         if (item.kind === "exploreLandingPoint") {
           const id = item.data?.id;
-          if (id && exploreSelectedLandingPointId === id) return 0.42 * s;
-          if (id && exploreSelectedCableLandingPointIds?.has(id)) return 0.3 * s;
-          return 0.16 * s;
+          if (id && exploreSelectedLandingPointId === id) return 0.7;
+          if (id && exploreSelectedCableLandingPointIds?.has(id)) return 0.48;
+          return 0.28;
         }
-        const cluster = (p as { clusterCount?: number }).clusterCount ?? 1;
-        return (item.kind === "subsea" ? 0.44 : 0.2) * s * clusterRadiusScale(cluster);
+        return item.kind === "subsea" ? 0.85 : 0.42;
       }}
       // Back to 8. Raising this to 14 to smooth the octagon edge was the wrong
       // trade: it added ~75% more geometry across thousands of markers to fix
@@ -1091,18 +1036,6 @@ const Globe = forwardRef<GlobeApi, Props>(function Globe(
       // Now that they are sized correctly the facet count is imperceptible.
       pointResolution={8}
       pointLabel={(p: unknown) => {
-        // A cluster stands for several facilities and must say so. Showing one
-        // member's name would attribute a specific operator and address to a
-        // marker drawn at an averaged position -- a fabricated fact, and
-        // exactly the kind this project refuses to produce elsewhere.
-        const clusterCount = (p as { clusterCount?: number }).clusterCount ?? 1;
-        if (clusterCount > 1) {
-          return `<div class="globe-tooltip">
-            <div style="font-weight:600">${clusterCount} data centre facilities</div>
-            <div class="detail-section-label" style="margin:4px 0">CLUSTERED VIEW</div>
-            <div class="globe-tooltip-hint">zoom in to see them individually</div>
-          </div>`;
-        }
         const point = p as
           | Selection
           | { kind: "landingPoint"; data: ConnectivityLandingPointDatum }
@@ -1156,19 +1089,7 @@ const Globe = forwardRef<GlobeApi, Props>(function Globe(
           </div>`;
       }}
       onPointClick={(p: unknown) => {
-        const item = p as { kind: string; data: unknown; clusterCount?: number };
-        // Clicking a cluster zooms toward it rather than selecting one of its
-        // members. Opening the detail panel for an arbitrary facility the user
-        // did not choose would be a guess presented as their selection.
-        if ((item.clusterCount ?? 1) > 1) {
-          const d = item.data as { lat: number; lng: number };
-          onUserInteracted();
-          globeRef.current?.pointOfView(
-            { lat: d.lat, lng: d.lng, altitude: Math.max(0.3, camera.altitude * 0.45) },
-            900
-          );
-          return;
-        }
+        const item = p as { kind: string; data: unknown };
         if (item.kind === "landingPoint") {
           onSelectConnectivityItem?.({ kind: "landingPoint", data: item.data as ConnectivityLandingPointDatum });
           return;

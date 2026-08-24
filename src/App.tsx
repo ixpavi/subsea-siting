@@ -1,10 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Globe from "./Globe";
 import type { GlobeApi, PlanningMarker, ConnectivitySelection } from "./Globe";
 import Legend from "./Legend";
-import LaunchScreen from "./LaunchScreen";
 import SiteComparisonPanel from "./siting/SiteComparisonPanel";
-import type { LoadStep } from "./LaunchScreen";
 import DetailPanel from "./DetailPanel";
 import PlanningPanel from "./design/PlanningPanel";
 import ConnectivityInspector from "./design/ConnectivityInspector";
@@ -35,16 +33,6 @@ export default function App() {
   const [subseaDCs, setSubseaDCs] = useState<SubseaDC[]>([]);
   const [landingPoints, setLandingPoints] = useState<LandingPoint[]>([]);
   const [loading, setLoading] = useState(true);
-  // The globe mounts IMMEDIATELY, behind the launch overlay, and the overlay
-  // only fades once the globe reports it has finished building. An earlier
-  // version deferred mounting until Launch was pressed, which moved the whole
-  // geometry burst to the moment the user clicked -- so the screen went from
-  // "loading" straight into several seconds of stutter. Building behind the
-  // curtain and then revealing something already finished is the difference
-  // between hiding the wait and actually filling it.
-  const [launched, setLaunched] = useState(false);
-  const [globeReady, setGlobeReady] = useState(false);
-  const handleGlobeReady = useCallback(() => setGlobeReady(true), []);
 
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Selection | null>(null);
@@ -73,28 +61,12 @@ export default function App() {
   const [cableChoices, setCableChoices] = useState<CableHitCandidate[] | null>(null);
   const [compareOpen, setCompareOpen] = useState(false);
 
-  // Each dataset marks its own step complete as it lands, so the launch
-  // screen's progress reflects work that actually finished rather than a
-  // timer. The Earth texture is included because it is the largest single
-  // asset (4.2 MB) and dominates the wait on a slow connection -- excluding
-  // it would show 100% while the globe was still blank.
-  const [loadedSteps, setLoadedSteps] = useState<Record<string, boolean>>({});
-  const markLoaded = useCallback((id: string) => {
-    setLoadedSteps((prev) => (prev[id] ? prev : { ...prev, [id]: true }));
-  }, []);
-
   useEffect(() => {
-    const track = <T,>(id: string, p: Promise<T>) =>
-      p.then((v) => {
-        markLoaded(id);
-        return v;
-      });
-
     Promise.all([
-      track("cables", fetchJSON<CableFeature[]>("/data/cables.json")),
-      track("facilities", fetchJSON<LandDC[]>("/data/land-dcs.json")),
-      track("subsea", fetchJSON<SubseaDC[]>("/data/subsea-dcs.json")),
-      track("landings", fetchJSON<LandingPoint[]>("/data/landing-points.json")),
+      fetchJSON<CableFeature[]>("/data/cables.json"),
+      fetchJSON<LandDC[]>("/data/land-dcs.json"),
+      fetchJSON<SubseaDC[]>("/data/subsea-dcs.json"),
+      fetchJSON<LandingPoint[]>("/data/landing-points.json"),
     ])
       .then(([c, l, s, lp]) => {
         setCables(c);
@@ -104,41 +76,7 @@ export default function App() {
       })
       .catch((e) => setError(String(e)))
       .finally(() => setLoading(false));
-
-    // Decoding, not just downloading -- an Image that has loaded is one the
-    // GPU upload can proceed from without stalling the first frames.
-    const img = new Image();
-    const finish = () => markLoaded("texture");
-    img.onload = finish;
-    // A missing texture must not strand the user on the launch screen forever.
-    img.onerror = finish;
-    img.src = "/textures/earth-8k.jpg";
-  }, [markLoaded]);
-
-  // Failsafe. Gating the Launch button on a callback means that if the
-  // callback never arrives -- a WebGL context that fails to initialise, a
-  // driver quirk, anything unforeseen -- the user is trapped on a loading
-  // screen with no way forward. Nothing about a loading overlay is important
-  // enough to justify that, so after this long the button unlocks regardless
-  // and the worst case is the stutter that existed before.
-  useEffect(() => {
-    if (globeReady || loading || error) return;
-    const t = window.setTimeout(() => setGlobeReady(true), 12000);
-    return () => window.clearTimeout(t);
-  }, [globeReady, loading, error]);
-
-  const loadSteps: LoadStep[] = useMemo(
-    () => [
-      { id: "cables", label: "Submarine cable geometry (TeleGeography)", done: !!loadedSteps.cables },
-      { id: "facilities", label: "Data centre facilities (PeeringDB)", done: !!loadedSteps.facilities },
-      { id: "landings", label: "Cable landing points", done: !!loadedSteps.landings },
-      { id: "subsea", label: "Subsea data centre sites", done: !!loadedSteps.subsea },
-      { id: "texture", label: "Earth imagery (NASA Blue Marble, 8K)", done: !!loadedSteps.texture },
-      // Real work, and the step that used to happen AFTER the user clicked.
-      { id: "globe", label: "Building globe geometry", done: globeReady },
-    ],
-    [loadedSteps, globeReady]
-  );
+  }, []);
 
   function focusCamera(loc: LocationRequirement | null, dest: LocationRequirement | null) {
     const api = globeApiRef.current;
@@ -317,14 +255,9 @@ export default function App() {
         </p>
       </header>
 
-      {!launched && (
-        <LaunchScreen steps={loadSteps} error={error} onLaunch={() => setLaunched(true)} />
-      )}
-      {error && launched && <div className="error-overlay">{error}</div>}
+      {loading && <div className="loading-overlay">Loading globe data…</div>}
+      {error && <div className="error-overlay">{error}</div>}
 
-      {/* Mounted as soon as the data is in, underneath the launch overlay, so
-          the geometry burst happens while the user is still reading rather
-          than after they click. */}
       {!loading && !error && (
         <>
           <Globe
@@ -333,7 +266,7 @@ export default function App() {
             landDCs={landDCs}
             subseaDCs={subseaDCs}
             toggles={toggles}
-            rotating={rotating && launched}
+            rotating={rotating}
             onUserInteracted={() => setRotating(false)}
             onSelect={handleSelectFacility}
             planningMode={planningMode}
@@ -343,7 +276,6 @@ export default function App() {
             routeEngineResult={routeEngineResult}
             selectedRouteCandidateId={selectedRouteCandidateId}
             onSelectRouteCandidate={setSelectedRouteCandidateId}
-            onReady={handleGlobeReady}
             connectivityAnalysis={connectivityAnalysis}
             onSelectConnectivityItem={setConnectivitySelection}
             landingPoints={landingPoints}

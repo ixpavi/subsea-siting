@@ -83,6 +83,10 @@ export interface GlobeProjection {
   getScreenCoords: (lat: number, lng: number, altitude?: number) => { x: number; y: number };
   camera: () => { position: { x: number; y: number; z: number }; updateMatrixWorld: (force?: boolean) => void };
   controls: () => { update: () => void };
+  /** Screen point -> the lat/lng under it, or null when the point is off the
+   *  globe entirely. Used to prune the scan; optional so existing callers and
+   *  tests that supply a minimal projection stub keep working. */
+  toGlobeCoords?: (x: number, y: number) => { lat: number; lng: number } | null;
 }
 
 /** Generous, screen-space, zoom-independent click tolerance around a cable's real geometry. */
@@ -150,6 +154,79 @@ export function isFacingCamera(world: { x: number; y: number; z: number }, camPo
 }
 
 /**
+ * Per-path latitude/longitude bounds, cached against the cables array.
+ *
+ * WHY. The scan below densifies every stored segment and runs TWO matrix
+ * projections per densified point. Across 724 cables / 1,933 paths / 14,103
+ * stored points that is well over a hundred thousand projections per call --
+ * and the hover handler was calling it 20 times a second, so simply moving the
+ * pointer across the globe cost hundreds of thousands of projections per
+ * second. That is the interaction stutter, not the rendering.
+ *
+ * A cable can only be near the cursor if its geometry is near the cursor, and
+ * that can be decided from the STORED coordinates without projecting anything.
+ * Bounds are computed once per cables array and reused.
+ */
+const boundsCache = new WeakMap<CableFeature[], PathBounds[][]>();
+
+interface PathBounds {
+  minLat: number;
+  maxLat: number;
+  minLng: number;
+  maxLng: number;
+  /** True when the path crosses the antimeridian, where a lat/lng box is
+   *  meaningless. Such paths are never pruned -- being conservative costs a
+   *  handful of extra projections; being wrong loses a clickable cable. */
+  spansSeam: boolean;
+}
+
+function boundsFor(cables: CableFeature[]): PathBounds[][] {
+  const cached = boundsCache.get(cables);
+  if (cached) return cached;
+  const all = cables.map((cable) =>
+    cable.paths.map((path) => {
+      let minLat = 90, maxLat = -90, minLng = 180, maxLng = -180, spansSeam = false;
+      for (let i = 0; i < path.length; i++) {
+        const [lat, lng] = path[i];
+        if (lat < minLat) minLat = lat;
+        if (lat > maxLat) maxLat = lat;
+        if (lng < minLng) minLng = lng;
+        if (lng > maxLng) maxLng = lng;
+        if (i > 0 && Math.abs(lng - path[i - 1][1]) > 180) spansSeam = true;
+      }
+      return { minLat, maxLat, minLng, maxLng, spansSeam };
+    })
+  );
+  boundsCache.set(cables, all);
+  return all;
+}
+
+/**
+ * Angular margin, in degrees, within which a path must fall to be worth
+ * projecting.
+ *
+ * Deliberately far larger than the pixel tolerance converts to at any zoom
+ * this globe supports. The failure mode of a margin that is too small is a
+ * cable that cannot be clicked, which is the behaviour this whole module
+ * exists to provide -- so the margin is sized to make that impossible rather
+ * than to squeeze out the last few projections. Even at 25 degrees the
+ * prefilter discards the overwhelming majority of paths.
+ */
+const PREFILTER_MARGIN_DEG = 25;
+
+function nearCursor(b: PathBounds, lat: number, lng: number): boolean {
+  if (b.spansSeam) return true;
+  if (lat < b.minLat - PREFILTER_MARGIN_DEG || lat > b.maxLat + PREFILTER_MARGIN_DEG) return false;
+  // Longitude separation must be measured the short way round.
+  const lo = b.minLng - PREFILTER_MARGIN_DEG;
+  const hi = b.maxLng + PREFILTER_MARGIN_DEG;
+  if (lng >= lo && lng <= hi) return true;
+  const dLo = Math.min(Math.abs(lng - lo), 360 - Math.abs(lng - lo));
+  const dHi = Math.min(Math.abs(lng - hi), 360 - Math.abs(lng - hi));
+  return Math.min(dLo, dHi) <= PREFILTER_MARGIN_DEG;
+}
+
+/**
  * Finds real cables whose stored path geometry passes within `toleranceOx`
  * screen pixels of (clickX, clickY), sorted closest-first. Multiple raw
  * cables.json entries sharing a cable id (see cableNetwork.ts's merge) are
@@ -168,9 +245,19 @@ export function findCablesNearScreenPoint(
   const camPos = globe.camera().position;
   const best = new Map<string, CableHitCandidate>();
 
-  for (const cable of cables) {
-    for (const path of cable.paths) {
+  // Prune to paths whose stored geometry is plausibly near the cursor before
+  // projecting anything. When the cursor is off the globe there is nothing to
+  // prune against, so the full scan still runs -- correctness first; callers
+  // that only need advisory feedback can skip the call entirely.
+  const cursor = globe.toGlobeCoords?.(clickX, clickY) ?? null;
+  const bounds = cursor ? boundsFor(cables) : null;
+
+  for (let ci = 0; ci < cables.length; ci++) {
+    const cable = cables[ci];
+    for (let pi = 0; pi < cable.paths.length; pi++) {
+      const path = cable.paths[pi];
       if (path.length < 2) continue;
+      if (cursor && bounds && !nearCursor(bounds[ci][pi], cursor.lat, cursor.lng)) continue;
 
       // Densify every real segment exactly as three-globe renders it -- see module doc, point 1.
       const densified: [number, number][] = [path[0]];

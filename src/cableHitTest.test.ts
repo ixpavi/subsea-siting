@@ -1,5 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { densifyRenderedSegment, pointToSegmentDistance, isFacingCamera } from "./cableHitTest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import {
+  densifyRenderedSegment,
+  pointToSegmentDistance,
+  isFacingCamera,
+  findCablesNearScreenPoint,
+} from "./cableHitTest";
+import type { CableFeature } from "./types";
 
 /**
  * These lock in the hit-test's hardest-won property: the densification here
@@ -83,5 +91,97 @@ describe("isFacingCamera", () => {
   });
   it("rejects a point exactly on the limb", () => {
     expect(isFacingCamera({ x: 1, y: 0, z: 0 }, cam)).toBe(false);
+  });
+});
+
+/**
+ * The spatial prefilter must be a pure optimisation.
+ *
+ * The scan densifies every stored segment and runs two matrix projections per
+ * densified point -- over 250,000 projections per call across the real
+ * dataset, and the hover handler was invoking it 20 times a second. Pruning
+ * paths whose stored coordinates are nowhere near the cursor removes ~60% of
+ * that, but a prefilter that drops a path the user could actually have clicked
+ * breaks the one thing this module exists to provide.
+ *
+ * So these tests do not check that the prefilter is fast. They check that
+ * turning it on NEVER changes which cables a click resolves to, on the real
+ * 724-cable dataset.
+ */
+describe("prefilter must not change results", () => {
+  const cables: CableFeature[] = JSON.parse(
+    readFileSync(join(process.cwd(), "public", "data", "cables.json"), "utf-8")
+  );
+
+  const W = 1600, H = 900, R = 300;
+
+  // Orthographic projection with screen (x, y) and depth (z) taken from
+  // DIFFERENT world axes. An earlier version of this harness used the same
+  // expression for screen-x and for depth, which let back-of-globe cables
+  // land on front-facing screen positions and produced phantom mismatches
+  // that were the harness's fault rather than the prefilter's.
+  const world = (lat: number, lng: number) => {
+    const a = (lat * Math.PI) / 180, b = (lng * Math.PI) / 180;
+    return { x: Math.cos(a) * Math.cos(b), y: Math.sin(a), z: Math.cos(a) * Math.sin(b) };
+  };
+
+  function projection(withPrefilter: boolean) {
+    const base = {
+      getCoords: (lat: number, lng: number) => world(lat, lng),
+      getScreenCoords: (lat: number, lng: number) => {
+        const w = world(lat, lng);
+        return { x: W / 2 + R * w.x, y: H / 2 - R * w.y };
+      },
+      camera: () => ({ position: { x: 0, y: 0, z: 5 }, updateMatrixWorld: () => {} }),
+      controls: () => ({ update: () => {} }),
+    };
+    if (!withPrefilter) return base;
+    return {
+      ...base,
+      toGlobeCoords: (sx: number, sy: number) => {
+        const nx = (sx - W / 2) / R, ny = (H / 2 - sy) / R;
+        if (nx * nx + ny * ny > 1) return null;
+        const lat = Math.asin(Math.max(-1, Math.min(1, ny)));
+        const cosLat = Math.cos(lat);
+        if (Math.abs(cosLat) < 1e-9) return { lat: (lat * 180) / Math.PI, lng: 0 };
+        const lng = Math.acos(Math.max(-1, Math.min(1, nx / cosLat)));
+        return { lat: (lat * 180) / Math.PI, lng: (lng * 180) / Math.PI };
+      },
+    };
+  }
+
+  /** A spread of points across the globe's face, including near the limb
+   *  where foreshortening makes a few pixels span many degrees -- the case a
+   *  too-small prefilter margin would get wrong. */
+  const samples: [number, number][] = [];
+  for (let gx = -0.85; gx <= 0.85; gx += 0.17) {
+    for (let gy = -0.85; gy <= 0.85; gy += 0.17) {
+      if (gx * gx + gy * gy > 0.95) continue;
+      samples.push([W / 2 + gx * R, H / 2 - gy * R]);
+    }
+  }
+
+  it("covers a wide spread of on-globe points", () => {
+    expect(samples.length).toBeGreaterThan(60);
+  });
+
+  it("resolves identical cables with and without the prefilter", () => {
+    const differing: string[] = [];
+    for (const [x, y] of samples) {
+      const withF = findCablesNearScreenPoint(cables, projection(true), x, y)
+        .map((c) => c.cableId).sort().join(",");
+      const withoutF = findCablesNearScreenPoint(cables, projection(false), x, y)
+        .map((c) => c.cableId).sort().join(",");
+      if (withF !== withoutF) differing.push(`(${x.toFixed(0)},${y.toFixed(0)}) ${withoutF} -> ${withF}`);
+    }
+    expect(differing).toEqual([]);
+  });
+
+  it("still finds cables at all, so the comparison is not vacuously empty", () => {
+    const hits = samples.reduce(
+      (n, [x, y]) => n + findCablesNearScreenPoint(cables, projection(true), x, y).length,
+      0
+    );
+    expect(hits).toBeGreaterThan(20);
   });
 });
