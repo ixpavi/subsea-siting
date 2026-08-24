@@ -151,6 +151,35 @@ interface Props {
   onSelectRouteCandidate?: (id: RoutingProfileId | null) => void;
 }
 
+// --- Stable accessor identities --------------------------------------------
+//
+// three-globe rebuilds a layer's ENTIRE geometry whenever an accessor's
+// identity changes. Passing inline arrows meant all 24 accessors were new on
+// every render, so any state change anywhere in the app -- opening a panel,
+// toggling a layer, selecting a list row -- rebuilt 1,933 densified cable
+// paths and thousands of markers from scratch. That is the multi-second stall
+// on interaction, and it had nothing to do with what was actually being
+// changed.
+//
+// Every accessor that depends ONLY on its datum is defined once here, at
+// module scope, so its identity is permanently stable. The ones that close
+// over component state are memoised in the component with explicit
+// dependencies, so they change only when their inputs genuinely do.
+const pathPointLatAccessor = (p: unknown) => (p as [number, number])[0];
+const pathPointLngAccessor = (p: unknown) => (p as [number, number])[1];
+const pointLatAccessor = (p: unknown) => (p as { data: { lat: number } }).data.lat;
+const pointLngAccessor = (p: unknown) => (p as { data: { lng: number } }).data.lng;
+const htmlLatAccessor = (d: unknown) => (d as GlobeHtmlMarker).lat;
+const htmlLngAccessor = (d: unknown) => (d as GlobeHtmlMarker).lng;
+const arcAltitudeAccessor = (d: unknown) => ((d as ArcDatum).kind === "planning" ? null : 0.06);
+const arcAltitudeAutoScaleAccessor = (d: unknown) => ((d as ArcDatum).kind === "planning" ? 0.35 : 0.5);
+const arcStrokeAccessor = (d: unknown) => ((d as ArcDatum).kind === "planning" ? 0.35 : 0.6);
+const arcDashLengthAccessor = (d: unknown) => ((d as ArcDatum).kind === "planning" ? 0.06 : 0.4);
+const arcDashGapAccessor = (d: unknown) => ((d as ArcDatum).kind === "planning" ? 0.03 : 0.15);
+const arcDashAnimateTimeAccessor = (d: unknown) => ((d as ArcDatum).kind === "planning" ? 4000 : 2500);
+const arcLabelAccessor = (d: unknown) =>
+  `<div class="globe-tooltip" style="border-color:${PLANNING_LINE_COLOR}">${(d as ArcDatum).label}</div>`;
+
 function hexToRgba(hex: string, alpha: number): string {
   const h = hex.replace("#", "");
   const full = h.length === 3 ? h.split("").map((c) => c + c).join("") : h;
@@ -835,6 +864,266 @@ const Globe = forwardRef<GlobeApi, Props>(function Globe(
     [onDismissProposedSite]
   );
 
+  // Memoised so a re-render that does not touch these inputs leaves the
+  // accessor identities alone, and three-globe skips rebuilding the layer.
+  const pathColorAccessor = useCallback(
+    (d: unknown) => {
+    const p = d as FlatPath;
+    if (p.kind === "route-halo") return hexToRgba(SELECTED_ROUTE_COLOR, 0.16);
+    if (p.kind === "route") {
+      // The selected candidate always renders in one fixed, unmistakable
+      // color (not its own candidate color) -- if it used ROUTE_COLORS
+      // like the others, selecting the yellow candidate would leave it
+      // looking like just another cable of the many yellow real cables
+      // already on the globe. Unselected candidates keep their distinct
+      // ROUTE_COLORS, muted, so they're still identifiable from the
+      // panel's color-coded list without competing with the selection.
+      if (p.selected) return SELECTED_ROUTE_COLOR;
+      // Unselected candidates must still outrank real cables in the visual
+      // hierarchy (proposed infrastructure above existing infrastructure),
+      // so they sit clearly above the 1.6-stroke full-colour relevant
+      // cables while staying well below the selected route.
+      return hexToRgba(ROUTE_COLORS[p.routeId], 0.65);
+    }
+    if (planningMode) {
+      // The real cable network is CONTEXT AND EVIDENCE, not clutter: it is
+      // what makes the geography legible ("what already connects these two
+      // places, and along which corridors"). An earlier revision faded
+      // relevant cables to 0.12 alpha / 0.5 stroke whenever hypothetical
+      // routes were on screen, on the theory that the proposal must not
+      // have to compete for attention. That was the wrong lever -- it
+      // bought route prominence by destroying the infrastructure context
+      // the planning view exists to show. Dominance is established by the
+      // ROUTE'S OWN treatment instead (see the route branch above and
+      // pathStroke below: a 4.2 white stroke under a 7-unit halo, against
+      // a 1.6 maximum for any cable), which reads as unmistakably "on top"
+      // without dimming anything underneath it.
+      //
+      // Connectivity-relevant cables therefore keep full colour and weight
+      // whether or not routes are displayed. Non-relevant cables stay
+      // faint but non-zero so the surrounding network still reads as a
+      // network rather than empty ocean.
+      if (relevantCableIds.size > 0) {
+        return relevantCableIds.has(p.cableId) ? p.color : hexToRgba(p.color, 0.07);
+      }
+      return hexToRgba(p.color, 0.09);
+    }
+    // Explore mode: an explicit selection always wins; otherwise a
+    // planning-handoff scope (see explorerScope) provides a base emphasis.
+    // Fades are aggressive on purpose -- the selected route must read as
+    // unmistakably "the one" against 700+ other real cables.
+    if (exploreSelectedCableId) {
+      return p.cableId === exploreSelectedCableId ? p.color : hexToRgba(p.color, 0.045);
+    }
+    if (exploreRelatedCableIds) {
+      return exploreRelatedCableIds.has(p.cableId) ? p.color : hexToRgba(p.color, 0.045);
+    }
+    if (explorerScope && explorerScope.size > 0) {
+      return explorerScope.has(p.cableId) ? p.color : hexToRgba(p.color, 0.1);
+    }
+    return p.color;
+  },
+    [relevantCableIds, explorerScope, exploreSelectedCableId, exploreRelatedCableIds, planningMode]
+  );
+
+  const pathLabelAccessor = useCallback(
+    (d: unknown) => {
+    const p = d as FlatPath;
+    if (p.kind === "route-halo") return ""; // purely decorative, never the hover target
+    if (p.kind === "route") {
+      const borderColor = p.selected ? SELECTED_ROUTE_COLOR : ROUTE_COLORS[p.routeId];
+      return `<div class="globe-tooltip" style="border-color:${borderColor}">
+        <div class="detail-section-label" style="margin-bottom:4px">MODELED / HYPOTHETICAL -- NOT A REAL CABLE ROUTE</div>
+        <div style="font-weight:600">${p.label}${p.selected ? " (selected)" : ""}</div>
+        <div class="globe-tooltip-hint">click to inspect this candidate route</div>
+      </div>`;
+    }
+    const rel = relevantCablesById.get(p.cableId);
+    if (rel) {
+      return `<div class="globe-tooltip" style="border-color:${p.color}">
+        <div style="font-weight:600">${p.cableName}</div>
+        <div class="detail-section-label" style="margin:4px 0">REAL CABLE -- ${rel.relevance.replace("-", " ").toUpperCase()}</div>
+        <div class="globe-tooltip-hint">click for connectivity details</div>
+      </div>`;
+    }
+    return `<div class="globe-tooltip"><strong>${p.cableName}</strong><br/>Submarine cable route${
+      planningMode ? "" : '<div class="globe-tooltip-hint">click to inspect this cable</div>'
+    }</div>`;
+  },
+    [planningMode, relevantCablesById]
+  );
+
+  const pathStrokeAccessor = useCallback(
+    (d: unknown) => {
+    const p = d as FlatPath;
+    // Halo first, then the sharp selected line drawn 2-3x thicker than
+    // any real cable ever gets (max real-cable stroke elsewhere in this
+    // function is 2.6, for an explicitly explore-mode-selected cable) --
+    // "substantially thicker" per the visual-hierarchy requirement, not
+    // just "a bit more".
+    if (p.kind === "route-halo") return 7;
+    if (p.kind === "route") return p.selected ? 4.2 : 1.9;
+    const cableId = p.cableId;
+    // Unchanged whether or not hypothetical routes are displayed -- see the
+    // context note in pathColor. 1.6 is the heaviest any real cable gets,
+    // against 4.2 for the selected route and 7 for its halo.
+    if (planningMode) return relevantCableIds.has(cableId) ? 1.6 : 0.6;
+    if (exploreSelectedCableId) return cableId === exploreSelectedCableId ? 2.6 : 0.4;
+    if (exploreRelatedCableIds) return exploreRelatedCableIds.has(cableId) ? 1.8 : 0.4;
+    return 0.6;
+  },
+    [relevantCableIds, exploreSelectedCableId, exploreRelatedCableIds, planningMode]
+  );
+
+  const pathDashLengthAccessor = useCallback(
+    (d: unknown) => {
+    const p = d as FlatPath;
+    if (p.kind === "route-halo") return 1; // solid -- a halo has no direction to indicate
+    if (p.kind === "route") return p.selected ? 0.05 : 0.03;
+    return 0.1;
+  },
+    []
+  );
+
+  const pathDashGapAccessor = useCallback(
+    (d: unknown) => {
+    const p = d as FlatPath;
+    if (p.kind === "route-halo") return 0;
+    if (p.kind === "route") return p.selected ? 0.025 : 0.02;
+    return 0.008;
+  },
+    []
+  );
+
+  const pathDashAnimateTimeAccessor = useCallback(
+    (d: unknown) => {
+    const p = d as FlatPath;
+    if (p.kind === "route-halo") return 0;
+    if (p.kind === "route") return p.selected ? 2600 : 9000; // faster = reads as "the active one, flowing toward its destination"
+    return 12000;
+  },
+    []
+  );
+
+  const pointColorAccessor = useCallback(
+    (p: unknown) => {
+    const item = p as { kind: string; data?: { id?: string; role?: "source" | "destination" } };
+    if (item.kind === "landingPoint") {
+      return item.data?.role === "destination" ? DESTINATION_LANDING_POINT_COLOR : SOURCE_LANDING_POINT_COLOR;
+    }
+    if (item.kind === "exploreLandingPoint") {
+      const id = item.data?.id;
+      if (id && exploreSelectedLandingPointId === id) return "#facc15";
+      if (id && exploreSelectedCableLandingPointIds?.has(id)) return "#67e8f9";
+      // Unrelated landing points recede further once a cable is the
+      // subject, so the cable's own landings read as the highlighted set.
+      return hexToRgba("#94a3b8", exploreSelectedCableId ? 0.16 : 0.45);
+    }
+    const base = item.kind === "subsea" ? SUBSEA_DC_COLOR : LAND_DC_COLOR;
+    // Facilities are background context whenever a cable or landing point
+    // is the subject. Kept faintly visible rather than hidden, so the user
+    // can still see that infrastructure is there.
+    return hasFocusedSelection ? hexToRgba(base, 0.08) : base;
+  },
+    [hasFocusedSelection, exploreSelectedCableId, exploreSelectedLandingPointId, exploreSelectedCableLandingPointIds]
+  );
+
+  const pointAltitudeAccessor = useCallback(
+    (p: unknown) => {
+    const item = p as { kind: string; data?: { id?: string } };
+    if (item.kind === "landingPoint") return 0.012;
+    if (item.kind === "exploreLandingPoint") {
+      const id = item.data?.id;
+      const emphasized =
+        (id && exploreSelectedLandingPointId === id) || (id && exploreSelectedCableLandingPointIds?.has(id));
+      return emphasized ? 0.014 : 0.006;
+    }
+    return item.kind === "subsea" ? 0.018 : 0.006;
+  },
+    [exploreSelectedLandingPointId, exploreSelectedCableLandingPointIds]
+  );
+
+  const pointRadiusAccessor = useCallback(
+    (p: unknown) => {
+    const item = p as { kind: string; data?: { id?: string } };
+    if (item.kind === "landingPoint") return 0.55;
+    if (item.kind === "exploreLandingPoint") {
+      const id = item.data?.id;
+      if (id && exploreSelectedLandingPointId === id) return 0.7;
+      if (id && exploreSelectedCableLandingPointIds?.has(id)) return 0.48;
+      return 0.28;
+    }
+    return item.kind === "subsea" ? 0.85 : 0.42;
+  },
+    [exploreSelectedLandingPointId, exploreSelectedCableLandingPointIds]
+  );
+
+  const pointLabelAccessor = useCallback(
+    (p: unknown) => {
+    const point = p as
+      | Selection
+      | { kind: "landingPoint"; data: ConnectivityLandingPointDatum }
+      | { kind: "exploreLandingPoint"; data: LandingPoint };
+    if (point.kind === "exploreLandingPoint") {
+      const lp = point.data;
+      return `<div class="globe-tooltip">
+        <div style="font-weight:600">${lp.name}</div>
+        <div class="detail-section-label" style="margin:4px 0">REAL LANDING POINT</div>
+        <div class="globe-tooltip-hint">click for connected cable systems</div>
+      </div>`;
+    }
+    if (point.kind === "landingPoint") {
+      const lp = point.data;
+      const color = lp.role === "destination" ? DESTINATION_LANDING_POINT_COLOR : SOURCE_LANDING_POINT_COLOR;
+      return `<div class="globe-tooltip" style="border-color:${color}">
+        <div style="font-weight:600;color:${color}">${lp.name}</div>
+        <div class="detail-section-label" style="margin:4px 0">REAL LANDING POINT</div>
+        <div>${lp.distanceFromQueryKm.toFixed(1)} km from ${lp.role === "destination" ? "destination" : "proposed site"}</div>
+        <div class="globe-tooltip-hint">click for connectivity details</div>
+      </div>`;
+    }
+    if (point.kind === "subsea") {
+      const dc = point.data as SubseaDC;
+      return `
+        <div class="globe-tooltip" style="border-color:${SUBSEA_DC_COLOR}">
+          <div style="font-weight:600;color:${SUBSEA_DC_COLOR}">\u{1F30A} ${dc.name}</div>
+          <div>${dc.operator}</div>
+          <div>Depth: ${dc.depth_m} m &middot; Status: ${dc.status}</div>
+          ${dc.capacity_mw ? `<div>Capacity: ${dc.capacity_mw} MW</div>` : ""}
+          ${
+            dc.nearestLandingPoint
+              ? `<div>Nearest landing: ${dc.nearestLandingPoint.name} (${dc.nearestLandingPointDistanceKm} km)</div>`
+              : ""
+          }
+          ${
+            dc.coordinate_precision !== "exact"
+              ? `<div style="color:#f59e0b;font-style:italic;margin-top:4px">⚠ coordinates approximate</div>`
+              : ""
+          }
+          <div class="globe-tooltip-hint">click for full details</div>
+        </div>`;
+    }
+    const dc = point.data as LandDC;
+    return `
+      <div class="globe-tooltip" style="border-color:${LAND_DC_COLOR}">
+        <div style="font-weight:600;color:${LAND_DC_COLOR}">${dc.name}</div>
+        <div>${dc.org}</div>
+        <div>${dc.city}, ${dc.country}</div>
+        <div class="globe-tooltip-hint">click for full details</div>
+      </div>`;
+  },
+    []
+  );
+
+  const arcColorAccessor = useCallback(
+    (d: unknown) => {
+    const a = d as ArcDatum;
+    if (a.kind === "planning") return hexToRgba(PLANNING_LINE_COLOR, 0.35);
+    return planningMode ? hexToRgba(CONNECTOR_COLOR, 0.06) : CONNECTOR_COLOR;
+  },
+    [planningMode]
+  );
+
   return (
     <GlobeGL
       ref={globeRef}
@@ -850,123 +1139,14 @@ const Globe = forwardRef<GlobeApi, Props>(function Globe(
       // layer, same rendering/densification pipeline -- see combinedPaths) ---
       pathsData={combinedPaths}
       pathPoints="points"
-      pathPointLat={(p: unknown) => (p as [number, number])[0]}
-      pathPointLng={(p: unknown) => (p as [number, number])[1]}
-      pathColor={(d: unknown) => {
-        const p = d as FlatPath;
-        if (p.kind === "route-halo") return hexToRgba(SELECTED_ROUTE_COLOR, 0.16);
-        if (p.kind === "route") {
-          // The selected candidate always renders in one fixed, unmistakable
-          // color (not its own candidate color) -- if it used ROUTE_COLORS
-          // like the others, selecting the yellow candidate would leave it
-          // looking like just another cable of the many yellow real cables
-          // already on the globe. Unselected candidates keep their distinct
-          // ROUTE_COLORS, muted, so they're still identifiable from the
-          // panel's color-coded list without competing with the selection.
-          if (p.selected) return SELECTED_ROUTE_COLOR;
-          // Unselected candidates must still outrank real cables in the visual
-          // hierarchy (proposed infrastructure above existing infrastructure),
-          // so they sit clearly above the 1.6-stroke full-colour relevant
-          // cables while staying well below the selected route.
-          return hexToRgba(ROUTE_COLORS[p.routeId], 0.65);
-        }
-        if (planningMode) {
-          // The real cable network is CONTEXT AND EVIDENCE, not clutter: it is
-          // what makes the geography legible ("what already connects these two
-          // places, and along which corridors"). An earlier revision faded
-          // relevant cables to 0.12 alpha / 0.5 stroke whenever hypothetical
-          // routes were on screen, on the theory that the proposal must not
-          // have to compete for attention. That was the wrong lever -- it
-          // bought route prominence by destroying the infrastructure context
-          // the planning view exists to show. Dominance is established by the
-          // ROUTE'S OWN treatment instead (see the route branch above and
-          // pathStroke below: a 4.2 white stroke under a 7-unit halo, against
-          // a 1.6 maximum for any cable), which reads as unmistakably "on top"
-          // without dimming anything underneath it.
-          //
-          // Connectivity-relevant cables therefore keep full colour and weight
-          // whether or not routes are displayed. Non-relevant cables stay
-          // faint but non-zero so the surrounding network still reads as a
-          // network rather than empty ocean.
-          if (relevantCableIds.size > 0) {
-            return relevantCableIds.has(p.cableId) ? p.color : hexToRgba(p.color, 0.07);
-          }
-          return hexToRgba(p.color, 0.09);
-        }
-        // Explore mode: an explicit selection always wins; otherwise a
-        // planning-handoff scope (see explorerScope) provides a base emphasis.
-        // Fades are aggressive on purpose -- the selected route must read as
-        // unmistakably "the one" against 700+ other real cables.
-        if (exploreSelectedCableId) {
-          return p.cableId === exploreSelectedCableId ? p.color : hexToRgba(p.color, 0.045);
-        }
-        if (exploreRelatedCableIds) {
-          return exploreRelatedCableIds.has(p.cableId) ? p.color : hexToRgba(p.color, 0.045);
-        }
-        if (explorerScope && explorerScope.size > 0) {
-          return explorerScope.has(p.cableId) ? p.color : hexToRgba(p.color, 0.1);
-        }
-        return p.color;
-      }}
-      pathLabel={(d: unknown) => {
-        const p = d as FlatPath;
-        if (p.kind === "route-halo") return ""; // purely decorative, never the hover target
-        if (p.kind === "route") {
-          const borderColor = p.selected ? SELECTED_ROUTE_COLOR : ROUTE_COLORS[p.routeId];
-          return `<div class="globe-tooltip" style="border-color:${borderColor}">
-            <div class="detail-section-label" style="margin-bottom:4px">MODELED / HYPOTHETICAL -- NOT A REAL CABLE ROUTE</div>
-            <div style="font-weight:600">${p.label}${p.selected ? " (selected)" : ""}</div>
-            <div class="globe-tooltip-hint">click to inspect this candidate route</div>
-          </div>`;
-        }
-        const rel = relevantCablesById.get(p.cableId);
-        if (rel) {
-          return `<div class="globe-tooltip" style="border-color:${p.color}">
-            <div style="font-weight:600">${p.cableName}</div>
-            <div class="detail-section-label" style="margin:4px 0">REAL CABLE -- ${rel.relevance.replace("-", " ").toUpperCase()}</div>
-            <div class="globe-tooltip-hint">click for connectivity details</div>
-          </div>`;
-        }
-        return `<div class="globe-tooltip"><strong>${p.cableName}</strong><br/>Submarine cable route${
-          planningMode ? "" : '<div class="globe-tooltip-hint">click to inspect this cable</div>'
-        }</div>`;
-      }}
-      pathStroke={(d: unknown) => {
-        const p = d as FlatPath;
-        // Halo first, then the sharp selected line drawn 2-3x thicker than
-        // any real cable ever gets (max real-cable stroke elsewhere in this
-        // function is 2.6, for an explicitly explore-mode-selected cable) --
-        // "substantially thicker" per the visual-hierarchy requirement, not
-        // just "a bit more".
-        if (p.kind === "route-halo") return 7;
-        if (p.kind === "route") return p.selected ? 4.2 : 1.9;
-        const cableId = p.cableId;
-        // Unchanged whether or not hypothetical routes are displayed -- see the
-        // context note in pathColor. 1.6 is the heaviest any real cable gets,
-        // against 4.2 for the selected route and 7 for its halo.
-        if (planningMode) return relevantCableIds.has(cableId) ? 1.6 : 0.6;
-        if (exploreSelectedCableId) return cableId === exploreSelectedCableId ? 2.6 : 0.4;
-        if (exploreRelatedCableIds) return exploreRelatedCableIds.has(cableId) ? 1.8 : 0.4;
-        return 0.6;
-      }}
-      pathDashLength={(d: unknown) => {
-        const p = d as FlatPath;
-        if (p.kind === "route-halo") return 1; // solid -- a halo has no direction to indicate
-        if (p.kind === "route") return p.selected ? 0.05 : 0.03;
-        return 0.1;
-      }}
-      pathDashGap={(d: unknown) => {
-        const p = d as FlatPath;
-        if (p.kind === "route-halo") return 0;
-        if (p.kind === "route") return p.selected ? 0.025 : 0.02;
-        return 0.008;
-      }}
-      pathDashAnimateTime={(d: unknown) => {
-        const p = d as FlatPath;
-        if (p.kind === "route-halo") return 0;
-        if (p.kind === "route") return p.selected ? 2600 : 9000; // faster = reads as "the active one, flowing toward its destination"
-        return 12000;
-      }}
+      pathPointLat={pathPointLatAccessor}
+      pathPointLng={pathPointLngAccessor}
+      pathColor={pathColorAccessor}
+      pathLabel={pathLabelAccessor}
+      pathStroke={pathStrokeAccessor}
+      pathDashLength={pathDashLengthAccessor}
+      pathDashGap={pathDashGapAccessor}
+      pathDashAnimateTime={pathDashAnimateTimeAccessor}
       pathTransitionDuration={0}
       // Route click/hover, like real-cable click/hover, is handled by our
       // own native listener below -- NOT onPathClick/built-in raycasting,
@@ -981,113 +1161,23 @@ const Globe = forwardRef<GlobeApi, Props>(function Globe(
       // cable landing points (connectivity-analysis subset in planning mode,
       // every landing point in explore mode) ---
       pointsData={pointsData}
-      pointLat={(p: unknown) => (p as { data: { lat: number } }).data.lat}
-      pointLng={(p: unknown) => (p as { data: { lng: number } }).data.lng}
-      pointColor={(p: unknown) => {
-        const item = p as { kind: string; data?: { id?: string; role?: "source" | "destination" } };
-        if (item.kind === "landingPoint") {
-          return item.data?.role === "destination" ? DESTINATION_LANDING_POINT_COLOR : SOURCE_LANDING_POINT_COLOR;
-        }
-        if (item.kind === "exploreLandingPoint") {
-          const id = item.data?.id;
-          if (id && exploreSelectedLandingPointId === id) return "#facc15";
-          if (id && exploreSelectedCableLandingPointIds?.has(id)) return "#67e8f9";
-          // Unrelated landing points recede further once a cable is the
-          // subject, so the cable's own landings read as the highlighted set.
-          return hexToRgba("#94a3b8", exploreSelectedCableId ? 0.16 : 0.45);
-        }
-        const base = item.kind === "subsea" ? SUBSEA_DC_COLOR : LAND_DC_COLOR;
-        // Facilities are background context whenever a cable or landing point
-        // is the subject. Kept faintly visible rather than hidden, so the user
-        // can still see that infrastructure is there.
-        return hasFocusedSelection ? hexToRgba(base, 0.08) : base;
-      }}
-      pointAltitude={(p: unknown) => {
-        const item = p as { kind: string; data?: { id?: string } };
-        if (item.kind === "landingPoint") return 0.012;
-        if (item.kind === "exploreLandingPoint") {
-          const id = item.data?.id;
-          const emphasized =
-            (id && exploreSelectedLandingPointId === id) || (id && exploreSelectedCableLandingPointIds?.has(id));
-          return emphasized ? 0.014 : 0.006;
-        }
-        return item.kind === "subsea" ? 0.018 : 0.006;
-      }}
+      pointLat={pointLatAccessor}
+      pointLng={pointLngAccessor}
+      pointColor={pointColorAccessor}
+      pointAltitude={pointAltitudeAccessor}
       // Fixed angular sizes, tuned for legibility at the zoom levels this globe
       // is actually used at. An earlier version scaled these with camera
       // altitude to make markers pinpoint-accurate when zoomed in; that was the
       // wrong trade. The Earth texture is 8K, so there is no satellite-level
       // detail to pinpoint AGAINST -- shrinking the markers only made them
       // harder to see and bought precision the imagery cannot support.
-      pointRadius={(p: unknown) => {
-        const item = p as { kind: string; data?: { id?: string } };
-        if (item.kind === "landingPoint") return 0.55;
-        if (item.kind === "exploreLandingPoint") {
-          const id = item.data?.id;
-          if (id && exploreSelectedLandingPointId === id) return 0.7;
-          if (id && exploreSelectedCableLandingPointIds?.has(id)) return 0.48;
-          return 0.28;
-        }
-        return item.kind === "subsea" ? 0.85 : 0.42;
-      }}
+      pointRadius={pointRadiusAccessor}
       // Back to 8. Raising this to 14 to smooth the octagon edge was the wrong
       // trade: it added ~75% more geometry across thousands of markers to fix
       // an artefact that was only visible because the markers were 93 km wide.
       // Now that they are sized correctly the facet count is imperceptible.
       pointResolution={8}
-      pointLabel={(p: unknown) => {
-        const point = p as
-          | Selection
-          | { kind: "landingPoint"; data: ConnectivityLandingPointDatum }
-          | { kind: "exploreLandingPoint"; data: LandingPoint };
-        if (point.kind === "exploreLandingPoint") {
-          const lp = point.data;
-          return `<div class="globe-tooltip">
-            <div style="font-weight:600">${lp.name}</div>
-            <div class="detail-section-label" style="margin:4px 0">REAL LANDING POINT</div>
-            <div class="globe-tooltip-hint">click for connected cable systems</div>
-          </div>`;
-        }
-        if (point.kind === "landingPoint") {
-          const lp = point.data;
-          const color = lp.role === "destination" ? DESTINATION_LANDING_POINT_COLOR : SOURCE_LANDING_POINT_COLOR;
-          return `<div class="globe-tooltip" style="border-color:${color}">
-            <div style="font-weight:600;color:${color}">${lp.name}</div>
-            <div class="detail-section-label" style="margin:4px 0">REAL LANDING POINT</div>
-            <div>${lp.distanceFromQueryKm.toFixed(1)} km from ${lp.role === "destination" ? "destination" : "proposed site"}</div>
-            <div class="globe-tooltip-hint">click for connectivity details</div>
-          </div>`;
-        }
-        if (point.kind === "subsea") {
-          const dc = point.data as SubseaDC;
-          return `
-            <div class="globe-tooltip" style="border-color:${SUBSEA_DC_COLOR}">
-              <div style="font-weight:600;color:${SUBSEA_DC_COLOR}">\u{1F30A} ${dc.name}</div>
-              <div>${dc.operator}</div>
-              <div>Depth: ${dc.depth_m} m &middot; Status: ${dc.status}</div>
-              ${dc.capacity_mw ? `<div>Capacity: ${dc.capacity_mw} MW</div>` : ""}
-              ${
-                dc.nearestLandingPoint
-                  ? `<div>Nearest landing: ${dc.nearestLandingPoint.name} (${dc.nearestLandingPointDistanceKm} km)</div>`
-                  : ""
-              }
-              ${
-                dc.coordinate_precision !== "exact"
-                  ? `<div style="color:#f59e0b;font-style:italic;margin-top:4px">⚠ coordinates approximate</div>`
-                  : ""
-              }
-              <div class="globe-tooltip-hint">click for full details</div>
-            </div>`;
-        }
-        const dc = point.data as LandDC;
-        return `
-          <div class="globe-tooltip" style="border-color:${LAND_DC_COLOR}">
-            <div style="font-weight:600;color:${LAND_DC_COLOR}">${dc.name}</div>
-            <div>${dc.org}</div>
-            <div>${dc.city}, ${dc.country}</div>
-            <div class="globe-tooltip-hint">click for full details</div>
-          </div>`;
-      }}
+      pointLabel={pointLabelAccessor}
       onPointClick={(p: unknown) => {
         const item = p as { kind: string; data: unknown };
         if (item.kind === "landingPoint") {
@@ -1112,11 +1202,7 @@ const Globe = forwardRef<GlobeApi, Props>(function Globe(
       arcStartLng="startLng"
       arcEndLat="endLat"
       arcEndLng="endLng"
-      arcColor={(d: unknown) => {
-        const a = d as ArcDatum;
-        if (a.kind === "planning") return hexToRgba(PLANNING_LINE_COLOR, 0.35);
-        return planningMode ? hexToRgba(CONNECTOR_COLOR, 0.06) : CONNECTOR_COLOR;
-      }}
+      arcColor={arcColorAccessor}
       // The planning line spans whatever the user's two cities happen to be
       // -- anywhere from a few hundred to over ten thousand km. A fixed
       // altitude (the old 0.12) is tuned for short hops; for a long route it
@@ -1126,9 +1212,9 @@ const Globe = forwardRef<GlobeApi, Props>(function Globe(
       // three-globe's own distance-proportional auto-scale instead, so the
       // arc always clears the horizon regardless of how far apart the two
       // points are.
-      arcAltitude={(d: unknown) => ((d as ArcDatum).kind === "planning" ? null : 0.06)}
-      arcAltitudeAutoScale={(d: unknown) => ((d as ArcDatum).kind === "planning" ? 0.35 : 0.5)}
-      arcStroke={(d: unknown) => ((d as ArcDatum).kind === "planning" ? 0.35 : 0.6)}
+      arcAltitude={arcAltitudeAccessor}
+      arcAltitudeAutoScale={arcAltitudeAutoScaleAccessor}
+      arcStroke={arcStrokeAccessor}
       // Dash length/gap are fractions of the ARC'S TOTAL LENGTH, not a fixed
       // pixel pattern -- the old 0.25/0.18 produced only ~2 dash-gap cycles
       // across the whole line, which reads as two disconnected fragments
@@ -1136,20 +1222,18 @@ const Globe = forwardRef<GlobeApi, Props>(function Globe(
       // pattern (many small dashes) reads unambiguously as a single
       // continuous dashed connection, matching the dashed-border convention
       // used elsewhere in the app for modeled/hypothetical elements.
-      arcDashLength={(d: unknown) => ((d as ArcDatum).kind === "planning" ? 0.06 : 0.4)}
-      arcDashGap={(d: unknown) => ((d as ArcDatum).kind === "planning" ? 0.03 : 0.15)}
-      arcDashAnimateTime={(d: unknown) => ((d as ArcDatum).kind === "planning" ? 4000 : 2500)}
-      arcLabel={(d: unknown) =>
-        `<div class="globe-tooltip" style="border-color:${PLANNING_LINE_COLOR}">${(d as ArcDatum).label}</div>`
-      }
+      arcDashLength={arcDashLengthAccessor}
+      arcDashGap={arcDashGapAccessor}
+      arcDashAnimateTime={arcDashAnimateTimeAccessor}
+      arcLabel={arcLabelAccessor}
       // --- Planning-mode markers: location / destination / proposed site,
       // plus (while a route is shown) SOURCE/DESTINATION MARINE ACCESS
       // endpoint markers and the selected route's floating label. Rendered
       // as real DOM elements (not the WebGL point layer above) so they can
       // never be visually confused with real facility markers. ---
       htmlElementsData={htmlMarkers}
-      htmlLat={(d: unknown) => (d as GlobeHtmlMarker).lat}
-      htmlLng={(d: unknown) => (d as GlobeHtmlMarker).lng}
+      htmlLat={htmlLatAccessor}
+      htmlLng={htmlLngAccessor}
       htmlAltitude={0}
       htmlElement={buildPlanningMarkerElement}
     />

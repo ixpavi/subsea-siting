@@ -169,6 +169,131 @@ export function isFacingCamera(world: { x: number; y: number; z: number }, camPo
  */
 const boundsCache = new WeakMap<CableFeature[], PathBounds[][]>();
 
+/**
+ * Densified geometry, cached against the cables array.
+ *
+ * Densification reproduces three-globe's own linear lat/lng interpolation so
+ * the hit-test follows the curve that is actually drawn. It is a pure function
+ * of the stored coordinates -- it cannot change while the dataset is the same
+ * object -- yet it was being recomputed from scratch on every call, which for
+ * hover meant tens of times a second. Computing it once and reusing it removes
+ * that entirely and leaves only the projections, which genuinely do depend on
+ * the camera.
+ */
+const densifiedCache = new WeakMap<CableFeature[], [number, number][][][]>();
+
+/**
+ * Projected screen positions for every densified point, cached against the
+ * CAMERA.
+ *
+ * Projection is the entire remaining cost: two matrix operations per densified
+ * point, and the prefilter can only skip paths that are geographically far
+ * from the cursor -- in a dense region like the North Atlantic most paths
+ * survive it. Measured at roughly 100 ms per scan, which the hover handler
+ * paid on every throttled pointer move.
+ *
+ * But projection depends only on the camera, not on where the pointer is. As
+ * long as the camera has not moved, every pointer event over the same view
+ * projects to exactly the same screen coordinates. So it is computed once per
+ * camera position and reused, turning subsequent hit-tests into a pure 2D
+ * distance search.
+ *
+ * The cache key is the camera position, so ANY camera movement invalidates it.
+ * That matters: an earlier bug in this module was hover and click disagreeing
+ * because they evaluated against different camera states. A stale projection
+ * cache would reintroduce exactly that, so staleness is impossible by
+ * construction rather than by timing.
+ */
+interface ProjectionCache {
+  camX: number;
+  camY: number;
+  camZ: number;
+  /** Per cable, per path: flat [x, y, x, y, ...] with NaN for back-facing. */
+  screen: Float64Array[][];
+}
+let projectionCache: ProjectionCache | null = null;
+let projectionCacheCables: CableFeature[] | null = null;
+
+/**
+ * How far the camera may drift before the cache is rebuilt, in world units.
+ *
+ * NOT an exact-match test, and that matters. OrbitControls runs with damping,
+ * so `controls().update()` perturbs the camera by a minute amount on every
+ * call -- an exact key therefore missed on literally every pointer event and
+ * the cache never did anything.
+ *
+ * The globe has radius 1 and renders a few hundred pixels across, so one world
+ * unit is on the order of a few hundred pixels. At 1e-4 units the largest
+ * possible screen shift is far below half a pixel: too small to move any point
+ * across the 9-pixel hit tolerance, so a cached projection cannot disagree
+ * with a fresh one about what was clicked. Real camera movement is orders of
+ * magnitude larger and misses immediately.
+ */
+const CAMERA_CACHE_TOLERANCE = 1e-4;
+
+function cameraUnchanged(cache: ProjectionCache, p: { x: number; y: number; z: number }): boolean {
+  return (
+    Math.abs(cache.camX - p.x) < CAMERA_CACHE_TOLERANCE &&
+    Math.abs(cache.camY - p.y) < CAMERA_CACHE_TOLERANCE &&
+    Math.abs(cache.camZ - p.z) < CAMERA_CACHE_TOLERANCE
+  );
+}
+
+function projectAll(
+  densifiedAll: [number, number][][][],
+  globe: GlobeProjection
+): Float64Array[][] {
+  const camPos = globe.camera().position;
+  return densifiedAll.map((paths) =>
+    paths.map((densified) => {
+      const out = new Float64Array(densified.length * 2);
+      for (let i = 0; i < densified.length; i++) {
+        const [lat, lng] = densified[i];
+        const world = globe.getCoords(lat, lng, PATH_POINT_ALTITUDE);
+        if (!isFacingCamera(world, camPos)) {
+          out[i * 2] = NaN;
+          out[i * 2 + 1] = NaN;
+          continue;
+        }
+        const screen = globe.getScreenCoords(lat, lng, PATH_POINT_ALTITUDE);
+        out[i * 2] = screen.x;
+        out[i * 2 + 1] = screen.y;
+      }
+      return out;
+    })
+  );
+}
+
+function screenFor(cables: CableFeature[], densifiedAll: [number, number][][][], globe: GlobeProjection) {
+  const p = globe.camera().position;
+  if (projectionCache && projectionCacheCables === cables && cameraUnchanged(projectionCache, p)) {
+    return projectionCache.screen;
+  }
+  const screen = projectAll(densifiedAll, globe);
+  projectionCache = { camX: p.x, camY: p.y, camZ: p.z, screen };
+  projectionCacheCables = cables;
+  return screen;
+}
+
+function densifiedFor(cables: CableFeature[]): [number, number][][][] {
+  const cached = densifiedCache.get(cables);
+  if (cached) return cached;
+  const all = cables.map((cable) =>
+    cable.paths.map((path) => {
+      if (path.length < 2) return [] as [number, number][];
+      const densified: [number, number][] = [path[0]];
+      for (let i = 0; i < path.length - 1; i++) {
+        const [lat1, lng1] = path[i];
+        const [lat2, lng2] = path[i + 1];
+        for (const pt of densifyRenderedSegment(lat1, lng1, lat2, lng2)) densified.push(pt);
+      }
+      return densified;
+    })
+  );
+  densifiedCache.set(cables, all);
+  return all;
+}
+
 interface PathBounds {
   minLat: number;
   maxLat: number;
@@ -242,7 +367,6 @@ export function findCablesNearScreenPoint(
   // Force fresh camera orientation and matrices -- see module doc, point 2.
   globe.controls().update();
   globe.camera().updateMatrixWorld(true);
-  const camPos = globe.camera().position;
   const best = new Map<string, CableHitCandidate>();
 
   // Prune to paths whose stored geometry is plausibly near the cursor before
@@ -251,6 +375,10 @@ export function findCablesNearScreenPoint(
   // that only need advisory feedback can skip the call entirely.
   const cursor = globe.toGlobeCoords?.(clickX, clickY) ?? null;
   const bounds = cursor ? boundsFor(cables) : null;
+  const densifiedAll = densifiedFor(cables);
+  // Projected once per camera position; every pointer event over the same view
+  // reuses it. This is what turns a ~100 ms scan into a 2D distance search.
+  const screenAll = screenFor(cables, densifiedAll, globe);
 
   for (let ci = 0; ci < cables.length; ci++) {
     const cable = cables[ci];
@@ -259,24 +387,21 @@ export function findCablesNearScreenPoint(
       if (path.length < 2) continue;
       if (cursor && bounds && !nearCursor(bounds[ci][pi], cursor.lat, cursor.lng)) continue;
 
-      // Densify every real segment exactly as three-globe renders it -- see module doc, point 1.
-      const densified: [number, number][] = [path[0]];
-      for (let i = 0; i < path.length - 1; i++) {
-        const [lat1, lng1] = path[i];
-        const [lat2, lng2] = path[i + 1];
-        for (const pt of densifyRenderedSegment(lat1, lng1, lat2, lng2)) densified.push(pt);
-      }
-
-      let prevVisible: { x: number; y: number } | null = null;
-      for (const [lat, lng] of densified) {
-        const world = globe.getCoords(lat, lng, PATH_POINT_ALTITUDE);
-        if (!isFacingCamera(world, camPos)) {
-          prevVisible = null;
+      const screen = screenAll[ci][pi];
+      const n = screen.length / 2;
+      let prevX = NaN;
+      let prevY = NaN;
+      for (let i = 0; i < n; i++) {
+        const x = screen[i * 2];
+        const y = screen[i * 2 + 1];
+        // NaN marks a back-facing point: it breaks the polyline exactly as the
+        // previous per-point visibility check did.
+        if (Number.isNaN(x)) {
+          prevX = NaN;
           continue;
         }
-        const screen = globe.getScreenCoords(lat, lng, PATH_POINT_ALTITUDE);
-        if (prevVisible) {
-          const d = pointToSegmentDistance(clickX, clickY, prevVisible.x, prevVisible.y, screen.x, screen.y);
+        if (!Number.isNaN(prevX)) {
+          const d = pointToSegmentDistance(clickX, clickY, prevX, prevY, x, y);
           if (d <= toleranceOx) {
             const existing = best.get(cable.id);
             if (!existing || d < existing.distancePx) {
@@ -284,7 +409,8 @@ export function findCablesNearScreenPoint(
             }
           }
         }
-        prevVisible = screen;
+        prevX = x;
+        prevY = y;
       }
     }
   }
