@@ -29,3 +29,4 @@ scripts/research/.cache/
 # The derived textures in public/textures/ ARE committed so the app works
 # from a clean clone without running the build script.
 scripts/.cache-earth-source.jpg
+scripts/research/.cache/
