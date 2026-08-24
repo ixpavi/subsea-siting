@@ -208,8 +208,9 @@ interface ProjectionCache {
   camX: number;
   camY: number;
   camZ: number;
-  /** Per cable, per path: flat [x, y, x, y, ...] with NaN for back-facing. */
-  screen: Float64Array[][];
+  /** Per cable, per path: flat [x, y, ...] with NaN for back-facing points.
+   *  undefined means "not projected yet at this camera position". */
+  screen: (Float64Array | undefined)[][];
 }
 let projectionCache: ProjectionCache | null = null;
 let projectionCacheCables: CableFeature[] | null = null;
@@ -239,40 +240,49 @@ function cameraUnchanged(cache: ProjectionCache, p: { x: number; y: number; z: n
   );
 }
 
-function projectAll(
-  densifiedAll: [number, number][][][],
-  globe: GlobeProjection
-): Float64Array[][] {
+/**
+ * Projects ONE path, lazily.
+ *
+ * Projecting everything up front wasted almost all of it: the prefilter then
+ * discarded the overwhelming majority of paths, so the first hit-test after
+ * any camera movement paid ~250,000 projections to use a few thousand. Since
+ * clicking a cable flies the camera, every cable click hit that cold path --
+ * which is precisely the "lags for a split second when clicking a cable"
+ * symptom. Projecting per path, on demand, means only the paths genuinely near
+ * the pointer are ever computed.
+ */
+function projectPath(densified: [number, number][], globe: GlobeProjection): Float64Array {
   const camPos = globe.camera().position;
-  return densifiedAll.map((paths) =>
-    paths.map((densified) => {
-      const out = new Float64Array(densified.length * 2);
-      for (let i = 0; i < densified.length; i++) {
-        const [lat, lng] = densified[i];
-        const world = globe.getCoords(lat, lng, PATH_POINT_ALTITUDE);
-        if (!isFacingCamera(world, camPos)) {
-          out[i * 2] = NaN;
-          out[i * 2 + 1] = NaN;
-          continue;
-        }
-        const screen = globe.getScreenCoords(lat, lng, PATH_POINT_ALTITUDE);
-        out[i * 2] = screen.x;
-        out[i * 2 + 1] = screen.y;
-      }
-      return out;
-    })
-  );
+  const out = new Float64Array(densified.length * 2);
+  for (let i = 0; i < densified.length; i++) {
+    const [lat, lng] = densified[i];
+    const world = globe.getCoords(lat, lng, PATH_POINT_ALTITUDE);
+    if (!isFacingCamera(world, camPos)) {
+      out[i * 2] = NaN;
+      out[i * 2 + 1] = NaN;
+      continue;
+    }
+    const screen = globe.getScreenCoords(lat, lng, PATH_POINT_ALTITUDE);
+    out[i * 2] = screen.x;
+    out[i * 2 + 1] = screen.y;
+  }
+  return out;
 }
 
-function screenFor(cables: CableFeature[], densifiedAll: [number, number][][][], globe: GlobeProjection) {
+/** The lazily-filled projection table for the current camera position. */
+function screenCacheFor(cables: CableFeature[], globe: GlobeProjection): (Float64Array | undefined)[][] {
   const p = globe.camera().position;
   if (projectionCache && projectionCacheCables === cables && cameraUnchanged(projectionCache, p)) {
     return projectionCache.screen;
   }
-  const screen = projectAll(densifiedAll, globe);
-  projectionCache = { camX: p.x, camY: p.y, camZ: p.z, screen };
+  projectionCache = {
+    camX: p.x,
+    camY: p.y,
+    camZ: p.z,
+    screen: cables.map((c) => new Array<Float64Array | undefined>(c.paths.length)),
+  };
   projectionCacheCables = cables;
-  return screen;
+  return projectionCache.screen;
 }
 
 function densifiedFor(cables: CableFeature[]): [number, number][][][] {
@@ -376,9 +386,9 @@ export function findCablesNearScreenPoint(
   const cursor = globe.toGlobeCoords?.(clickX, clickY) ?? null;
   const bounds = cursor ? boundsFor(cables) : null;
   const densifiedAll = densifiedFor(cables);
-  // Projected once per camera position; every pointer event over the same view
-  // reuses it. This is what turns a ~100 ms scan into a 2D distance search.
-  const screenAll = screenFor(cables, densifiedAll, globe);
+  // Lazily-filled per camera position: a path is projected the first time it
+  // survives the prefilter, and reused by every later event at the same camera.
+  const screenAll = screenCacheFor(cables, globe);
 
   for (let ci = 0; ci < cables.length; ci++) {
     const cable = cables[ci];
@@ -387,7 +397,11 @@ export function findCablesNearScreenPoint(
       if (path.length < 2) continue;
       if (cursor && bounds && !nearCursor(bounds[ci][pi], cursor.lat, cursor.lng)) continue;
 
-      const screen = screenAll[ci][pi];
+      let screen = screenAll[ci][pi];
+      if (!screen) {
+        screen = projectPath(densifiedAll[ci][pi], globe);
+        screenAll[ci][pi] = screen;
+      }
       const n = screen.length / 2;
       let prevX = NaN;
       let prevY = NaN;

@@ -57,8 +57,14 @@ const SELECTED_ROUTE_COLOR = "#ffffff";
 // Self-hosted rather than pulled from a CDN, so the globe is not one unpkg
 // outage away from a black sphere. Built by scripts/build-earth-texture.py
 // from NASA Blue Marble Next Generation (public domain).
+//
+// 4096x2048, not 8192x4096. The 8K version was tried and reverted: it decodes
+// to ~179 MB of GPU memory once mipmapped against ~45 MB here, and that
+// showed up as dropped frames during the camera animation after a cable
+// click. Anisotropic filtering below does more for perceived sharpness than
+// the extra resolution did.
 const EARTH_TEXTURE_SMALL = "/textures/earth-2k.jpg";
-const EARTH_TEXTURE_FULL = "/textures/earth-8k.jpg";
+const EARTH_TEXTURE_FULL = "/textures/earth-4k.jpg";
 
 /** Starting camera altitude. */
 const DEFAULT_ALTITUDE = 2.2;
@@ -386,49 +392,12 @@ const Globe = forwardRef<GlobeApi, Props>(function Globe(
   const hasFocusedSelection =
     planningMode || exploreSelectedCableId !== null || exploreSelectedLandingPointId !== null;
 
-  const [camera, setCamera] = useState<{ lat: number; lng: number; altitude: number }>({
-    lat: 20,
-    lng: 10,
-    altitude: DEFAULT_ALTITUDE,
-  });
-  useEffect(() => {
-    const g = globeRef.current;
-    if (!g) return;
-    const controls = g.controls();
-    let timer = 0;
-    const commit = () => {
-      const pov = g.pointOfView?.();
-      if (!pov || typeof pov.altitude !== "number") return;
-      setCamera((prev) =>
-        Math.abs(prev.altitude - pov.altitude) < 0.05 &&
-        Math.abs(prev.lat - pov.lat) < 2 &&
-        Math.abs(prev.lng - pov.lng) < 2
-          ? prev
-          : { lat: pov.lat, lng: pov.lng, altitude: pov.altitude }
-      );
-    };
-    const update = () => {
-      window.clearTimeout(timer);
-      timer = window.setTimeout(commit, 160);
-    };
-    commit();
-    controls.addEventListener("change", update);
-    return () => {
-      window.clearTimeout(timer);
-      controls.removeEventListener("change", update);
-    };
-  }, []);
-
-  /** Angular radius of the visible cap, in degrees, plus a margin.
-   *  From altitude h (in globe radii) the horizon is at acos(1/(1+h)) -- 72
-   *  degrees when zoomed out, under 40 when zoomed in close. Markers beyond it
-   *  are behind the planet and cannot be seen or clicked, so building geometry
-   *  for them is pure cost. */
-  const visibleCapDeg = useMemo(() => {
-    const h = Math.max(0.05, camera.altitude);
-    const horizon = (Math.acos(1 / (1 + h)) * 180) / Math.PI;
-    return Math.min(180, horizon + 25);
-  }, [camera.altitude]);
+  // NOTE: there is deliberately no camera-derived state in this component.
+  // Anything stored from the camera changes as the user moves, and every such
+  // change rebuilds the layers that depend on it -- which is how a marker
+  // optimisation ended up making every camera movement more expensive than the
+  // work it saved. Camera position is read directly where it is needed
+  // instead, never mirrored into React state.
 
   const flatCablePaths: CableFlatPath[] = useMemo(
     () =>
@@ -517,49 +486,25 @@ const Globe = forwardRef<GlobeApi, Props>(function Globe(
     return landingPoints.map((lp) => ({ kind: "exploreLandingPoint" as const, data: lp }));
   }, [planningMode, toggles.landingPoints, landingPoints]);
 
-  // Horizon culling for the bulk facility layers.
-  //
-  // The dataset is 5,260 land facilities. Every one becomes real geometry,
-  // and at any moment at least half are behind the planet where they cannot
-  // be seen or clicked. Zoomed in, the great majority are. Dropping them is
-  // the single largest rendering saving available here and costs the user
-  // nothing, because they were never visible.
-  //
-  // Deliberately NOT applied to the small curated layers -- connectivity
-  // landing points and explore-mode selections number in the dozens, and
-  // culling them would risk a selected item vanishing for no benefit.
-  const cullToVisible = useCallback(
-    <T extends { lat: number; lng: number }>(items: T[]): T[] => {
-      if (visibleCapDeg >= 180) return items;
-      const toRad = Math.PI / 180;
-      const cLat = camera.lat * toRad;
-      const cLng = camera.lng * toRad;
-      const cosCap = Math.cos(visibleCapDeg * toRad);
-      const sinCLat = Math.sin(cLat);
-      const cosCLat = Math.cos(cLat);
-      return items.filter((d) => {
-        const lat = d.lat * toRad;
-        // Cosine of the angular distance from the camera's sub-point.
-        const cosD =
-          sinCLat * Math.sin(lat) + cosCLat * Math.cos(lat) * Math.cos(d.lng * toRad - cLng);
-        return cosD >= cosCap;
-      });
-    },
-    [camera.lat, camera.lng, visibleCapDeg]
-  );
-
   const pointsData = useMemo(
     () => [
       ...(toggles.landDCs && !connectivityAnalysis
-        ? cullToVisible(landDCs).map((d) => ({ kind: "land" as const, data: d }))
+        ? landDCs.map((d) => ({ kind: "land" as const, data: d }))
         : []),
       ...(toggles.subseaDCs && !connectivityAnalysis
-        ? cullToVisible(subseaDCs).map((d) => ({ kind: "subsea" as const, data: d }))
+        ? subseaDCs.map((d) => ({ kind: "subsea" as const, data: d }))
         : []),
       ...connectivityLandingPoints.map((lp) => ({ kind: "landingPoint" as const, data: lp })),
       ...explorePointsData,
     ],
-    [toggles.landDCs, toggles.subseaDCs, connectivityAnalysis, landDCs, subseaDCs, connectivityLandingPoints, explorePointsData, cullToVisible]
+    // Deliberately independent of the camera. Horizon culling used to live
+    // here, dropping the markers behind the planet -- but three-globe rebuilds
+    // the whole layer when its data changes, so culling made every camera
+    // movement rebuild all 5,260 markers to avoid drawing the ~18% that were
+    // never visible. Clicking a cable flies the camera, so it paid that cost
+    // every time. Building the layer once and leaving it alone is far cheaper
+    // than repeatedly rebuilding a slightly smaller one.
+    [toggles.landDCs, toggles.subseaDCs, connectivityAnalysis, landDCs, subseaDCs, connectivityLandingPoints, explorePointsData]
   );
 
   // Custom cable click/hover hit-testing -- see cableHitTest.ts for why

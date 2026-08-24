@@ -7,12 +7,14 @@ soon as anyone zooms in on a landing point. NASA publishes the same imagery at
 rather than an artist's rendering. That matters for a tool that is careful
 about provenance everywhere else.
 
-WHY NOT JUST USE THE 21600 FILE. Two reasons. It is 30 MB, which is not a
-defensible page weight. And WebGL implementations are only required to support
-textures up to 2048; 8192 is very widely supported while 16384 is not, so
-21600 would simply fail to upload on a lot of hardware. 8192x4096 doubles the
-linear resolution of what we had and stays inside what browsers can actually
-render.
+WHY 4096 AND NOT LARGER. An 8192x4096 version was tried and reverted. It
+decodes to roughly 179 MB of GPU memory once mipmapped, four times the 45 MB
+of 4096x2048, and on integrated graphics that showed up as lost frames during
+camera animation -- the globe stuttered for a moment after every cable click.
+The imagery still comes from the 21600x10800 NASA original rather than
+three-globe's example texture, so it is a genuinely better source at the same
+dimensions, and anisotropic filtering (see Globe.tsx) turned out to matter far
+more for perceived sharpness than raw resolution anyway.
 
 PROGRESSIVE LOADING. A 5-ish MB texture cannot block first paint, so a small
 version is emitted alongside it. The app shows the small one immediately and
@@ -38,7 +40,7 @@ SOURCE = (
     "world.topo.bathy.200412.3x21600x10800.jpg"
 )
 OUT_DIR = os.path.join(os.path.dirname(__file__), "..", "public", "textures")
-FULL = (8192, 4096)
+FULL = (4096, 2048)
 SMALL = (2048, 1024)
 CACHE = os.path.join(os.path.dirname(__file__), ".cache-earth-source.jpg")
 
@@ -71,7 +73,7 @@ img.draft("RGB", FULL)
 img = img.convert("RGB")
 print(f"After draft decode: {img.size[0]} x {img.size[1]}")
 
-for size, name, quality in ((FULL, "earth-8k.jpg", 86), (SMALL, "earth-2k.jpg", 82)):
+for size, name, quality in ((FULL, "earth-4k.jpg", 88), (SMALL, "earth-2k.jpg", 82)):
     out = img.resize(size, Image.LANCZOS)
     path = os.path.join(OUT_DIR, name)
     # progressive=True so the browser paints a coarse version while the rest
