@@ -43,15 +43,18 @@ const CORRIDOR_DEG = 1.0;
  *  to say anything; longer ones make the search cost explode. Both bounds are
  *  reported, and the sensitivity of the headline to them is printed below. */
 const MIN_KM = 40;
-const MAX_KM = 900;
+const MAX_KM = 500;
 
-/** Weight levels searched per term. Coarse deliberately: the question is
- *  whether terrain preference helps AT ALL, not what its third decimal is. */
-const LEVELS = [0, 0.5, 1.5];
+/** Weight levels searched per term. Two levels, deliberately: the question is
+ *  whether terrain preference helps AT ALL, not what its third decimal is.
+ *  Three levels across three terms is 27 combinations per fold, which at one
+ *  A* search per route per combination does not finish in useful time -- and a
+ *  finer grid would not change the answer to a yes/no question. */
+const LEVELS = [0, 1];
 /** Routes used to FIT weights within each training set. Fitting is the
  *  expensive part (one A* per route per weight combination) and the fitted
  *  optimum is stable well before the full training set is used. */
-const FIT_SAMPLE = 45;
+const FIT_SAMPLE = 24;
 
 const args = process.argv.slice(2);
 const LIMIT = args.includes("--quick") ? 60 : Infinity;

@@ -25,9 +25,17 @@ route choice actually matters — **did not survive testing.** It appeared
 clearly in a quartile analysis and then dissolved once the confound with data
 source was controlled for.
 
-The practical implication is the interesting part: **bathymetry explains only a
-small part of where cables go.** A routing engine optimising on terrain alone
-models a minority of the real decision.
+**Terrain preference does measurably improve route prediction.** Given only two
+endpoints, adding it to a least-cost-path search cuts median error from 9.6 km
+to 7.1 km — a 26% reduction, better on 62% of held-out routes (p = 0.0009).
+
+**But fitting the weights does not beat guessing them** (52%, p = 0.63), and the
+absolute accuracy stays modest: predictions land about 7 km from the real cable,
+which is the same order as a naive great circle once the grid's own
+discretisation handicap (7.9 km) is accounted for.
+
+The practical implication: terrain optimisation is worth doing and is not worth
+over-engineering. A sensible hand-set weighting captures what is there.
 
 ---
 
@@ -239,6 +247,93 @@ supported.
 
 ---
 
+## 4a. Test 4 — does terrain-aware routing predict real cables better?
+
+The percentile effect above says cables *prefer* flatter ground. It does not
+say what that preference is worth. A 1.6 percentile shift could correspond to a
+router that reproduces real routes closely or one that barely beats a ruler, and
+the percentile cannot distinguish them.
+
+**Design.** Give each method only the two endpoints, have it predict the route,
+and measure the mean distance from the cable actually laid. Every terrain-aware
+method uses the **same A\* over the same bathymetry**, differing only in cost
+weights — so a difference between them cannot come from the search, grid,
+corridor or endpoint handling. Leave-one-source-out cross-validation, because
+routes from one agency share a sea and a survey convention.
+
+**Result (216 held-out routes, 40–500 km):**
+
+| Method | Median error | Mean | p90 |
+|---|---|---|---|
+| Great circle (no bathymetry) | 7.0 km | 11.2 | 26.3 |
+| All terms, weights fitted on other sources | 7.1 km | 11.0 | 23.8 |
+| Slope-avoiding | 7.3 km | 10.7 | 22.4 |
+| All terms, hand-set weights | 7.8 km | 11.2 | 24.9 |
+| Shortest sea path (terrain ignored) | 9.6 km | 13.5 | 30.3 |
+| Depth-avoiding | 9.7 km | 14.7 | 33.5 |
+
+Read naively this says every bathymetry-aware method is worse than a straight
+line. **That reading is wrong**, and the control below is why.
+
+### The discretisation control
+
+The geodesic is a smooth analytic curve. Every other method is a path over an
+8-connected 460 m grid that can only step in 45° increments and must snap its
+endpoints to water cells. Those are properties of the *search*, not of terrain.
+
+Measuring the zero-weight router — terrain entirely ignored, so over open water
+it is trying to reproduce the great circle — against the true great circle, on
+the 51 route pairs whose geodesic never touches land:
+
+**Median discretisation penalty: 7.85 km** (mean 10.2, p90 26.1).
+
+That handicap is **larger than the 2.58 km gap** between the geodesic and the
+shortest sea path. So "A\* is worse than a straight line" measures the grid, not
+the bathymetry, and cannot support a claim either way.
+
+### The comparison that is sound
+
+Weighted versus unweighted A\* share the discretisation handicap exactly, so it
+cancels and only the terrain preference differs:
+
+| Comparison | Better on | p |
+|---|---|---|
+| **Fitted terrain preference vs shortest sea path** | **133/216 (62%)** | **0.0009** |
+| Hand-set terrain preference vs shortest sea path | 125/216 (58%) | 0.0247 |
+| Fitting the weights vs guessing them | 108/208 (52%) | 0.63 |
+
+Median error falls from **9.61 km to 7.08 km — a 26% reduction** — when terrain
+preference is added to the same search.
+
+Two things follow, and the second is as important as the first.
+
+**Terrain preference genuinely improves route prediction.** Not by a little: a
+quarter of the error, on 62% of held-out routes, across sources the weights were
+never fitted on.
+
+**Fitting the weights does not beat guessing them** (52%, p = 0.63). Whatever
+the terrain signal is, it is coarse enough that a sensible hand-set weighting
+captures it. That is a direct and unflattering finding about learned cost
+surfaces for this problem.
+
+### Fitted weights across folds
+
+| Held out | depth | slope | rough |
+|---|---|---|---|
+| FR SIGCables | 1 | 1 | 0 |
+| FR SHOM | 0 | 1 | 0 |
+| NL Rijkswaterstaat | 1 | 1 | 0 |
+| ES CICA | 0 | 0 | 1 |
+| DE BSH-CONTIS | 1 | 1 | 0 |
+
+Slope is selected in 4 of 5 folds, roughness in 1, depth in 3. The partial
+agreement matters: **slope is the term that transfers**, which is the same term
+the placebo test found the strongest effect on, arrived at by a completely
+different method.
+
+
+---
+
 ## 5. Threats to validity
 
 **The flattest quartile sits at the measurement floor.** Q1's local relief is
@@ -247,10 +342,16 @@ shelf tiles (0.46–1.28 m RMS). Its near-null effect is partly an instrument
 limit, not demonstrated absence of preference. This cuts *against* the
 dose-response reading from the flat end as well.
 
-**One source contradicts the main effect.** DE BSH-CONTIS shows Δslope **+1.57**
-— cables on *steeper* ground. It is also the highest-fidelity source and sits
-almost entirely in the flattest terrain, where the signal is at the noise
-floor, but it is reported rather than explained away.
+**One source contradicts the main effect — and it is now explained.** DE
+BSH-CONTIS shows Δslope **+1.57**, cables on *steeper* ground. It is also the
+only source whose median terrain relief (1.0 m) falls **below the grid's own
+downsampling error** (1.28 m RMS on shelf tiles). Measured across all sources,
+the relief-to-noise ratio is 0.78 for BSH and 1.56–21.5 for every other source
+— and every source above the floor agrees with the main finding, with the one
+sitting marginally at the boundary (NL Rijkswaterstaat, 1.56) showing the
+weakest agreement. The contradiction tracks the measurement floor, not the
+agency. This is a **scope condition** — the method needs relief above the
+bathymetry's noise — rather than a contradiction of the result.
 
 **The corridor is bounded.** Bathymetry was loaded within ±1° (~111 km) of each
 route. Generous for the median 171 km route, tight for the 49 routes over
@@ -308,9 +409,21 @@ assumptions are made about these heavily skewed quantities.
 
 ## 8. Contribution
 
-The transferable part is not the effect size. It is the **placebo-displaced
-control** for route-preference inference: taking the observed geometry,
-displacing it, and re-running the identical measurement to establish what the
-instrument reads when no preference exists. Comparing against a nominal null
-of 50 would have overstated the depth effect by roughly 70%, and no amount of
-significance testing would have revealed it.
+Two methodological points, both of which changed a headline in this study.
+
+**The placebo-displaced control** for route-preference inference: take the
+observed geometry, displace it sideways, re-run the identical measurement to
+establish what the instrument reads when no preference exists. Comparing
+against a nominal null of 50 would have overstated the depth effect by roughly
+70%, and no amount of significance testing would have revealed it.
+
+**The discretisation control** for route-prediction evaluation: measure what a
+grid search costs you when it is trying to reproduce a known answer, before
+comparing it against an analytic baseline. Without it, this study would have
+reported that bathymetry-aware routing is worse than a straight line — a
+conclusion that is both wrong and quotable, and that follows directly from the
+prediction table if the control is not run.
+
+Both corrections point the same way. An evaluation of route-choice models needs
+a stated zero point for its instrument, and neither the nominal null nor the
+analytic baseline is that zero point.
