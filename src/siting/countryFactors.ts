@@ -1,3 +1,4 @@
+import { assetUrl } from "../assetUrl";
 // National indicators for a site's country: grid carbon intensity and
 // baseline water stress. Built at build time by scripts/build-siting-data.mjs
 // from real published datasets (Our World in Data / Ember, and WRI Aqueduct
@@ -35,7 +36,7 @@ let filePromise: Promise<SitingCountryFile> | null = null;
 
 export function loadCountryFactorsFile(): Promise<SitingCountryFile> {
   if (!filePromise) {
-    filePromise = fetch("/data/siting-country.json").then((res) => {
+    filePromise = fetch(assetUrl("data/siting-country.json")).then((res) => {
       if (!res.ok) throw new Error(`Failed to load siting-country.json: ${res.status}`);
       return res.json() as Promise<SitingCountryFile>;
     });

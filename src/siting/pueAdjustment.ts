@@ -1,3 +1,4 @@
+import { assetUrl } from "../assetUrl";
 // Applies a climate correction to a design's baseline PUE, using a gradient
 // fitted to REAL MEASURED per-facility PUE (see scripts/build-pue-model.mjs).
 //
@@ -56,7 +57,7 @@ let modelPromise: Promise<PueModel> | null = null;
 
 export function loadPueModel(): Promise<PueModel> {
   if (!modelPromise) {
-    modelPromise = fetch("/data/pue-model.json").then((res) => {
+    modelPromise = fetch(assetUrl("data/pue-model.json")).then((res) => {
       if (!res.ok) throw new Error(`Failed to load pue-model.json: ${res.status}`);
       return res.json() as Promise<PueModel>;
     });

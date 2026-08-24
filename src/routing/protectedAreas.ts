@@ -17,6 +17,7 @@
 // into evidence of environmental safety, which is the single most damaging
 // thing this layer could do.
 import type { EnvironmentalAssessment } from "./routingTypes";
+import { assetUrl } from "../assetUrl";
 
 interface ProtectedAreasFile {
   resolutionDeg: number;
@@ -49,7 +50,7 @@ let gridPromise: Promise<ProtectedAreaGrid> | null = null;
 
 export function loadProtectedAreas(): Promise<ProtectedAreaGrid> {
   if (!gridPromise) {
-    gridPromise = fetch("/data/protected-areas.json")
+    gridPromise = fetch(assetUrl("data/protected-areas.json"))
       .then((res) => {
         if (!res.ok) throw new Error(`Failed to load protected-areas.json: ${res.status}`);
         return res.json() as Promise<ProtectedAreasFile>;

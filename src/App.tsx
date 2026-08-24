@@ -20,6 +20,7 @@ import type { NetworkSelection } from "./cableNetwork";
 import type { CableHitCandidate } from "./cableHitTest";
 import type { CableFeature, LandDC, SubseaDC, LandingPoint, LayerToggles, Selection } from "./types";
 import "./App.css";
+import { assetUrl } from "./assetUrl";
 
 async function fetchJSON<T>(path: string): Promise<T> {
   const res = await fetch(path);
@@ -63,10 +64,10 @@ export default function App() {
 
   useEffect(() => {
     Promise.all([
-      fetchJSON<CableFeature[]>("/data/cables.json"),
-      fetchJSON<LandDC[]>("/data/land-dcs.json"),
-      fetchJSON<SubseaDC[]>("/data/subsea-dcs.json"),
-      fetchJSON<LandingPoint[]>("/data/landing-points.json"),
+      fetchJSON<CableFeature[]>(assetUrl("data/cables.json")),
+      fetchJSON<LandDC[]>(assetUrl("data/land-dcs.json")),
+      fetchJSON<SubseaDC[]>(assetUrl("data/subsea-dcs.json")),
+      fetchJSON<LandingPoint[]>(assetUrl("data/landing-points.json")),
     ])
       .then(([c, l, s, lp]) => {
         setCables(c);

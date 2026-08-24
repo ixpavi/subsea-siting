@@ -10,6 +10,7 @@ import { loadProtectedAreas } from "./protectedAreas";
 import { runHypotheticalRouting } from "./hypotheticalRouting";
 import type { CableFeature, LandingPoint } from "../types";
 import type { RouteEngineResult, RoutingWeights } from "./routingTypes";
+import { assetUrl } from "../assetUrl";
 
 export interface RoutingRequest {
   requestId: number;
@@ -36,11 +37,11 @@ let cablesPromise: Promise<CableFeature[]> | null = null;
 let landingPointsPromise: Promise<LandingPoint[]> | null = null;
 
 function getCables(): Promise<CableFeature[]> {
-  if (!cablesPromise) cablesPromise = fetchJSON<CableFeature[]>("/data/cables.json");
+  if (!cablesPromise) cablesPromise = fetchJSON<CableFeature[]>(assetUrl("data/cables.json"));
   return cablesPromise;
 }
 function getLandingPoints(): Promise<LandingPoint[]> {
-  if (!landingPointsPromise) landingPointsPromise = fetchJSON<LandingPoint[]>("/data/landing-points.json");
+  if (!landingPointsPromise) landingPointsPromise = fetchJSON<LandingPoint[]>(assetUrl("data/landing-points.json"));
   return landingPointsPromise;
 }
 

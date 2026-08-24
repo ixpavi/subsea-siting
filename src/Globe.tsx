@@ -8,6 +8,7 @@ import { findCablesNearScreenPoint, CABLE_HIT_TOLERANCE_PX, CABLE_HIT_AMBIGUITY_
 import type { CableHitCandidate } from "./cableHitTest";
 import { findRoutesNearScreenPoint } from "./routing/routeHitTest";
 import type { RouteEngineResult, RoutingProfileId } from "./routing/routingTypes";
+import { assetUrl } from "./assetUrl";
 
 const LAND_DC_COLOR = "#5eead4";
 const SUBSEA_DC_COLOR = "#fb923c";
@@ -63,8 +64,8 @@ const SELECTED_ROUTE_COLOR = "#ffffff";
 // showed up as dropped frames during the camera animation after a cable
 // click. Anisotropic filtering below does more for perceived sharpness than
 // the extra resolution did.
-const EARTH_TEXTURE_SMALL = "/textures/earth-2k.jpg";
-const EARTH_TEXTURE_FULL = "/textures/earth-4k.jpg";
+const EARTH_TEXTURE_SMALL = assetUrl("textures/earth-2k.jpg");
+const EARTH_TEXTURE_FULL = assetUrl("textures/earth-4k.jpg");
 
 /** Starting camera altitude. */
 const DEFAULT_ALTITUDE = 2.2;
@@ -1075,8 +1076,8 @@ const Globe = forwardRef<GlobeApi, Props>(function Globe(
       width={dims.width}
       height={dims.height}
       globeImageUrl={earthTextureUrl}
-      bumpImageUrl="/textures/earth-topology.png"
-      backgroundImageUrl="/textures/night-sky.png"
+      bumpImageUrl={assetUrl("textures/earth-topology.png")}
+      backgroundImageUrl={assetUrl("textures/night-sky.png")}
       showAtmosphere
       atmosphereColor="#4fd1ff"
       atmosphereAltitude={0.22}

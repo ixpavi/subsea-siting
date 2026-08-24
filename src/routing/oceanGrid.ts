@@ -33,6 +33,8 @@
 // stay closed, which is what makes the "around Africa" behaviour above
 // genuinely true rather than a route that simply fails.
 
+import { assetUrl } from "../assetUrl";
+
 export interface DepthBand {
   index: number;
   minDepthM: number;
@@ -60,7 +62,7 @@ let gridPromise: Promise<OceanGrid> | null = null;
 
 export function loadOceanGrid(): Promise<OceanGrid> {
   if (!gridPromise) {
-    gridPromise = fetch("/data/ocean-grid.json")
+    gridPromise = fetch(assetUrl("data/ocean-grid.json"))
       .then((res) => {
         if (!res.ok) throw new Error(`Failed to load ocean-grid.json: ${res.status}`);
         return res.json() as Promise<OceanGridJson>;
