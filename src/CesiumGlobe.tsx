@@ -107,6 +107,11 @@ export default function CesiumGlobe({ cables, landDCs, onSelectCable, lighting =
         // --- Cables -------------------------------------------------------
         // One entity per stored path. Cesium interpolates polylines along
         // geodesics by default, which is the correctness gain over three-globe.
+        // Entity ids must be globally unique, and cable ids are NOT: the
+        // dataset carries several entries sharing one id, which cableNetwork.ts
+        // merges downstream. three-globe never noticed because it keys nothing;
+        // Cesium throws on the duplicate. The running counter guarantees
+        // uniqueness while the cable id stays recoverable for selection.
         let drawn = 0;
         for (const cable of cables) {
           for (let i = 0; i < cable.paths.length; i++) {
@@ -116,7 +121,7 @@ export default function CesiumGlobe({ cables, landDCs, onSelectCable, lighting =
               path.flatMap(([lat, lng]) => [lng, lat])
             );
             viewer.entities.add({
-              id: `cable:${cable.id}:${i}`,
+              id: `cable:${cable.id}:${i}:${drawn}`,
               polyline: {
                 positions,
                 width: 1.6,
@@ -132,9 +137,10 @@ export default function CesiumGlobe({ cables, landDCs, onSelectCable, lighting =
         }
 
         // --- Facilities ---------------------------------------------------
-        for (const dc of landDCs) {
+        for (let d = 0; d < landDCs.length; d++) {
+          const dc = landDCs[d];
           viewer.entities.add({
-            id: `dc:${dc.id}`,
+            id: `dc:${dc.id}:${d}`,
             position: Cartesian3.fromDegrees(dc.lng, dc.lat),
             point: {
               pixelSize: 4,
