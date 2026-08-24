@@ -37,6 +37,12 @@ discretisation handicap (7.9 km) is accounted for.
 The practical implication: terrain optimisation is worth doing and is not worth
 over-engineering. A sensible hand-set weighting captures what is there.
 
+**And terrain is not the strongest signal available.** Cables sit 68% closer to
+other operators' cables than displaced controls do (83% of routes, p < 1e-4),
+surviving exclusion of the same cable and even the same national dataset. That
+is a larger and more consistent effect than seabed terrain, and it needs no
+bathymetry at all.
+
 ---
 
 ## 1. Data
@@ -330,6 +336,60 @@ Slope is selected in 4 of 5 folds, roughness in 1, depth in 3. The partial
 agreement matters: **slope is the term that transfers**, which is the same term
 the placebo test found the strongest effect on, arrived at by a completely
 different method.
+
+
+---
+
+## 4b. Test 5 — if not terrain, then what?
+
+The terrain effect is real but modest, and the prediction experiment showed it
+buys a 26% error reduction inside a search that still lands ~7 km from the real
+cable. That leaves the interesting question open, and the most plausible answer
+is not exotic: **cable projects reuse corridors.** Existing routes carry survey
+data, established permits, known burial conditions and proven landing
+approaches, all expensive to obtain afresh.
+
+**Design.** Identical instrument to the terrain test: measure the median
+distance from each route to the nearest *other* cable, then displace that route
+20–50 km sideways and measure again. Whatever the displaced line finds is what
+that corridor of ocean offers by chance.
+
+**The confound that decides it.** EMODnet publishes route *segments*. If a
+route's nearest neighbour is another segment of the same physical cable, the
+result is true by construction and worthless. The same applies one level up: a
+single agency densely surveying one busy corridor produces many nearby features
+that say nothing about operators reusing each other's routes. So the
+measurement runs at three exclusion strengths.
+
+| Compared against | n | Real | Control | Closer on | p |
+|---|---|---|---|---|---|
+| Any other route | 336 | 2.1 km | 9.8 km | 90% | <1e-4 |
+| Excluding the same named cable | 336 | 2.2 km | 9.9 km | 90% | <1e-4 |
+| **Excluding the same agency entirely** | 301 | **7.1 km** | **22.2 km** | **83%** | **<1e-4** |
+
+It survives all three. Even when a route may only be compared against cables
+published by a *different country's* hydrographic office, it sits **68% closer**
+than the same line displaced sideways in the same water.
+
+The absolute distances rise under the strictest exclusion (7.1 km rather than
+2.1 km) because foreign cables are simply farther away on average. That does not
+weaken the result — the displaced control faces exactly the same constraint,
+which is what the placebo design exists to absorb.
+
+### Against the terrain effect
+
+| | Routes showing it | Effect |
+|---|---|---|
+| Terrain (slope, placebo-corrected) | 68% | −1.65 percentile |
+| **Corridor reuse** | **83%** | **68% closer, 15.1 km** |
+
+Corridor reuse is the larger, more consistent and more interpretable driver —
+and unlike bathymetry it requires no survey data at all, because every planner
+already knows where the existing cables are.
+
+That reframes the whole study. Terrain-driven least-cost-path routing optimises
+the weaker of two available signals while ignoring the stronger one, which is
+sitting in a dataset every operator has.
 
 
 ---
