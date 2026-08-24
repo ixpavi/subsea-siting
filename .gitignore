@@ -30,3 +30,5 @@ scripts/research/.cache/
 # from a clean clone without running the build script.
 scripts/.cache-earth-source.jpg
 scripts/research/.cache/
+
+.vercel
