@@ -9,7 +9,7 @@
 [![Vite](https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white)](https://vite.dev)
 [![Tests](https://img.shields.io/badge/tests-144%20passing-2ea44f)](#testing)
 [![Data](https://img.shields.io/badge/cable%20systems-724-0e7c86)](#data-provenance)
-[![Licence](https://img.shields.io/badge/licence-MIT-blue)](#licence)
+[![Licence](https://img.shields.io/badge/licence-Apache%202.0-blue)](LICENSE)
 
 </div>
 
@@ -223,7 +223,14 @@ Stated here rather than discovered later:
 
 ## 📜 Licence
 
-MIT. Data remains under the terms of its respective sources — see the provenance table above.
+[Apache License 2.0](LICENSE) — permissive reuse with an explicit patent grant.
+Chosen over MIT deliberately: submarine cable route generation is a
+patent-active area, and Apache 2.0 grants patent rights from contributors and
+terminates for anyone who litigates over them.
+
+**The code is Apache 2.0. The data is not.** Each dataset remains under the
+terms of its own source — see the [provenance table](#-data-provenance). Check
+those terms before redistributing any of it, particularly for commercial use.
 
 <div align="center">
 
