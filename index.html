@@ -2,9 +2,32 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Subsea Cable & Data Centre Planning Globe</title>
+
+    <title>Subsea Cable &amp; Data Centre Planning Globe</title>
+    <meta
+      name="description"
+      content="Interactive planning tool for submarine cable routing and data centre siting, built on published infrastructure data with every figure labelled by provenance."
+    />
+
+    <!-- SVG first: modern browsers pick it and it stays sharp at any density.
+         The PNG is the fallback for clients that ignore SVG favicons. -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+
+    <!-- Matches the app's own background so the browser chrome does not flash
+         a different colour before the globe paints. -->
+    <meta name="theme-color" content="#06192a" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Subsea Cable &amp; Data Centre Planning Globe" />
+    <meta
+      property="og:description"
+      content="Submarine cable routing and data centre siting over real infrastructure data — 724 cable systems, 5,260 facilities, provenance on every number."
+    />
+    <meta property="og:image" content="/icon-512.png" />
+    <meta name="twitter:card" content="summary" />
   </head>
   <body>
     <div id="root"></div>
