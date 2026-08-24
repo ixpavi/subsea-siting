@@ -13,6 +13,7 @@ import { generateRouteCandidates, getCableProximityIndex } from "./routeCandidat
 import { computeRouteAnalysis } from "./routeAnalysis";
 import { computeRouteResilience } from "./routeResilience";
 import { assessEnvironmental } from "./environmentalConstraints";
+import type { ProtectedAreaGrid } from "./protectedAreas";
 import { computeCost } from "./routeCostModel";
 import type {
   CriterionOutcome,
@@ -369,6 +370,9 @@ export interface HypotheticalRoutingInputs {
   cables: CableFeature[];
   landingPoints: LandingPoint[];
   grid: OceanGrid;
+  /** Marine protected areas. Optional: when absent the environmental criterion
+   *  reports unavailable, exactly as it did before any dataset existed. */
+  protectedAreas?: ProtectedAreaGrid | null;
   weights?: RoutingWeights;
 }
 
@@ -420,7 +424,7 @@ export function runHypotheticalRouting(inputs: HypotheticalRoutingInputs): Route
   for (const geo of geometries) {
     if (!geo.found || geo.path.length < 2) continue;
     const analysis = computeRouteAnalysis(inputs.grid, geo.path, sourceEndpoint.terrestrialAccessKm, destinationEndpoint.terrestrialAccessKm);
-    const environmental = assessEnvironmental(geo.path);
+    const environmental = assessEnvironmental(geo.path, inputs.protectedAreas ?? null);
     const resilience = computeRouteResilience(cableIndex, geo.path);
     const cost = computeCost(analysis, environmental);
     candidates.push({

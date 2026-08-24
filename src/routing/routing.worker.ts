@@ -6,6 +6,7 @@
 // main thread already fetches) so requests only need to carry
 // coordinates/weights, not the whole cable/grid payload every time.
 import { loadOceanGrid } from "./oceanGrid";
+import { loadProtectedAreas } from "./protectedAreas";
 import { runHypotheticalRouting } from "./hypotheticalRouting";
 import type { CableFeature, LandingPoint } from "../types";
 import type { RouteEngineResult, RoutingWeights } from "./routingTypes";
@@ -46,7 +47,16 @@ function getLandingPoints(): Promise<LandingPoint[]> {
 self.onmessage = async (e: MessageEvent<RoutingRequest>) => {
   const req = e.data;
   try {
-    const [grid, cables, landingPoints] = await Promise.all([loadOceanGrid(), getCables(), getLandingPoints()]);
+    // Protected areas are allowed to fail without taking the route with them:
+    // a missing environmental dataset degrades that one criterion to
+    // unavailable, which the engine already handles, rather than failing the
+    // whole request.
+    const [grid, cables, landingPoints, protectedAreas] = await Promise.all([
+      loadOceanGrid(),
+      getCables(),
+      getLandingPoints(),
+      loadProtectedAreas().catch(() => null),
+    ]);
     const result = runHypotheticalRouting({
       sourceLat: req.sourceLat,
       sourceLng: req.sourceLng,
@@ -57,6 +67,7 @@ self.onmessage = async (e: MessageEvent<RoutingRequest>) => {
       cables,
       landingPoints,
       grid,
+      protectedAreas,
       weights: req.weights,
     });
     const response: RoutingResponse = { requestId: req.requestId, ok: true, result };

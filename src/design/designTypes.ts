@@ -120,7 +120,7 @@ export const PIPELINE_STAGES: PipelineStageMeta[] = [
   { id: "existing-connectivity", label: "Existing Connectivity", shortLabel: "Connectivity", implemented: true },
   { id: "landing-points", label: "Landing Points", shortLabel: "Landing Pts", implemented: true },
   { id: "hypothetical-routes", label: "Hypothetical Routes", shortLabel: "Routes", implemented: true },
-  { id: "environmental-analysis", label: "Environmental Analysis", shortLabel: "Environment", implemented: false },
+  { id: "environmental-analysis", label: "Environmental Analysis", shortLabel: "Environment", implemented: true },
   { id: "data-centre-design", label: "Data Centre Design", shortLabel: "DC Design", implemented: true },
   { id: "resilience", label: "Resilience", shortLabel: "Resilience", implemented: true },
   { id: "economics", label: "Economics", shortLabel: "Economics", implemented: true },
