@@ -32,6 +32,7 @@ import { dirname, join } from "path";
 import { BathyGrid } from "./lib/bathyGrid.mjs";
 import { routeBetween, ZERO_WEIGHTS } from "./lib/corridorRouter.mjs";
 import { routeDeviationKm, geodesicPath } from "./lib/routeDeviation.mjs";
+import { buildCorridorIndex, corridorDistanceFor, EXCLUSION } from "./lib/corridorIndex.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const grid = new BathyGrid(join(__dirname, ".cache", "bathy-tiles"), 240);
@@ -88,13 +89,39 @@ console.log("");
 
 const obsOf = (r) => r.coordinates.map(([lng, lat]) => [lat, lng]);
 
+// --- Corridor index --------------------------------------------------------
+// Built over the WHOLE corpus, with exclusions applied per query rather than
+// per index, so one structure serves every route and every strictness level.
+function systemKey(r) {
+  const p = r.properties ?? {};
+  const raw = p.name ?? p.naam ?? p.kabel_nr ?? p.omschrijvi ?? null;
+  return raw ? String(raw).trim().toUpperCase() : null;
+}
+const corridorIndex = buildCorridorIndex(corpus.routes, corpus.routes.map(systemKey));
+const indexOf = new Map(corpus.routes.map((r, i) => [r, i]));
+
+/** SAME-AGENCY exclusion, deliberately the strictest available.
+ *
+ *  A router allowed to see the route it is predicting traces it and scores
+ *  perfectly, measuring nothing. Excluding only that one route is not enough
+ *  either: neighbouring segments of the same cable, and the same agency's other
+ *  surveys of the same corridor, leak the answer just as effectively. Asking
+ *  whether a route can be predicted from cables a DIFFERENT country published
+ *  is the version of the question worth answering. */
+function corridorFnFor(route) {
+  const ri = indexOf.get(route);
+  if (ri === undefined) return null;
+  return corridorDistanceFor(corridorIndex, ri, EXCLUSION.sameAgency);
+}
+
 /** Deviation of a weighted prediction from the observed route, or null when
  *  no path exists in the corridor. */
 function predictAndScore(route, weights) {
   const obs = obsOf(route);
   const a = obs[0];
   const b = obs[obs.length - 1];
-  const res = routeBetween(grid, a, b, weights, CORRIDOR_DEG);
+  const corridorFn = weights.corridor ? corridorFnFor(route) : null;
+  const res = routeBetween(grid, a, b, weights, CORRIDOR_DEG, 2_000_000, corridorFn);
   if (!res.reachable) return null;
   const dev = routeDeviationKm(obs, res.path);
   return dev ? dev.meanKm : null;
@@ -121,7 +148,10 @@ function fitWeights(trainRoutes, label) {
   for (const depth of LEVELS) {
     for (const slope of LEVELS) {
       for (const rough of LEVELS) {
-        const w = { depth, slope, rough };
+        // Fitting stays terrain-only: the corridor term is evaluated as a
+        // fixed competing hypothesis, so the two are compared on equal footing
+        // rather than one being tuned and the other not.
+        const w = { depth, slope, rough, corridor: 0 };
         const devs = [];
         for (const r of fitSet) {
           const d = predictAndScore(r, w);
@@ -139,13 +169,16 @@ function fitWeights(trainRoutes, label) {
 }
 
 // --- Methods ---------------------------------------------------------------
+const W = (o) => ({ depth: 0, slope: 0, rough: 0, corridor: 0, ...o });
 const METHODS = [
   { id: "geodesic", label: "Great circle (no bathymetry at all)", kind: "geodesic" },
   { id: "seapath", label: "Shortest sea path (terrain ignored)", kind: "weights", weights: ZERO_WEIGHTS },
-  { id: "depth", label: "Depth-avoiding", kind: "weights", weights: { depth: 1.5, slope: 0, rough: 0 } },
-  { id: "slope", label: "Slope-avoiding", kind: "weights", weights: { depth: 0, slope: 1.5, rough: 0 } },
-  { id: "handset", label: "All terms, hand-set weights", kind: "weights", weights: { depth: 0.5, slope: 1.5, rough: 0.5 } },
-  { id: "fitted", label: "All terms, weights FITTED on other sources", kind: "fitted" },
+  { id: "slope", label: "Terrain only (slope-avoiding)", kind: "weights", weights: W({ slope: 1.5 }) },
+  { id: "handset", label: "Terrain, all terms hand-set", kind: "weights", weights: W({ depth: 0.5, slope: 1.5, rough: 0.5 }) },
+  // The competing hypothesis: follow existing corridors, ignore terrain.
+  { id: "corridor", label: "Corridor only (follow other operators' cables)", kind: "weights", weights: W({ corridor: 1.5 }) },
+  { id: "both", label: "Corridor + terrain", kind: "weights", weights: W({ slope: 1.5, corridor: 1.5 }) },
+  { id: "fitted", label: "Terrain, weights FITTED on other sources", kind: "fitted" },
 ];
 
 // --- Run leave-one-source-out ----------------------------------------------
@@ -230,10 +263,11 @@ function signTest(better, worse) {
 
 console.log("\n=== PAIRED COMPARISONS (same routes, per route) ===");
 const pairs = [
-  ["seapath", "geodesic", "knowing where the water is"],
   ["fitted", "seapath", "fitted terrain preference over plain shortest sea path"],
-  ["handset", "seapath", "hand-set terrain preference over plain shortest sea path"],
-  ["fitted", "handset", "fitting the weights over guessing them"],
+  ["corridor", "seapath", "corridor following over plain shortest sea path"],
+  ["corridor", "fitted", "corridor following over fitted terrain preference"],
+  ["corridor", "handset", "corridor following over hand-set terrain"],
+  ["both", "corridor", "adding terrain on top of corridor following"],
 ];
 const paired = [];
 for (const [a, b, what] of pairs) {

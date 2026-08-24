@@ -16,11 +16,22 @@
 // reported parameter of the experiment.
 //
 // COST SURFACE. cost(cell) = distance * (1 + w.depth*d~ + w.slope*s~ +
-// w.rough*r~), where each ~ term is that cell's value normalised to roughly
-// 0..1 by a fixed scale. Setting every weight to zero gives a pure
-// shortest-path search, which is exactly the geodesic baseline -- so the
-// baselines and the fitted model differ ONLY in their weights, never in the
-// search. That is what makes the comparison fair.
+// w.rough*r~ + w.corridor*c~), where each ~ term is that cell's value
+// normalised to roughly 0..1 by a fixed scale. Setting every weight to zero
+// gives a pure shortest-path search, which is exactly the geodesic baseline --
+// so the baselines and the fitted model differ ONLY in their weights, never in
+// the search. That is what makes the comparison fair.
+//
+// THE CORRIDOR TERM AND WHY IT MUST BE FED CAREFULLY. c~ is how far a cell sits
+// from the nearest EXISTING cable, so a positive weight makes the router prefer
+// established corridors. The corridor-following study found that effect larger
+// than terrain -- but a router told about the very route it is predicting would
+// simply trace it and score perfectly, which measures nothing.
+//
+// So `corridorDistanceKm` is supplied by the caller, not computed here, and the
+// caller is responsible for excluding the route under test. The router cannot
+// enforce that, so it is stated at every level: this comment, the experiment
+// that calls it, and the exclusion levels reported in the results.
 import { haversineKm } from "./bathyGrid.mjs";
 
 /** Normalisation scales. Fixed constants, chosen once from the corpus's own
@@ -30,8 +41,12 @@ import { haversineKm } from "./bathyGrid.mjs";
 export const DEPTH_SCALE_M = 4000;
 export const SLOPE_SCALE = 0.05;
 export const ROUGH_SCALE_M = 120;
+/** Distance beyond which "far from an existing cable" stops getting worse.
+ *  25 km is roughly where the corridor-following study's real routes and its
+ *  displaced controls separate (7.1 km vs 22.2 km under the strictest test). */
+export const CORRIDOR_SCALE_KM = 25;
 
-export const ZERO_WEIGHTS = { depth: 0, slope: 0, rough: 0 };
+export const ZERO_WEIGHTS = { depth: 0, slope: 0, rough: 0, corridor: 0 };
 
 /** Cells per degree in the tile set. */
 const PER_DEG = 240;
@@ -117,7 +132,7 @@ const KM_PER_DEG = 111.32;
  *        when no water path exists inside the corridor, which must be
  *        reported rather than silently returning a straight line.
  */
-export function routeBetween(grid, a, b, weights, corridorDeg = 1.0, maxExpansions = 2_000_000) {
+export function routeBetween(grid, a, b, weights, corridorDeg = 1.0, maxExpansions = 2_000_000, corridorDistanceKm = null) {
   const terrain = new TerrainCache(grid);
 
   const minLat = Math.min(a[0], b[0]) - corridorDeg;
@@ -195,11 +210,19 @@ export function routeBetween(grid, a, b, weights, corridorDeg = 1.0, maxExpansio
         const stepKm =
           Math.hypot(dr * KM_PER_DEG * CELL_DEG, dc * KM_PER_DEG * CELL_DEG * Math.cos((lat * Math.PI) / 180));
 
-        const multiplier =
+        let multiplier =
           1 +
           weights.depth * (t.depth / DEPTH_SCALE_M) +
           weights.slope * (t.slope / SLOPE_SCALE) +
           weights.rough * (t.rough / ROUGH_SCALE_M);
+
+        if (weights.corridor && corridorDistanceKm) {
+          // Zero at an existing cable, saturating at CORRIDOR_SCALE_KM away, so
+          // the term expresses "prefer established corridors" without letting a
+          // remote cell cost unboundedly more than a merely distant one.
+          const dKm = corridorDistanceKm(cellLat(nr), cellLng(nc));
+          multiplier += weights.corridor * Math.min(1, dKm / CORRIDOR_SCALE_KM);
+        }
 
         const tentative = g + stepKm * multiplier;
         const nk = key(nr, nc);

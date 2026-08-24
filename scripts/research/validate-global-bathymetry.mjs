@@ -23,7 +23,7 @@
 // combining them into one analysis silently mixes two different measurement
 // systems, and any effect could be an artefact of which source covered which
 // route.
-import { readFileSync, existsSync } from "fs";
+import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { BathyGrid } from "./lib/bathyGrid.mjs";
