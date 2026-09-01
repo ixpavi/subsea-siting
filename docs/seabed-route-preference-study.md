@@ -664,7 +664,7 @@ node scripts/research/analyse-local-preference.mjs     # Test 2 + placebo, secti
 node scripts/research/analyse-terrain-stratified.mjs   # Test 3, section 4          [~5 s]
 node scripts/research/analyse-dose-response.mjs        # the source confound, section 4   [~5 s]
 node scripts/research/analyse-bsh-anomaly.mjs          # the contradicting source, section 5   [<1 s]
-node scripts/research/evaluate-route-prediction.mjs    # Test 4, section 4a -- leave-one-source-out   [over an hour]
+node scripts/research/evaluate-route-prediction.mjs    # Test 4, section 4a -- leave-one-source-out   [~28 min]
 node scripts/research/measure-discretisation-penalty.mjs  # the discretisation control, section 4a   [~21 s]
 node scripts/research/analyse-corridor-following.mjs   # Tests 5 and 6, sections 4b and 4c   [~11 s]
 node scripts/research/analyse-corridor-endpoint-control.mjs  # the landfall confound, sections 4b and 5   [~12 s]
@@ -674,8 +674,8 @@ node scripts/research/analyse-corridor-endpoint-control.mjs  # the landfall conf
 measured in hours rather than seconds: it runs one leave-one-source-out fold per
 national source, and each fold searches 8 weight combinations with a full A*
 over the 460 m grid for every route, then scores the held-out routes the same
-way. Budget an afternoon, or run it detached. Everything else in Phase 4
-finishes in under 20 seconds.
+way. Measured at 27 min 40 s across five folds; run it detached. Everything else
+in Phase 4 finishes in under 20 seconds.
 
 ### Cheapest way to check the two load-bearing results
 
