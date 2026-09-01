@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🌊 Subsea Cable & Data Centre Planning Globe
+# 🌊 Subsea Cable Routing & Data Centre Planning 
 
 **An interactive planning tool for submarine cable routing and data centre siting — built on published infrastructure data, with every number traceable to its source.**
 
