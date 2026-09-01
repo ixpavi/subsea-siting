@@ -528,23 +528,107 @@ presented as one input to a decision rather than as an optimum.
 
 ## 7. Reproducing
 
+Every number in this document comes from one of the commands below. No API key,
+no account, no prerequisite beyond Node (verified on 24.19). Each script writes
+its result to `scripts/research/.cache/` and prints the figures quoted here. The
+full cache is about 615 MB, most of it bathymetry tiles.
+
+Runtimes are wall-clock on the machine the study was run on, and are given so a
+reader can tell which steps are cheap. Acquisition dominates: after the cache is
+built, every test except the prediction fit re-runs in under a minute combined.
+
+### Phase 1 — corpus
+
 ```bash
-node scripts/research/build-cable-corpus.mjs        # fetch + characterise the corpus
-node scripts/research/plan-bathymetry-tiles.mjs     # size the download first
-node scripts/research/validate-scaling.mjs          # downsampling fidelity
-node scripts/research/validate-scaling-bias.mjs     # is the error biased?
-node scripts/research/build-bathymetry-tiles.mjs    # ~789 tiles, 90 MB
-node scripts/research/validate-bathymetry-coverage.mjs   # acceptance test
-node scripts/research/analyse-route-deviation.mjs   # Test 1
-node scripts/research/analyse-local-preference.mjs  # Test 2 + placebo
-node scripts/research/analyse-terrain-stratified.mjs # Test 3
-node scripts/research/analyse-dose-response.mjs     # confound check
+node scripts/research/build-cable-corpus.mjs      # fetch + characterise 412 routes -> cable-corpus.json
 ```
 
+### Phase 2 — European bathymetry (EMODnet)
+
+Measure the downsampling error *before* downloading against it: the acceptance
+threshold for the whole study is that terrain relief exceed this error, and §5
+turns it into a scope condition.
+
+```bash
+node scripts/research/plan-bathymetry-tiles.mjs        # size the download before committing to it
+node scripts/research/validate-scaling.mjs             # downsampling fidelity: 0.46-1.28 m RMS on shelf
+node scripts/research/validate-scaling-bias.mjs        # is that error biased, or symmetric noise?
+node scripts/research/build-bathymetry-tiles.mjs       # 789 tiles, 90 MB   [~25 min]
+node scripts/research/validate-bathymetry-coverage.mjs # orientation, coverage, independent agreement
+```
+
+### Phase 3 — global bathymetry (NOAA NCEI mosaic)
+
+EMODnet stops at lat 11..90, lng -70.5..43, which excludes 56 corpus routes --
+the French overseas territories, which are also the deepest and longest. This
+phase is what the §5 geographic-scope note is measured against; skip it and the
+corpus is Europe only.
+
+```bash
+node scripts/research/build-global-bathymetry.mjs      # 1,196 tiles, 136 MB   [~40 min]
+node scripts/research/validate-global-bathymetry.mjs   # as above, plus: do the two sources agree where they overlap?
+```
+
+### Phase 4 — the tests
+
+Ordered as they appear in this document. All read the cache; none re-download.
+
+```bash
+node scripts/research/analyse-route-deviation.mjs      # Test 1, section 2          [<1 s]
+node scripts/research/analyse-local-preference.mjs     # Test 2 + placebo, section 3   [~17 s]
+node scripts/research/analyse-terrain-stratified.mjs   # Test 3, section 4          [~5 s]
+node scripts/research/analyse-dose-response.mjs        # the source confound, section 4   [~5 s]
+node scripts/research/analyse-bsh-anomaly.mjs          # the contradicting source, section 5   [<1 s]
+node scripts/research/evaluate-route-prediction.mjs    # Test 4, section 4a -- leave-one-source-out   [over an hour]
+node scripts/research/measure-discretisation-penalty.mjs  # the discretisation control, section 4a   [~21 s]
+node scripts/research/analyse-corridor-following.mjs   # Tests 5 and 6, sections 4b and 4c   [~11 s]
+```
+
+`evaluate-route-prediction.mjs` is by far the slow one, and the only step here
+measured in hours rather than seconds: it runs one leave-one-source-out fold per
+national source, and each fold searches 8 weight combinations with a full A*
+over the 460 m grid for every route, then scores the held-out routes the same
+way. Budget an afternoon, or run it detached. Everything else in Phase 4
+finishes in under 20 seconds.
+
+### Cheapest way to check the two load-bearing results
+
+The corridor result -- the largest effect in the paper -- is measured purely on
+route geometry and touches no bathymetry at all. It needs **Phase 1 only**, so
+it can be checked in a couple of minutes without downloading a single tile:
+
+```bash
+node scripts/research/build-cable-corpus.mjs           # Phase 1
+node scripts/research/analyse-corridor-following.mjs   # the 83% / 68%-closer headline   [~11 s]
+```
+
+The discretisation control reads the EMODnet grid, so it additionally needs
+Phase 2, but not Phase 3:
+
+```bash
+node scripts/research/measure-discretisation-penalty.mjs  # the control that flipped Test 4's sign   [~21 s]
+```
+
+Between them these two cover the finding this paper's conclusion rests on and
+the control that reversed one of its headlines -- which is where a sceptical
+reader should start.
+
+### Utility
+
+```bash
+node scripts/research/inspect-geotiff.mjs <file.tif>   # dump a raster's bbox, resolution, value range
+```
+
+Not part of the pipeline. It exists because the EMODnet WCS's resolution,
+elevation convention and nodata handling had to be established empirically
+before the tile downloader could be written against them.
+
 **Sources.** EMODnet Human Activities (national hydrographic office cable
-routes); EMODnet Bathymetry DTM; TeleGeography (for the fidelity comparison
-only). All statistics are permutation- or sign-tested; no distributional
-assumptions are made about these heavily skewed quantities.
+routes); EMODnet Bathymetry DTM; NOAA NCEI global DEM mosaic (a multi-source
+composite, not a single uniform-accuracy product -- labelled as such rather
+than as "GEBCO"); TeleGeography (for the fidelity comparison only). All
+statistics are permutation- or sign-tested; no distributional assumptions are
+made about these heavily skewed quantities.
 
 ## 8. Contribution
 
