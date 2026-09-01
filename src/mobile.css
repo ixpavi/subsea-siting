@@ -1,0 +1,376 @@
+/* Phone and small-tablet layout.
+ *
+ * THE PROBLEM THIS SOLVES. Every surface in this app was positioned for a
+ * desktop window: the planning console is a right-hand dock with
+ * min-width 320px, the inspectors are 280-340px cards pinned at
+ * top 112px / left 20px, the search field is 36vw, and the toolbar is a single
+ * unwrapped row of four buttons. On a 390px viewport that means the console
+ * covers 82% of the screen, the inspectors sit on top of the search field, the
+ * search field is 140px wide, and the toolbar runs off the edge.
+ *
+ * THE APPROACH. Rather than shrinking the desktop layout, the small-screen
+ * layout is a different arrangement of the same components:
+ *
+ *   - Controls collect at the top: title, then a full-width search field, then
+ *     one horizontally scrollable row holding every button including Layers.
+ *   - The globe keeps the middle of the screen, which is the whole point of the
+ *     application and the first thing a shrunken desktop layout loses.
+ *   - Every panel becomes a bottom sheet. .panel is already shared by the
+ *     detail, inspector, directory, chooser and layers surfaces, so one rule
+ *     converts all of them, and each keeps its own internal styling.
+ *
+ * The selectors below double the class (.panel.panel) to outrank the per-panel
+ * top/left/width rules in App.css, explore.css and design.css without
+ * !important and without depending on stylesheet import order.
+ *
+ * Units are dvh, not vh: on mobile browsers vh resolves against the viewport
+ * with the URL bar hidden, so a 100vh root is taller than the screen and its
+ * bottom edge -- which is where these sheets and their close buttons live --
+ * sits underneath the browser chrome.
+ */
+
+/* Heights of the stacked top controls, named once so the sheet's max-height and
+   the globe's usable area cannot drift out of step with the header. */
+:root {
+  --m-gutter: 12px;
+  --m-title-h: 38px;
+  --m-search-h: 38px;
+  --m-toolbar-h: 40px;
+  --m-top-stack: calc(
+    var(--m-title-h) + var(--m-search-h) + var(--m-toolbar-h) + (var(--m-gutter) * 2)
+  );
+}
+
+@media (max-width: 760px) {
+  /* --- Top control stack -------------------------------------------------- */
+
+  .title-bar {
+    padding: 9px var(--m-gutter) 6px;
+  }
+  .title-bar h1 {
+    font-size: 11px;
+    letter-spacing: 0.05em;
+  }
+  /* The strapline is the first thing to go: on a phone it costs a line of
+     vertical space that the globe uses better, and the title already says it. */
+  .title-bar p {
+    display: none;
+  }
+
+  .network-search {
+    top: var(--m-title-h);
+    left: var(--m-gutter);
+    right: var(--m-gutter);
+    width: auto;
+    transform: none;
+  }
+  .network-search-input {
+    padding: 9px 12px 9px 32px;
+    font-size: 16px; /* iOS zooms the page in on focus for anything under 16px. */
+    border-radius: var(--radius-md);
+  }
+  .network-search-icon {
+    left: 12px;
+  }
+
+  .top-toolbar {
+    top: calc(var(--m-title-h) + var(--m-search-h) + var(--m-gutter));
+    left: var(--m-gutter);
+    right: var(--m-gutter);
+    gap: 7px;
+    /* Five controls will not fit across 390px at a legible size, and wrapping
+       them pushes the globe down a whole row. A scroll strip keeps the row one
+       line tall and keeps every control reachable. */
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 2px;
+  }
+  .top-toolbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .toolbar-btn,
+  .design-launch-btn {
+    min-height: 36px;
+    padding: 8px 13px;
+    font-size: 13px;
+    flex: none;
+  }
+
+  /* On desktop the Layers control floats at bottom-left, clear of everything.
+     On a phone the bottom belongs to the sheets, so it joins the toolbar row as
+     an ordinary flex child and its popover opens as a sheet like the rest. */
+  .legend-root {
+    position: static;
+    flex: none;
+  }
+
+  /* --- Panels become bottom sheets ---------------------------------------- */
+
+  .panel.panel {
+    position: fixed;
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    max-width: none;
+    /* Never taller than the space below the controls, so the globe is always
+       partly visible and the sheet never reads as a full-screen takeover. */
+    max-height: min(62dvh, calc(100dvh - var(--m-top-stack) - 16px));
+    border-radius: 18px 18px 0 0;
+    border-left: none;
+    border-right: none;
+    border-bottom: none;
+    box-shadow:
+      inset 0 1px 0 0 rgba(190, 222, 245, 0.1),
+      0 -14px 40px -8px rgba(0, 0, 0, 0.7);
+    animation: sheet-rise 220ms cubic-bezier(0.32, 0.72, 0, 1);
+  }
+
+  /* Grabber. Purely an affordance -- these sheets are closed with the header's
+     close button, not by dragging -- but without it the panel reads as a
+     rectangle that happens to touch the bottom edge rather than as a sheet. */
+  .panel.panel > .panel-header {
+    position: relative;
+    padding-top: 18px;
+  }
+  .panel.panel > .panel-header::before {
+    content: "";
+    position: absolute;
+    top: 7px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 36px;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--line-strong);
+  }
+
+  /* Home-indicator clearance on iOS; resolves to 0 everywhere else. */
+  .panel.panel > .panel-body,
+  .panel.panel > .cable-directory-list {
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+  }
+
+  /* The layers popover is a .panel, so it is already a sheet -- it just needs
+     its desktop "open upward from the button" anchoring cleared. */
+  .legend-popover {
+    bottom: 0;
+    left: 0;
+  }
+  .legend-row {
+    /* Checkbox rows are the densest tap targets in the app; 5px padding gave
+       them a 23px height, roughly half a fingertip. border-box matters here:
+       min-height applies to the content box by default, so 44px plus vertical
+       padding produced 62px rows and a list that scrolled for no reason. */
+    box-sizing: border-box;
+    padding: 6px 0;
+    font-size: 14px;
+    min-height: var(--touch);
+  }
+  .legend-row input {
+    width: 18px;
+    height: 18px;
+  }
+
+  /* --- Planning console --------------------------------------------------- */
+
+  /* The one surface that is not a .panel. It is a multi-step workflow rather
+     than a readout, so it gets more height than the sheets above -- but still
+     stops short of the top so the globe it is describing stays in view. */
+  .pp-shell {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    min-width: 0;
+    height: 72dvh;
+    max-height: calc(100dvh - 56px);
+    border-left: none;
+    border-top: 1px solid var(--line-strong);
+    border-radius: 18px 18px 0 0;
+    box-shadow: 0 -16px 44px -10px rgba(0, 0, 0, 0.7);
+    animation: sheet-rise 220ms cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  .pp-header {
+    padding: 14px 16px 10px;
+  }
+  .pp-steps {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  /* Ten monospace chips wrap to four lines on a phone and push the actual step
+     content off the bottom of the sheet. The step dots above already show
+     position; the rail is the redundant one. */
+  .pp-rail {
+    display: none;
+  }
+  .pp-content {
+    padding: 14px 16px calc(28px + env(safe-area-inset-bottom));
+  }
+
+  /* --- Site comparison ---------------------------------------------------- */
+
+  /* Height follows the content rather than being fixed: this panel starts as a
+     short "add a site" prompt and only becomes a tall ranking table once there
+     are sites to rank. A fixed 82dvh made the empty state cover the toolbar and
+     the globe with nothing in it. */
+  .site-compare {
+    position: fixed;
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    height: auto;
+    max-height: 82dvh;
+    border-radius: 18px 18px 0 0;
+    border-left: none;
+    border-right: none;
+    border-bottom: none;
+    padding: 22px 14px calc(24px + env(safe-area-inset-bottom));
+  }
+  /* Same grabber as the .panel sheets. This surface predates that shared shell
+     and has its own header markup, so it gets the affordance directly. */
+  .site-compare::before {
+    content: "";
+    position: absolute;
+    top: 7px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 36px;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--line-strong);
+  }
+
+  /* --- Touch targets ------------------------------------------------------ */
+
+  /* Everything below is a control that a mouse hits comfortably at its authored
+     size and a finger does not. The rule of thumb applied is ~40px of height;
+     where a control sits inside a large label or row that is itself the tap
+     target (the layer checkboxes, the radio option cards) the small element is
+     left alone, because the thing being tapped is already big enough. */
+
+  /* Segmented chips (industry) were 26px tall -- the densest run of adjacent
+     targets in the planning flow, seven of them wrapped across two rows. */
+  .design-segmented {
+    gap: 7px;
+  }
+  .design-segmented button {
+    min-height: 40px;
+    padding: 9px 13px;
+    font-size: 13px;
+  }
+
+  /* Step dots double as backward navigation, so they are real controls, not
+     just an indicator. 20px is under half a fingertip. */
+  .pp-step-dot {
+    width: 30px;
+    height: 30px;
+    font-size: 12px;
+  }
+  .pp-steps {
+    gap: 6px;
+  }
+
+  .design-disclosure-toggle {
+    min-height: 40px;
+    padding: 9px 0;
+    font-size: 13px;
+  }
+
+  /* The primary action of the whole workflow, at 30px tall. */
+  .design-btn-primary,
+  .design-btn-secondary {
+    min-height: 44px;
+    padding: 11px 18px;
+    font-size: 14px;
+  }
+
+  /* Landing-point links inside the inspector: 14px of text with no padding,
+     and they sit directly above one another in the route list. */
+  .ni-link,
+  .ni-route-item {
+    line-height: 1.5;
+  }
+  .ni-link {
+    min-height: 36px;
+    padding: 8px 0;
+    font-size: 13.5px;
+  }
+
+  .close-btn {
+    width: var(--touch);
+    height: var(--touch);
+    margin: -6px -8px -6px 0;
+  }
+  .close-btn svg {
+    width: 17px;
+    height: 17px;
+  }
+  .cable-directory-row {
+    min-height: var(--touch);
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+  /* 16px minimum on every text input, for the same iOS auto-zoom reason. */
+  .cable-directory-filter,
+  input[type="text"],
+  input[type="search"],
+  input[type="number"],
+  select {
+    font-size: 16px;
+  }
+}
+
+@keyframes sheet-rise {
+  from { transform: translateY(14px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* Landscape phones: tall bottom sheets leave no globe at all when the viewport
+   is only ~380px high, so they become a right-hand column instead. */
+@media (max-width: 900px) and (max-height: 520px) and (orientation: landscape) {
+  /* Named so the panel width and the space the top controls leave for it are
+     one number, not two that can drift apart. */
+  :root {
+    --m-landscape-col: min(340px, 52vw);
+  }
+
+  /* The controls keep out of the column the panels occupy, rather than sliding
+     underneath it. Without this the rightmost button -- the primary "Design a
+     Data Centre" action -- sits behind an open panel. */
+  .top-toolbar,
+  .network-search {
+    right: calc(var(--m-landscape-col) + var(--m-gutter));
+  }
+
+  .panel.panel,
+  .pp-shell,
+  .site-compare {
+    top: 0;
+    bottom: 0;
+    left: auto;
+    right: 0;
+    width: var(--m-landscape-col);
+    height: auto;
+    max-height: 100dvh;
+    border-radius: 0;
+    border-left: 1px solid var(--line-strong);
+    padding-right: env(safe-area-inset-right);
+  }
+  .panel.panel > .panel-header::before {
+    display: none;
+  }
+  .panel.panel > .panel-header {
+    padding-top: 12px;
+  }
+  .title-bar p {
+    display: none;
+  }
+}

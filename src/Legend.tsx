@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { LayerToggles } from "./types";
+import CloseButton from "./CloseButton";
 
 interface Props {
   toggles: LayerToggles;
@@ -40,6 +41,10 @@ export default function Legend({ toggles, onChange, counts }: Props) {
         <div className="panel legend-popover">
           <div className="panel-header">
             <h2>Layers</h2>
+            {/* Outside-click already dismisses this, but on a phone it renders as
+                a bottom sheet like every other panel, and a sheet without a
+                visible close control reads as stuck. */}
+            <CloseButton onClick={() => setOpen(false)} label="Close layers" />
           </div>
           <div className="panel-body legend-body">
             <span className="ni-label">Infrastructure</span>

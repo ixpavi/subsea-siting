@@ -1,0 +1,214 @@
+/* Shared visual language for every floating surface in the app.
+ *
+ * WHY THIS FILE EXISTS. The app grew three independent looks: App.css hard-coded
+ * `rgba(11, 18, 32, 0.92)` panels, design.css defined a `--dc-*` token set, and
+ * explore.css deliberately re-declared its own colours to stay independent of
+ * Planning Mode. Three sources meant a border tweak had to be made in three
+ * places and usually was not, so panels sitting side by side on the same globe
+ * did not match.
+ *
+ * This file is the single source. Modules keep their own class names and their
+ * own layout; what they take from here is colour, elevation and type. The
+ * `--dc-*` names are aliased at the bottom so design.css keeps working unchanged.
+ *
+ * DIRECTION. The subject is deep water and survey instrumentation, so the
+ * neutrals are biased toward the cyan accent rather than pure grey -- a panel
+ * edge is a desaturated blue-grey, never #ffffff at low alpha, which is what
+ * made the old borders read as generic chrome. Surfaces are layered with a
+ * single-pixel top highlight so a panel looks like glass catching light from
+ * above rather than a flat rectangle, and the corner radius stays small: this
+ * is an instrument, not a consumer app.
+ */
+
+:root {
+  color-scheme: dark;
+
+  /* --- Ground and surfaces --- */
+  --ocean-void: #04080f;
+  --surface: rgba(9, 16, 27, 0.9);
+  --surface-solid: #0a1019;
+  --surface-raised: rgba(22, 34, 52, 0.55);
+  --surface-inset: rgba(125, 165, 195, 0.055);
+  --surface-inset-strong: rgba(125, 165, 195, 0.1);
+
+  /* Blue-grey rather than white-at-low-alpha. This one change is most of the
+     difference between "generic dark UI" and something that belongs on water. */
+  --line: rgba(130, 170, 200, 0.16);
+  --line-strong: rgba(130, 170, 200, 0.3);
+  --line-faint: rgba(130, 170, 200, 0.09);
+
+  /* --- Text --- */
+  --text: #e8eff7;
+  --text-dim: rgba(203, 220, 236, 0.64);
+  --text-faint: rgba(203, 220, 236, 0.42);
+
+  /* --- Accent and semantics. Semantic colours are separate from the accent so
+         a warning never has to compete with a selected state for meaning. --- */
+  --accent: #4fd1ff;
+  --accent-soft: rgba(79, 209, 255, 0.12);
+  --accent-line: rgba(79, 209, 255, 0.45);
+  --accent-ink: #04121a;
+  --good: #86efac;
+  --good-soft: rgba(34, 197, 94, 0.12);
+  --good-line: rgba(74, 222, 128, 0.3);
+  --warn: #fdba74;
+  --warn-soft: rgba(245, 158, 11, 0.1);
+  --warn-line: rgba(245, 158, 11, 0.35);
+  --bad: #fca5a5;
+
+  /* --- Type --- */
+  --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "JetBrains Mono", "SFMono-Regular", Menlo, monospace;
+
+  /* --- Geometry --- */
+  --radius-sm: 5px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  /* Layered rather than one big blur: a tight contact shadow anchors the panel
+     to the globe, the wide one gives it height, the inset line is the lit edge. */
+  --shadow-panel:
+    inset 0 1px 0 0 rgba(190, 222, 245, 0.09),
+    0 2px 6px rgba(0, 0, 0, 0.45),
+    0 20px 48px -16px rgba(0, 0, 0, 0.75);
+
+  /* Kept modest on purpose. backdrop-filter over the WebGL canvas is composited
+     every frame, and larger radii were measurably costly during globe interaction. */
+  --glass: blur(9px) saturate(1.15);
+
+  /* Minimum comfortable touch target. Referenced rather than repeated so the
+     mobile layer and the desktop controls cannot drift apart. */
+  --touch: 44px;
+}
+
+/* --- Aliases, so design.css needs no edits -------------------------------- */
+:root {
+  --dc-bg-panel: var(--surface-solid);
+  --dc-bg-inset: var(--surface-inset);
+  --dc-bg-inset-strong: var(--surface-inset-strong);
+  --dc-border: var(--line);
+  --dc-border-strong: var(--line-strong);
+  --dc-text: var(--text);
+  --dc-text-dim: var(--text-dim);
+  --dc-accent: var(--accent);
+  --dc-good: var(--good);
+  --dc-warn: var(--warn);
+  --dc-font-mono: var(--font-mono);
+  --dc-radius-sm: var(--radius-sm);
+  --dc-radius-md: var(--radius-md);
+}
+
+/* --- The shared panel shell ----------------------------------------------- */
+
+.panel {
+  background:
+    linear-gradient(180deg, rgba(20, 32, 50, 0.92) 0%, rgba(8, 14, 24, 0.94) 42%),
+    var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  backdrop-filter: var(--glass);
+  -webkit-backdrop-filter: var(--glass);
+  box-shadow: var(--shadow-panel);
+  color: var(--text);
+}
+
+/* Hairline under the header, so the scrolling body visibly runs beneath a
+   fixed title rather than the two reading as one undivided block. */
+.panel-header {
+  border-bottom: 1px solid var(--line-faint);
+  padding: 12px 10px 9px 16px;
+}
+
+.panel-header h2,
+.ni-kicker {
+  font-size: 10.5px;
+  letter-spacing: 0.09em;
+  color: var(--text-faint);
+}
+
+/* Figures line up in columns throughout -- distances, depths, percentages.
+   Proportional digits make those columns ragged. */
+.panel-body,
+.pp-content {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Every text input in this app is authored as `width: 100%` inside a padded
+   panel. Under the default content-box sizing each one overflows its container
+   by its own padding plus border -- small, but enough to give the panel a
+   horizontal scrollbar and push the right edge of the field under the panel
+   edge. Four modules had already patched this one control at a time; making it
+   the default fixes the ones that were missed and the next one written. */
+input,
+textarea,
+select {
+  box-sizing: border-box;
+}
+
+/* The title sits directly over the globe, whose brightest areas (polar ice,
+   desert) are near-white. The gradient behind it is not enough on its own at
+   the top of the arc, so the type carries its own shadow. */
+.title-bar h1,
+.title-bar p {
+  text-shadow: 0 1px 3px rgba(2, 6, 12, 0.85);
+}
+
+/* --- Controls -------------------------------------------------------------- */
+
+.toolbar-btn,
+.design-launch-btn {
+  font-family: var(--font-ui);
+  border-radius: var(--radius-md);
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.toolbar-btn {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--text);
+  backdrop-filter: var(--glass);
+  -webkit-backdrop-filter: var(--glass);
+}
+.toolbar-btn:hover {
+  background: var(--surface-raised);
+  border-color: var(--line-strong);
+}
+.toolbar-btn.active {
+  border-color: var(--accent-line);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.design-launch-btn {
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-line);
+  color: var(--accent);
+  backdrop-filter: var(--glass);
+  -webkit-backdrop-filter: var(--glass);
+}
+.design-launch-btn:hover {
+  background: rgba(79, 209, 255, 0.2);
+  border-color: rgba(79, 209, 255, 0.75);
+}
+
+/* Keyboard focus must stay visible on every control, including the ones whose
+   :hover styling above is the only other affordance they have. */
+.toolbar-btn:focus-visible,
+.design-launch-btn:focus-visible,
+.close-btn:focus-visible,
+.legend-row:focus-within,
+.cable-directory-row:focus-visible,
+.network-search-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

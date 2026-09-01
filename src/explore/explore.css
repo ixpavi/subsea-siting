@@ -1,7 +1,10 @@
 /* Explore-mode cable explorer: search, directory, and inspector. Compact,
-   information-dense, self-contained (no dependency on design.css's tokens)
-   so this module works independently of Planning Mode. Positioned to keep
-   the globe dominant -- small panels, no full-height takeover. */
+   information-dense, and independent of Planning Mode. Colour and elevation
+   come from theme.css, which every module now shares -- this file previously
+   re-declared its own so it would not depend on design.css, with the result
+   that an explore panel and a planning panel on the same globe did not match.
+   Positioned to keep the globe dominant -- small panels, no full-height
+   takeover. */
 
 .ex-mono {
   font-family: ui-monospace, "JetBrains Mono", "SFMono-Regular", Menlo, monospace;
@@ -131,7 +134,7 @@
   top: 112px;
   left: 20px;
   width: 300px;
-  max-height: calc(100vh - 140px);
+  max-height: calc(100dvh - 140px);
   z-index: 25;
 }
 
@@ -214,7 +217,7 @@
   top: 112px;
   left: 20px;
   width: 280px;
-  max-height: calc(100vh - 140px);
+  max-height: calc(100dvh - 140px);
   z-index: 26;
 }
 
@@ -229,7 +232,7 @@
   top: 112px;
   left: 20px;
   width: 300px;
-  max-height: calc(100vh - 140px);
+  max-height: calc(100dvh - 140px);
   z-index: 25;
 }
 
@@ -247,6 +250,36 @@
 
 .ni-section {
   margin-bottom: 12px;
+}
+
+/* These two class names were already in NetworkInspector's markup but had no
+   rules at all, so the facts stacked flush against one another -- "United
+   States" ran straight into the next section's "Geometry" heading with nothing
+   between them. Grouping them into one inset readout block separates them and
+   also stops a short value like "4 segments" from claiming a full line of a
+   300px panel. auto-fit rather than a fixed two columns, because the same
+   block renders inside a full-width bottom sheet on a phone. */
+.ni-factgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+  gap: 10px 14px;
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  background: var(--surface-inset);
+  border: 1px solid var(--line-faint);
+  border-radius: var(--radius-md);
+}
+
+.ni-fact {
+  min-width: 0;
+}
+
+.ni-fact > div {
+  font-size: 12.5px;
+  line-height: 1.45;
+  /* Country lists and cable ids are unbroken strings long enough to force the
+     grid track wider than the panel if they are allowed to. */
+  overflow-wrap: anywhere;
 }
 
 .ni-label {

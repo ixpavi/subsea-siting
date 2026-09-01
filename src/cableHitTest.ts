@@ -95,6 +95,13 @@ export const CABLE_HIT_TOLERANCE_PX = 9;
 export const PATH_POINT_ALTITUDE = 0.001;
 /** Two candidates within this margin of each other are "effectively identical" -- surface a chooser instead of guessing. */
 export const CABLE_HIT_AMBIGUITY_MARGIN_PX = 4;
+/** Multiplier applied to both tolerances when the pointer is coarse (a finger,
+ *  not a cursor). 9px is tuned against a 1px hotspot; a fingertip contact patch
+ *  on a typical phone covers roughly 40px, and the reported point sits somewhere
+ *  inside it. 2.2 lands near 20px -- wide enough that a 1.6px cable is reachable,
+ *  narrow enough that the ambiguity chooser still resolves distinct systems
+ *  rather than opening on every tap over a busy corridor. */
+export const TOUCH_TOLERANCE_SCALE = 2.2;
 /** three-globe's own default `pathResolution` (degrees) -- see module doc, point 1. Must match exactly, not just approximately, since it's a threshold on the SAME distance metric (Euclidean in lat/lng-degree space) as the source. */
 const PATH_RESOLUTION_DEG = 2;
 

@@ -295,6 +295,21 @@ export default function App() {
           )}
           {!planningMode && (
             <div className="top-toolbar">
+              {/* Layers lives inside the toolbar rather than beside it so that on a
+                  phone -- where the bottom of the screen belongs to the panel sheets
+                  -- it can become an ordinary flex child of this row instead of a
+                  floating control with nowhere to float. On desktop it is
+                  position:fixed and still sits at bottom-left, unchanged. */}
+              <Legend
+                toggles={toggles}
+                onChange={setToggles}
+                counts={{
+                  cables: cables.length,
+                  landDCs: landDCs.length,
+                  subseaDCs: subseaDCs.length,
+                  landingPoints: landingPoints.length,
+                }}
+              />
               <button
                 className="toolbar-btn"
                 onClick={() => setRotating((r) => !r)}
@@ -351,18 +366,6 @@ export default function App() {
             />
           )}
 
-          {!planningMode && (
-            <Legend
-              toggles={toggles}
-              onChange={setToggles}
-              counts={{
-                cables: cables.length,
-                landDCs: landDCs.length,
-                subseaDCs: subseaDCs.length,
-                landingPoints: landingPoints.length,
-              }}
-            />
-          )}
           {!planningMode && selected && <DetailPanel selection={selected} onClose={() => setSelected(null)} />}
 
           {cableChoices && (

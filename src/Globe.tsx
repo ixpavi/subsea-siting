@@ -4,7 +4,12 @@ import type { GlobeMethods } from "react-globe.gl";
 import type { CableFeature, LandDC, SubseaDC, LandingPoint, LayerToggles, Selection } from "./types";
 import type { ConnectivityAnalysis, RelevantCable, RelevantLandingPoint } from "./design/connectivityAnalysis";
 import type { CableNetworkIndex, NetworkSelection } from "./cableNetwork";
-import { findCablesNearScreenPoint, CABLE_HIT_TOLERANCE_PX, CABLE_HIT_AMBIGUITY_MARGIN_PX } from "./cableHitTest";
+import {
+  findCablesNearScreenPoint,
+  CABLE_HIT_TOLERANCE_PX,
+  CABLE_HIT_AMBIGUITY_MARGIN_PX,
+  TOUCH_TOLERANCE_SCALE,
+} from "./cableHitTest";
 import type { CableHitCandidate } from "./cableHitTest";
 import { findRoutesNearScreenPoint } from "./routing/routeHitTest";
 import type { RouteEngineResult, RoutingProfileId } from "./routing/routingTypes";
@@ -545,6 +550,26 @@ const Globe = forwardRef<GlobeApi, Props>(function Globe(
     let downPos: { x: number; y: number } | null = null;
     let lastHoverAt = 0;
 
+    // Touch needs a bigger target than a mouse. A fingertip contact patch is
+    // roughly 8-10mm and the point the browser reports can sit several pixels
+    // from where the user believed they pressed, so the 9px tolerance tuned
+    // against a 1px cursor leaves a 1.6px-wide cable effectively unhittable on
+    // a phone. The click-vs-drag threshold is raised for the same reason: a
+    // finger drifts several pixels during a deliberate tap, and at 5px those
+    // taps were being classified as rotate gestures and discarded.
+    //
+    // Read through the live MediaQueryList rather than captured at mount, so a
+    // convertible or a device with both a trackpad and a touchscreen picks up
+    // whichever input is actually being used.
+    const coarsePointer = window.matchMedia("(pointer: coarse)");
+    const hitTolerancePx = () =>
+      coarsePointer.matches ? CABLE_HIT_TOLERANCE_PX * TOUCH_TOLERANCE_SCALE : CABLE_HIT_TOLERANCE_PX;
+    const ambiguityMarginPx = () =>
+      coarsePointer.matches
+        ? CABLE_HIT_AMBIGUITY_MARGIN_PX * TOUCH_TOLERANCE_SCALE
+        : CABLE_HIT_AMBIGUITY_MARGIN_PX;
+    const dragThresholdPx = () => (coarsePointer.matches ? 12 : 5);
+
     function canvasPos(e: PointerEvent): { x: number; y: number } {
       const rect = canvas.getBoundingClientRect();
       return { x: e.clientX - rect.left, y: e.clientY - rect.top };
@@ -554,7 +579,7 @@ const Globe = forwardRef<GlobeApi, Props>(function Globe(
       const s = interactionStateRef.current;
       const globeInstance = globeRef.current;
       if (!globeInstance) return [];
-      const candidates = findCablesNearScreenPoint(s.cables, globeInstance, x, y, CABLE_HIT_TOLERANCE_PX);
+      const candidates = findCablesNearScreenPoint(s.cables, globeInstance, x, y, hitTolerancePx());
       return s.planningMode ? candidates.filter((c) => s.relevantCablesById.has(c.cableId)) : candidates;
     }
 
@@ -583,7 +608,7 @@ const Globe = forwardRef<GlobeApi, Props>(function Globe(
       if (!start) return;
       const up = canvasPos(e);
       // A real drag/rotate, not a click -- OrbitControls already handled it.
-      if (Math.hypot(up.x - start.x, up.y - start.y) > 5) return;
+      if (Math.hypot(up.x - start.x, up.y - start.y) > dragThresholdPx()) return;
 
       const filtered = resolveCandidates(up.x, up.y);
       const s = interactionStateRef.current;
@@ -595,7 +620,7 @@ const Globe = forwardRef<GlobeApi, Props>(function Globe(
         if (s.planningMode && s.routeFlatPaths.length > 0) {
           const globeInstance = globeRef.current;
           if (globeInstance) {
-            const routeHits = findRoutesNearScreenPoint(s.routeFlatPaths, globeInstance, up.x, up.y, CABLE_HIT_TOLERANCE_PX);
+            const routeHits = findRoutesNearScreenPoint(s.routeFlatPaths, globeInstance, up.x, up.y, hitTolerancePx());
             if (routeHits.length > 0) s.onSelectRouteCandidate?.(routeHits[0].routeId);
           }
         }
@@ -603,10 +628,11 @@ const Globe = forwardRef<GlobeApi, Props>(function Globe(
       }
 
       const [closest, second] = filtered;
-      const ambiguous = second != null && second.distancePx - closest.distancePx < CABLE_HIT_AMBIGUITY_MARGIN_PX;
+      const margin = ambiguityMarginPx();
+      const ambiguous = second != null && second.distancePx - closest.distancePx < margin;
 
       if (ambiguous) {
-        const tied = filtered.filter((c) => c.distancePx - closest.distancePx < CABLE_HIT_AMBIGUITY_MARGIN_PX);
+        const tied = filtered.filter((c) => c.distancePx - closest.distancePx < margin);
         s.onAmbiguousCableClick?.(tied);
         return;
       }
