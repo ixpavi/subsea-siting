@@ -37,9 +37,12 @@ discretisation handicap (7.9 km) is accounted for.
 The practical implication: terrain optimisation is worth doing and is not worth
 over-engineering. A sensible hand-set weighting captures what is there.
 
-**And terrain is not the strongest signal available.** Cables sit 68% closer to
-other operators' cables than displaced controls do (83% of routes, p < 1e-4),
-surviving exclusion of the same cable and even the same national dataset.
+**And terrain is not the strongest signal available.** Cables sit closer to
+other operators' cables than displaced controls do, surviving exclusion of the
+same cable, the same national dataset, the landfall approaches at either end,
+and every cable sharing a named landing point. Under that full set of controls
+the effect is **29% closer on 74% of routes (p < 1e-4)** — roughly a third of
+the uncontrolled figure, and still several times the terrain effect.
 
 Built into a router, that corridor signal is **the only method tested that beats
 a great circle** at predicting real cables (6.4 km median against 7.1 km), while
@@ -378,16 +381,79 @@ The absolute distances rise under the strictest exclusion (7.1 km rather than
 weaken the result — the displaced control faces exactly the same constraint,
 which is what the placebo design exists to absorb.
 
+### The confound those three exclusions do not remove
+
+All three exclude candidates by *identity* — same segment, same cable, same
+agency. None of them touches the obvious alternative explanation: **cables
+converge at landing points because they have to.** Two systems making landfall
+on the same beach are close there for reasons that have nothing to do with
+reusing a surveyed corridor, and a different operator's cable landing beside
+mine passes all three tests above. Because the displacement is applied
+per-vertex, it moves the real route's endpoints out of those convergence zones
+along with everything else — so the real line samples crowded landfall water and
+its placebo samples emptier water beside it.
+
+Two further controls, run in `analyse-corridor-endpoint-control.mjs` on top of
+the strictest exclusion, with the placebo receiving identical treatment:
+
+**Trim the approaches.** Discard samples within *T* km along the route of either
+of its own ends, so landfalls are not measured at all.
+
+| trim | n | real | placebo | closer | reduction | p |
+|---:|---:|---:|---:|---:|---:|---:|
+| 0 km | 301 | 7.1 km | 22.2 km | 83% | 68% | <1e-4 |
+| 10 km | 227 | 9.3 km | 22.7 km | 79% | 59% | <1e-4 |
+| 20 km | 204 | 10.7 km | 24.8 km | 77% | 57% | <1e-4 |
+| 30 km | 183 | 11.6 km | 23.6 km | 78% | 51% | <1e-4 |
+| 50 km | 158 | 11.5 km | 22.3 km | 79% | 48% | <1e-4 |
+
+The effect decays and then **plateaus**. Pure landfall geometry would keep
+falling toward zero once the trim exceeded the width of a convergence zone;
+instead it settles near 50% and stays significant on ~79% of routes. Cables
+follow other cables in mid-route water, where nothing forces them together.
+
+**Exclude cables that land where I land.** Association is decided by
+TeleGeography's 1,920 published landing points, a source independent of the
+EMODnet routes being measured. Two routes are excluded from each other only when
+both resolve to the *same named* landing point, so an administrative segment cut
+in open water — which has no landing point near it — excludes nothing. At a
+10 km association radius, 283 of 412 routes (69%) resolve to a named landfall.
+
+| association radius | n | real | placebo | closer | reduction | p |
+|---:|---:|---:|---:|---:|---:|---:|
+| 5 km | 182 | 18.4 km | 26.6 km | 74% | 31% | <1e-4 |
+| **10 km** | **182** | **19.0 km** | **26.6 km** | **74%** | **29%** | **<1e-4** |
+| 20 km | 182 | 20.1 km | 27.0 km | 75% | 26% | <1e-4 |
+
+Stable across the association radius, which is what a real effect looks like and
+a threshold artefact does not.
+
+**So the honest figure is 29%, not 68%.** Roughly half the uncontrolled effect
+was the landfall approaches, and a further part was cables genuinely sharing a
+landfall. What remains — a quarter to a third — is corridor reuse in open water,
+on three quarters of routes, at p < 1e-4.
+
+*(A cruder version of this control, excluding any route with a polyline terminus
+within 50 km of one of mine, collapses the median gap to −1% while the sign test
+still holds at 67%. It is not reported as a result: EMODnet endpoints are
+frequently administrative cuts, so it strips out genuine corridor neighbours
+along with landfall twins. It is a lower bound produced by a blunt instrument,
+which is why the named-landing-point version above replaced it.)*
+
 ### Against the terrain effect
+
+Both figures below are fully controlled — placebo-corrected for terrain,
+landfall-controlled for corridors.
 
 | | Routes showing it | Effect |
 |---|---|---|
 | Terrain (slope, placebo-corrected) | 68% | −1.65 percentile |
-| **Corridor reuse** | **83%** | **68% closer, 15.1 km** |
+| **Corridor reuse** (landfall-controlled) | **74%** | **29% closer** |
 
-Corridor reuse is the larger, more consistent and more interpretable driver —
-and unlike bathymetry it requires no survey data at all, because every planner
-already knows where the existing cables are.
+Corridor reuse remains the larger, more consistent and more interpretable
+driver even after the confound is removed — and unlike bathymetry it requires no
+survey data at all, because every planner already knows where the existing
+cables are.
 
 That reframes the whole study. Terrain-driven least-cost-path routing optimises
 the weaker of two available signals while ignoring the stronger one, which is
@@ -465,6 +531,11 @@ Terrain-driven least-cost-path routing optimises the weaker of two available
 signals. The stronger one requires no bathymetry, no survey, and no model — it
 is the location of the cables already there, which every operator has.
 
+The landfall control in §4b does not apply to this test. There the concern was
+that proximity is manufactured near landing points; here both endpoints are
+*given* to every method, and the question is what happens between them. The
+prediction result is unaffected by that confound.
+
 The honest ceiling: even the best method lands ~6.4 km from the real cable,
 against a 7.85 km grid handicap. Route choice is substantially driven by
 factors in neither dataset — landing-point contracts, permitting, seasonal
@@ -492,6 +563,14 @@ weakest agreement. The contradiction tracks the measurement floor, not the
 agency. This is a **scope condition** — the method needs relief above the
 bathymetry's noise — rather than a contradiction of the result.
 
+**The corridor effect was inflated by landfall geometry, and is corrected.**
+The three exclusion levels in §4b remove candidates by identity and leave
+untouched the fact that cables converge at landing points by necessity. Trimming
+the landfall approaches and excluding cables sharing a named landing point takes
+the effect from 68% to **29%** (74% of routes, still p < 1e-4). The finding
+holds; the uncontrolled figure did not, and any comparison against the terrain
+effect must use the controlled one.
+
 **The corridor is bounded.** Bathymetry was loaded within ±1° (~111 km) of each
 route. Generous for the median 171 km route, tight for the 49 routes over
 1,000 km, whose plausible alternatives may lie outside it.
@@ -516,6 +595,12 @@ The most useful reading is the negative one: **bathymetry exerts a weak
 influence on local cable position**, and the dominant factors are things not
 in the dataset — landing-point constraints, existing infrastructure, fishing
 and anchoring zones, jurisdiction.
+
+Two of those are now measured rather than speculated about. Landing-point
+constraint and existing infrastructure were separated in §4b: the first accounts
+for well over half of what looked like corridor reuse, and the second still
+accounts for a 29% effect on three quarters of routes after it is removed. Both
+are larger than the bathymetric signal this study set out to test.
 
 That is a direct challenge to the premise of terrain-driven least-cost-path
 cable routing, **including the engine in this repository**, which optimises on
@@ -582,6 +667,7 @@ node scripts/research/analyse-bsh-anomaly.mjs          # the contradicting sourc
 node scripts/research/evaluate-route-prediction.mjs    # Test 4, section 4a -- leave-one-source-out   [over an hour]
 node scripts/research/measure-discretisation-penalty.mjs  # the discretisation control, section 4a   [~21 s]
 node scripts/research/analyse-corridor-following.mjs   # Tests 5 and 6, sections 4b and 4c   [~11 s]
+node scripts/research/analyse-corridor-endpoint-control.mjs  # the landfall confound, sections 4b and 5   [~12 s]
 ```
 
 `evaluate-route-prediction.mjs` is by far the slow one, and the only step here
@@ -598,9 +684,13 @@ route geometry and touches no bathymetry at all. It needs **Phase 1 only**, so
 it can be checked in a couple of minutes without downloading a single tile:
 
 ```bash
-node scripts/research/build-cable-corpus.mjs           # Phase 1
-node scripts/research/analyse-corridor-following.mjs   # the 83% / 68%-closer headline   [~11 s]
+node scripts/research/build-cable-corpus.mjs                 # Phase 1
+node scripts/research/analyse-corridor-following.mjs         # the raw effect   [~11 s]
+node scripts/research/analyse-corridor-endpoint-control.mjs  # the controlled 29% figure   [~12 s]
 ```
+
+The control script additionally reads `public/data/landing-points.json`, which
+is committed, so this still needs no download.
 
 The discretisation control reads the EMODnet grid, so it additionally needs
 Phase 2, but not Phase 3:
