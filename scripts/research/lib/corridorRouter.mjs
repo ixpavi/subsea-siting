@@ -48,25 +48,37 @@ export const CORRIDOR_SCALE_KM = 25;
 
 export const ZERO_WEIGHTS = { depth: 0, slope: 0, rough: 0, corridor: 0 };
 
-/** Cells per degree in the tile set. */
-const PER_DEG = 240;
-const CELL_DEG = 1 / PER_DEG;
+/**
+ * Cells per degree comes from the GRID, not from a constant here.
+ *
+ * It was a module-level 240 while only the Phase 1 tiles existed. The
+ * long-haul extension routes over a 60/deg composite, because at 240/deg a
+ * 3,000 km corridor is 37 million cells against a 2 million expansion cap --
+ * not slow, impossible. A hardcoded resolution would have silently indexed
+ * that grid at 4x the true scale, producing paths that look plausible and are
+ * wrong, which is the worst available failure. BathyGrid already carries
+ * perDeg, so it is the single source of truth.
+ */
+const DEFAULT_PER_DEG = 240;
 
 /**
  * Terrain lookup with a small memo, since A* revisits cells constantly and
  * each lookup otherwise re-reads three separate grid neighbourhoods.
  */
 class TerrainCache {
-  constructor(grid) {
+  constructor(grid, cellDeg) {
     this.grid = grid;
+    this.cellDeg = cellDeg;
     this.memo = new Map();
   }
   at(row, col) {
+    // Safe as a single numeric key while |col| stays well under 1e6: at
+    // 240/deg the extremes are row +/-21,600 and col +/-43,200.
     const key = row * 1000000 + col;
     let v = this.memo.get(key);
     if (v !== undefined) return v;
-    const lat = row * CELL_DEG;
-    const lng = col * CELL_DEG;
+    const lat = row * this.cellDeg;
+    const lng = col * this.cellDeg;
     const depth = this.grid.depth(lat, lng);
     if (depth === null) {
       v = null;
@@ -133,7 +145,9 @@ const KM_PER_DEG = 111.32;
  *        reported rather than silently returning a straight line.
  */
 export function routeBetween(grid, a, b, weights, corridorDeg = 1.0, maxExpansions = 2_000_000, corridorDistanceKm = null) {
-  const terrain = new TerrainCache(grid);
+  const PER_DEG = grid?.perDeg ?? DEFAULT_PER_DEG;
+  const CELL_DEG = 1 / PER_DEG;
+  const terrain = new TerrainCache(grid, CELL_DEG);
 
   const minLat = Math.min(a[0], b[0]) - corridorDeg;
   const maxLat = Math.max(a[0], b[0]) + corridorDeg;
