@@ -131,7 +131,7 @@ Routing runs in a **Web Worker** so pathfinding never blocks the UI. Bathymetry,
 
 The repository includes an original study testing an assumption behind least-cost-path cable routing tools: **do submarine cables actually avoid difficult seabed?**
 
-Run against **412 as-laid routes (206,175 km)** from national hydrographic offices, matched to 460 m bathymetry.
+Run against **355 as-laid routes (131,506 km)** from national hydrographic offices, matched to 460 m bathymetry — extended to every length band up to 6,400 km on a 1.85 km grid.
 
 <div align="center">
 
@@ -139,8 +139,11 @@ Run against **412 as-laid routes (206,175 km)** from national hydrographic offic
 |---|---|
 | 🟡 Cables prefer flatter seabed | Real, replicated — but **small** (−1.65 percentile) |
 | 🔴 Effect scales with terrain difficulty | **Not supported** — confounded with data source |
-| 🟢 Cables follow *other cables* | **68% closer** than displaced controls, 83% of routes |
+| 🟢 Cables follow *other cables* | **29% closer** than displaced controls, 74% of routes, after landfall control |
 | 🟢 Corridor reuse as a router | **Only method that beats a great circle** (6.4 km vs 7.1 km) |
+| 🟢 …and it strengthens with distance | Beats hand-set terrain on **15/15 routes above 2,000 km** (p = 0.0003) |
+| 🟢 Survives an independent candidate set | Holds against TeleGeography's 724 systems with the 3 closest trackers removed |
+| 🔴 Cables avoid fishing grounds | **No signal** — the apparent effect is landfall geometry |
 
 </div>
 
