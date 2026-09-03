@@ -48,7 +48,15 @@ export type RouteMetricId =
   | "diversityScore"
   | "costEstimate"
   | "costCoefficient"
-  | "environmental"
+  // Environmental exposure has TWO provenances, not one, and which applies is
+  // decided per route at runtime. A single entry cannot express that: it was
+  // pinned to UNAVAILABLE from before any environmental dataset existed, and
+  // once the protected-area layer was added the chip went on asserting that
+  // nothing was integrated -- directly beside a completed assessment citing the
+  // World Database on Protected Areas. That is precisely the drift this module
+  // was built to prevent, occurring inside the module itself.
+  | "environmentalAssessed"
+  | "environmentalUnavailable"
   | "overallScore"
   | "candidateSeparation";
 
@@ -118,10 +126,19 @@ export const ROUTE_METRIC_PROVENANCE: Record<RouteMetricId, ProvenanceDescriptor
     provenance: "USER_ASSUMPTION",
     basis: "Fixed, unsourced coefficient held constant for reproducibility. Not a market price.",
   },
-  environmental: {
+  environmentalAssessed: {
+    provenance: "DERIVED",
+    basis:
+      "Share of sampled route length crossing marine protected areas, measured against the World Database on " +
+      "Protected Areas (European extract via EMODnet Human Activities) rasterised to ~11 km cells. Indicates " +
+      "PROXIMITY to protected water, not a legal boundary.",
+  },
+  environmentalUnavailable: {
     provenance: "UNAVAILABLE",
     basis:
-      "No verified marine-protected-area, reef or other environmental dataset is integrated. Reported as unavailable, not as an absence of constraints.",
+      "No protected-area data covers this route -- it lies outside the European extract's extent, or the grid " +
+      "could not be loaded. Reported as unavailable, NOT as an absence of constraints: the uncovered part could " +
+      "contain protected water, and scoring it as clear would misrepresent missing data as environmental safety.",
   },
   overallScore: {
     provenance: "MODELED",

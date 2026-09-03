@@ -185,10 +185,11 @@ export default function RouteInspector({
                   value={weights.resilience}
                   onChange={(v) => setWeights((w) => ({ ...w, resilience: v }))}
                 />
-                <div className="ri-weight-row ri-weight-row-disabled">
-                  <span className="ri-weight-label">Environmental</span>
-                  <span className="design-field-note ri-weight-unavailable">unavailable -- no weight applied</span>
-                </div>
+                <RiEnvironmentalWeight
+                  criteria={result.criteria}
+                  value={weights.environmental}
+                  onChange={(v) => setWeights((w) => ({ ...w, environmental: v }))}
+                />
                 <p className="design-field-note">
                   Cost is deliberately <strong>not</strong> a weighting axis: the cost model is a deterministic
                   function of route length and the seabed-difficulty index, both already weighted above, so scoring
@@ -394,6 +395,44 @@ function RiWeightControl({ label, value, onChange }: { label: string; value: num
   );
 }
 
+/**
+ * The environmental weight, which is a slider only when the criterion is
+ * actually available.
+ *
+ * This row was hardcoded to "unavailable -- no weight applied" from before any
+ * environmental dataset existed. Once the protected-area layer was added it
+ * became a lie the UI told about itself: on a route lying wholly inside the
+ * dataset's extent the criterion IS available and DOES vote, and the criteria
+ * table six lines below reported it contributing a quarter of the score while
+ * this row said it carried none -- with no control offered over a weight that
+ * was influencing the recommendation.
+ *
+ * Availability comes from the engine's own CriterionOutcome rather than being
+ * asserted here, so this cannot drift out of step with the scoring again.
+ */
+function RiEnvironmentalWeight({
+  criteria,
+  value,
+  onChange,
+}: {
+  criteria: CriterionOutcome[];
+  value: number;
+  onChange: (v: number) => void;
+}) {
+  const env = criteria.find((c) => c.id === "environmental");
+  if (env?.available) {
+    return <RiWeightControl label="Environmental" value={value} onChange={onChange} />;
+  }
+  return (
+    <div className="ri-weight-row ri-weight-row-disabled">
+      <span className="ri-weight-label">Environmental</span>
+      <span className="design-field-note ri-weight-unavailable">
+        no protected-area data covers this route -- no weight applied
+      </span>
+    </div>
+  );
+}
+
 function RiCandidateRow({ ranked, active, onClick }: { ranked: RankedRouteCandidate; active: boolean; onClick: () => void }) {
   const { candidate } = ranked;
   return (
@@ -487,7 +526,9 @@ function RiCandidateDetail({ ranked }: { ranked: RankedRouteCandidate }) {
       <DepthProfileChart profile={analysis.depthProfile} />
 
       <p className="design-field-note">
-        Environmental analysis <ProvenanceChip metric="environmental" />: {environmental.reason}
+        Environmental analysis{" "}
+        <ProvenanceChip metric={environmental.available ? "environmentalAssessed" : "environmentalUnavailable"} />:{" "}
+        {environmental.reason}
       </p>
     </div>
   );

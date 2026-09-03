@@ -101,10 +101,14 @@ export function resolveMarineEndpoint(
 }
 
 /**
- * Default weights. `environmental` is present so the axis exists structurally,
- * but no environmental dataset is integrated, so the criterion reports
- * unavailable and is excluded from scoring rather than silently treated as
- * "no constraints".
+ * Default weights, all equal.
+ *
+ * `environmental` is weighted like any other axis. Whether it actually counts
+ * is decided per route by whether the protected-area grid covers it: a route
+ * outside the European extract reports the criterion unavailable and it is
+ * excluded from scoring rather than silently treated as "no constraints". This
+ * comment previously said no environmental dataset was integrated, which
+ * stopped being true when routing/protectedAreas.ts was added.
  */
 export const DEFAULT_ROUTING_WEIGHTS: RoutingWeights = {
   length: 1,
