@@ -193,7 +193,15 @@ routes avoid their steepest sections, about an 8% reduction. Depth runs the
 
 ## 3. Test 2 — local preference, with a placebo control
 
-Test 1 has two weaknesses that could hide a real effect. It averages terrain
+Test 1 has two weaknesses that could hide a real effect.
+
+![The placebo-displaced control](figures/fig5-placebo-control.svg)
+
+**Figure 1.** The control shares the route's shape, length and heading and
+differs only in position. Displacement is perpendicular to the *local* heading
+rather than a rigid translation, so the separation `d` stays constant along a
+turning route.
+ It averages terrain
 over the whole route, so local avoidance is diluted against a counterfactual
 that was often barely different. And EMODnet features are route *segments*
 published by national authorities — if a segment's endpoints are
@@ -611,7 +619,15 @@ routes:
 | depth percentile | −7.55 | −7.39 | **98%** |
 
 Same sign throughout, roughly half the sensitivity on slope and relief, almost
-none lost on depth. The coarse grid can carry the experiment, with a
+none lost on depth.
+
+![Effect retained after coarsening](figures/fig4-resolution-gate.svg)
+
+**Figure 2.** The gate. The same placebo measurement at both resolutions on the
+same 235 routes. Depth survives almost intact; slope and relief lose about half.
+Had these collapsed toward zero, every long-haul result below would be
+uninterpretable rather than negative.
+ The coarse grid can carry the experiment, with a
 sensitivity cost that must be stated rather than assumed away. Note this is an
 *internal* comparison — the percentile scale here differs from §3's, because the
 pool is the real sample plus two displacements rather than a bucketed local
@@ -640,6 +656,13 @@ measurement was entirely the fill value.
 ### Result: the corridor effect strengthens with length
 
 Median km from the cable actually laid, all bands on one 1.85 km grid:
+
+![Prediction error by length band](figures/fig1-prediction-by-band.svg)
+
+**Figure 3.** Median error relative to a great circle; below the line beats a
+straight line. Corridor following improves steadily with route length while
+every terrain variant flattens out -- the opposite of what an objection to a
+regional-only corpus would predict.
 
 | Band | n | Great circle | Sea path | Terrain (hand-set) | **Corridor** | Corridor+terrain |
 |---|---|---|---|---|---|---|
@@ -770,6 +793,11 @@ it, over how far a great circle lands from it.
 | 1.59–3.63 | 58 | 2.46 | 29% | +73.6% |
 | 3.73–92.88 | 58 | 6.73 | **7%** | +352.1% |
 
+![When corridor following helps](figures/fig2-error-ratio.svg)
+
+**Figure 4.** The rule, per route rather than per band. Above the dashed line
+the method helps more often than not.
+
 Monotonic across every bin, **Spearman ρ = +0.656 on 348 routes (z = 12.2)**.
 Cutting at a ratio of 0.3: 86% of routes below it are improved by corridor
 following, against 33% above it.
@@ -835,7 +863,14 @@ fishing than the water beside it.** `*` marks p < 0.05 across routes.
 | 20 km | 0.86 | 0.11 | −0.43 | −0.50 |
 | 50 km | 1.21 | 0.53 | −0.09 | −0.40 |
 
-**There is no fishing-avoidance signal.** What effect exists points the wrong
+**There is no fishing-avoidance signal.**
+
+![Fishing effect against trim and displacement](figures/fig3-fishing-sweep.svg)
+
+**Figure 5.** Outlined cells are significant across routes. The effect is
+confined to the untrimmed and lightly trimmed columns and disappears at a 50 km
+trim, which locates it at the landfalls rather than along the route.
+ What effect exists points the wrong
 way — cables in slightly *heavier* fishing — and it vanishes once 50 km of each
 end is removed. It is landfall geometry: coastal water is busy, and a
 perpendicular control near shore moves offshore into quieter water. The same
@@ -1101,6 +1136,16 @@ from the 240/degree products already in cache and only 1,451 are fetched.
 node scripts/research/build-fishing-surface.mjs        # EMODnet vessel density, Fishing, to 60/deg   [~10 min]
 node scripts/research/analyse-fishing-preference.mjs   # Test 9, placebo + trim sweep, section 4f   [~15 s]
 ```
+
+### Figures
+
+```bash
+node scripts/research/make-figures.mjs                 # all five, into docs/figures/   [<1 s]
+```
+
+Every value in every figure is read from `.cache/`; none is transcribed, so a
+figure that disagrees with the text means one of the two is stale. Output is SVG
+at IEEE column widths and converts to PDF or EPS without resampling.
 
 `build-fishing-surface.mjs` takes `--year` (2017–2024, default 2022) and
 `--dry-run`. Tiles the service cannot serve return HTTP 500 and are recorded as
