@@ -39,7 +39,7 @@
 
 \title{Corridor Reuse Outperforms Bathymetry in\\
 Submarine Cable Route Prediction: A Controlled\\
-Evaluation on 355 As-Laid Routes}
+Evaluation on \nCorpusRoutes{} As-Laid Routes}
 
 \author{Pavitra~Sharma% <-- add co-authors here
 \thanks{% TODO: affiliation and postal address before submission.
@@ -58,9 +58,10 @@ Submarine cable route planning tools---academic, commercial and
 patented---optimise a least-cost path over seabed terrain, on the premise that
 real cable routes are largely the outcome of such an optimisation. That premise
 is widely assumed and, to our knowledge, never measured against cables that
-were actually laid. We test it on \nCorpusRoutes{} as-laid routes
-(\nCorpusKm{}\,km) republished by seven national hydrographic offices, against
-bathymetry at 460\,m and 1.85\,km. Three controls carry the evaluation: a
+were actually laid. We assemble a corpus of \nCorpusRoutes{} as-laid routes
+(\nCorpusKm{}\,km) republished by seven national hydrographic offices, of which
+\nBathyRoutes{} have matched bathymetry, and evaluate against grids at 460\,m
+and 1.85\,km. Three controls carry the evaluation: a
 \emph{placebo-displaced} baseline that establishes what each instrument reads
 when no preference exists, a \emph{discretisation} control that measures what a
 grid search costs before it is compared with an analytic baseline, and a
@@ -242,7 +243,8 @@ than point-samples; global mean signed error is $-1.2$\,m; the residual is
 interpolation noise concentrated on steep cells (steep-decile RMS 47\,m)
 against relief of thousands of metres. Of \nCorpusRoutes{} routes, 356 fall
 inside the product's envelope and one crosses a genuine coverage hole and is
-excluded rather than interpolated over, leaving 355 routes.
+excluded rather than interpolated over, leaving \nBathyRoutes{} routes, which
+carry every terrain result below.
 
 \emph{1.85\,km}, a uniform 60~cells/degree grid covering the search corridor of
 every corpus route, back-filled from the NOAA NCEI global DEM
@@ -625,7 +627,10 @@ breaks them.
 \caption{Fishing effect against endpoint trim and control displacement.
 Outlined cells are significant across routes. The effect is confined to the
 untrimmed and lightly trimmed columns and disappears at a 50\,km trim, which
-locates it at the landfalls rather than along the route.}
+locates it at the landfalls rather than along the route. The 1 and 2\,km rows
+are shown for completeness but are not interpretable and are omitted from
+Table~\ref{tab:fishing}: at $\sim$1.7\,km native resolution a control displaced
+that far usually lands in the same cell and scores 50 by construction.}
 \label{fig:fishing}
 \end{figure}
 

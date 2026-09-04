@@ -71,7 +71,11 @@ for (const file of files) {
 
   // The SVG is inlined rather than referenced, so the print has no subresource
   // to fetch and cannot race the page load.
+  // An explicit <title> becomes the PDF's /Title. Without one Chrome uses the
+  // source filename, which carries this process's pid and would make the
+  // output differ on every run.
   const html = `<!doctype html><meta charset="utf-8">
+<title>${basename(file, ".svg")}</title>
 <style>
   @page { size: ${w}pt ${h}pt; margin: 0; }
   html, body { margin: 0; padding: 0; }
@@ -100,7 +104,27 @@ ${svg}`;
 
   rmSync(htmlPath, { force: true });
   if (!existsSync(pdfPath)) throw new Error(`${file}: browser produced no PDF`);
-  const kb = (readFileSync(pdfPath).length / 1024).toFixed(1);
+
+  // Chrome stamps the wall clock into /CreationDate and /ModDate, so an
+  // unchanged figure produces a different file on every run and every rebuild
+  // dirties the working tree. Pin both to the epoch: the figures are committed
+  // (Overleaf needs them), and a diff should mean the data moved, not that
+  // someone ran the build. Same byte length, so no offset in the xref table.
+  const buf = readFileSync(pdfPath);
+  const EPOCH = "D:19700101000000+00'00'";
+  let n = 0;
+  for (const key of ["CreationDate", "ModDate"]) {
+    const at = buf.indexOf(`/${key} (D:`);
+    if (at === -1) continue;
+    const open = buf.indexOf("(", at);
+    const close = buf.indexOf(")", open);
+    if (close - open - 1 !== EPOCH.length) continue; // unexpected format, leave it
+    buf.write(EPOCH, open + 1, "latin1");
+    n += 1;
+  }
+  if (n) writeFileSync(pdfPath, buf);
+
+  const kb = (buf.length / 1024).toFixed(1);
   console.log(`  ${basename(file, ".svg")}.pdf   ${w}x${h} pt   ${kb} kB`);
 }
 

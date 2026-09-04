@@ -33,8 +33,17 @@ const grp = (x) => Math.round(Number(x)).toLocaleString("en-US");
 /** Signed, because the whole point of an effect is which way it points. */
 const sgn1 = (x) => (Number(x) >= 0 ? "+" : "\u2212") + Math.abs(Number(x)).toFixed(1);
 const sgn2 = (x) => (Number(x) >= 0 ? "+" : "\u2212") + Math.abs(Number(x)).toFixed(2);
-/** LaTeX minus, so a negative number does not get set as a hyphen. */
-const tex = (s) => String(s).replace(/\u2212/g, "$-$").replace(/%/g, "\\%").replace(/&/g, "\\&");
+/**
+ * LaTeX minus, so a negative number is not set as a hyphen.
+ *
+ * \ensuremath, not $...$: these values are emitted both into table cells (text
+ * mode) and into macros the prose may well wrap in math, e.g. ($p=\nLongHaulP$).
+ * A macro carrying its own $...$ closes the caller's math and reopens it,
+ * which LaTeX reports as "Missing $ inserted" -- four times, on the first real
+ * compile of this paper. \ensuremath is correct in either mode.
+ */
+const tex = (s) =>
+  String(s).replace(/\u2212/g, "\\ensuremath{-}").replace(/%/g, "\\%").replace(/&/g, "\\&");
 
 /**
  * A p-value at the resolution the test actually has. Permutation and sign tests
@@ -42,8 +51,10 @@ const tex = (s) => String(s).replace(/\u2212/g, "$-$").replace(/%/g, "\\%").repl
  * "below what this test can resolve", not "zero".
  */
 function pv(p) {
-  if (p === 0 || p < 1e-4) return "$<$\\,$10^{-4}$";
-  if (p < 0.001) return "$" + p.toExponential(0).replace("e-", "\\!\\times\\!10^{-") + "}$";
+  if (p === 0 || p < 1e-4) return "\\ensuremath{<10^{-4}}";
+  if (p < 0.001) {
+    return "\\ensuremath{" + p.toExponential(0).replace("e-", "\\!\\times\\!10^{-") + "}}";
+  }
   if (p < 0.01) return p.toFixed(4);
   return p.toFixed(3);
 }
@@ -133,6 +144,11 @@ ${rows.join(" \\\\\n")} \\\\
     return line;
   });
   N.localN = f0(real.slope.n);
+  // The corpus is 412 routes; this is the subset with matched bathymetry, and
+  // it is the number the terrain claims are actually made on. The two were
+  // used interchangeably in the first draft, which the title and the abstract
+  // then disagreed about.
+  N.bathyRoutes = grp(lp.routes);
   table(
     "preference",
     `\\begin{table}[t]
@@ -313,12 +329,12 @@ ${N.discGap}\\,km gap the raw table attributes to bathymetry.} \\\\
   table(
     "corridor",
     `\\begin{table}[t]
-\\caption{Distance to the nearest \\textit{other} cable, real route vs.\\ its
+\\caption{Distance to the nearest OTHER cable, real route vs.\\ its
 placebo-displaced copy, under progressively stricter controls. The first three
 rows exclude candidates by identity; the rest remove the landfall geometry that
 identity exclusion cannot touch. The bold row is the figure this paper claims.}
 \\label{tab:corridor}
-\\centering\\footnotesize
+\\centering\\footnotesize\\setlength{\\tabcolsep}{3pt}
 \\begin{tabular}{@{}lrrrrr@{}}
 \\toprule
 Control & $n$ & Real & Placebo & Closer & $p$ \\\\
@@ -354,7 +370,7 @@ ${rows.join(" \\\\\n").replace(/\\midrule \\\\/g, "\\midrule")} \\\\
 1.85\\,km grid. Bold is the best method in that band. Corridor following
 improves monotonically with length; every terrain variant does not.}
 \\label{tab:bands}
-\\centering\\footnotesize
+\\centering\\footnotesize\\setlength{\\tabcolsep}{3pt}
 \\begin{tabular}{@{}lrrrrrr@{}}
 \\toprule
 Band & $n$ & ${head.join(" & ")} \\\\
@@ -367,9 +383,9 @@ ${rows.join(" \\\\\n")} \\\\
   );
 
   const want = [
-    ["corridor", "handset", "Corridor vs.\\ hand-set terrain"],
-    ["corridor", "seapath", "Corridor vs.\\ shortest sea path"],
-    ["both", "corridor", "Adding terrain on top of corridor"],
+    ["corridor", "handset", "Corridor vs.\\ terrain"],
+    ["corridor", "seapath", "Corridor vs.\\ sea path"],
+    ["both", "corridor", "Terrain added to corridor"],
   ];
   const prows = [];
   for (const b of lh.bands) {
@@ -401,7 +417,7 @@ objection to a regional corpus predicts corridor following weakening with
 distance; it strengthens, and above 2{,}000\\,km adding terrain on top of it
 reverses sign.}
 \\label{tab:bandpaired}
-\\centering\\footnotesize
+\\centering\\footnotesize\\setlength{\\tabcolsep}{3pt}
 \\begin{tabular}{@{}llrrr@{}}
 \\toprule
 Band & Comparison & $n$ & Better on & $p$ \\\\
@@ -515,8 +531,8 @@ ${rows.join(" \\\\\n")} \\\\
     "fishing",
     `\\begin{table}[t]
 \\caption{Fishing effort: mean percentile minus 50, by control displacement and
-by how much of each route end is discarded. \\textit{Positive means the cable
-sits in heavier fishing than the water beside it.} $^{*}$~$p<0.05$ across
+by how much of each route end is discarded. Positive means the cable
+sits in heavier fishing than the water beside it. $^{*}$~$p<0.05$ across
 routes. The effect is confined to the untrimmed columns and vanishes at a
 50\\,km trim, which locates it at the landfalls.}
 \\label{tab:fishing}

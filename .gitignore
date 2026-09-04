@@ -32,3 +32,14 @@ scripts/.cache-earth-source.jpg
 scripts/research/.cache/
 
 .vercel
+
+# LaTeX build artifacts. main.pdf and main.bbl ARE committed: the PDF is the
+# deliverable, and IEEE submission wants the .bbl because they do not run
+# bibtex for you. Everything below regenerates from a single build.
+docs/paper/*.aux
+docs/paper/*.log
+docs/paper/*.out
+docs/paper/*.blg
+docs/paper/*.fls
+docs/paper/*.fdb_latexmk
+docs/paper/*.synctex.gz

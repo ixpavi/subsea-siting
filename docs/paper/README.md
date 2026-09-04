@@ -5,30 +5,47 @@ IEEE submission draft of the study in
 The study document is the full engineering record; this is the ~10-page argument
 built from it.
 
-**Not yet compiled.** There is no LaTeX toolchain on the machine this was
-written on. `check-paper.mjs` verifies every cross-file coupling a compile would
-catch — macros, labels, citations, includes, environment balance, table column
-counts — but it cannot see layout. Overfull boxes, float placement and the real
-page count need `pdflatex`.
+**Compiles clean.** 9 pages, 0 errors, 0 undefined references, 0 overfull
+boxes, 1 underfull hbox (cosmetic). Built with MiKTeX 25.12 / pdfTeX 1.40.28.
 
 ## Build
+
+One command does everything — regenerate, convert, check, compile, report:
+
+```bash
+powershell -ExecutionPolicy Bypass -File docs/paper/build.ps1
+```
+
+It reports pages, errors, undefined references and overfull boxes from the log,
+and exits non-zero on anything that would embarrass you in review.
+
+The steps individually, if you want them:
 
 ```bash
 node scripts/research/make-paper-tables.mjs   # tables/ + numbers.tex, from .cache/
 node scripts/research/svg-to-pdf.mjs          # docs/figures/*.svg -> figures/*.pdf
-node scripts/research/check-paper.mjs         # cross-file checks
+node scripts/research/check-paper.mjs         # cross-file checks, no TeX needed
 ```
 
-Then, from `docs/paper/`:
+then, from `docs/paper/`, `latexmk -pdf main` or `pdflatex` → `bibtex` →
+`pdflatex` → `pdflatex`.
 
-```bash
-latexmk -pdf main
-```
+### Two local quirks the build script works around
 
-or `pdflatex main` → `bibtex main` → `pdflatex main` → `pdflatex main`.
+**PATH contains file entries.** `C:\Program Files\nodejs\node.exe`, `npm` and
+`npm.cmd` are on `PATH` as if they were directories. MiKTeX enumerates every
+`PATH` directory and aborts outright — *"cannot retrieve attributes for the
+directory"* — before doing any TeX work. `build.ps1` filters them for its own
+process only. Fixing the real `PATH` is worth doing; other tools that scan it
+will hit the same wall.
 
-With no local TeX, upload this whole directory to Overleaf — `IEEEtran` is
-already in its TeX Live image, so it compiles with no further setup.
+**MiKTeX writes to stderr on every run** ("you have not checked for updates"),
+and PowerShell turns any native stderr output into a `NativeCommandError`. A
+perfectly good build therefore reports failure if you judge it by exit code.
+`build.ps1` judges by `main.pdf` and the log instead.
+
+No local TeX? Upload this directory to Overleaf — `IEEEtran` is in its image, so
+it compiles with no setup.
 
 ## What is generated and what is written
 
@@ -58,8 +75,8 @@ reviewer rather than to carry the argument.
 
 ## Before submitting
 
-- [ ] Compile it. Fix overfull boxes and float placement.
 - [ ] Fill in the author affiliation in the `\thanks` block.
+- [ ] Decide the author list. Currently one name.
 - [ ] Read *Optimising submarine cable routes from offshore wind farms* (2026),
       *J. Ocean Eng. Marine Energy*, doi:10.1007/s40722-026-00472-7 — paywalled,
       and the one recent paper that could contain the validation this work
