@@ -29,7 +29,7 @@ import type {
   PlanningStep,
 } from "./designTypes";
 import { PIPELINE_STAGES, PLANNING_STEPS } from "./designTypes";
-import type { ConnectivityAnalysis, RelevantCable } from "./connectivityAnalysis";
+import type { ConnectivityAnalysis, EndpointConnectivity, RelevantCable } from "./connectivityAnalysis";
 import RouteInspector from "./RouteInspector";
 import ClimateAdjustedPue from "./ClimateAdjustedPue";
 import CoolingAdvisor from "./CoolingAdvisor";
@@ -861,6 +861,46 @@ const RELEVANCE_LABEL: Record<RelevantCable["relevance"], string> = {
   "destination-side": "Destination side",
 };
 
+/**
+ * Nothing within the search radius. That has two causes and they are not the
+ * same, so this does not report them the same way.
+ *
+ * An inland site has no cable landing near it because cables land on coasts --
+ * that is geography, not a hole in the dataset, and the distance to the nearest
+ * landing point is a genuinely useful number: it is the terrestrial backhaul
+ * the site would need. Only when the dataset holds no landing points at all is
+ * "unavailable" the honest word.
+ */
+function NoLandingPointsNearby({
+  what,
+  endpoint,
+  searchRadiusKm,
+}: {
+  what: "proposed site" | "destination";
+  endpoint: EndpointConnectivity;
+  searchRadiusKm: number;
+}) {
+  const nearest = endpoint.nearestLandingPoint;
+
+  if (!nearest) {
+    return (
+      <p className="pp-conn-unavailable">
+        The landing-point dataset is empty, so connectivity relevance is unavailable for the {what}.
+      </p>
+    );
+  }
+
+  return (
+    <p className="pp-conn-unavailable">
+      No submarine cable lands within {searchRadiusKm} km of the {what}. The nearest landing point in
+      the dataset is <strong>{nearest.name}</strong>,{" "}
+      <span className="dc-mono">{Math.round(nearest.distanceFromQueryKm)} km</span> away — so this
+      location needs roughly that much terrestrial backhaul to reach the subsea network. That is a
+      measured distance, not missing data.
+    </p>
+  );
+}
+
 /** Renders the real-data output of connectivityAnalysis.ts -- every number and cable listed here comes straight from the dataset, nothing modeled. */
 function ConnectivityAnalysisPanel({
   analysis,
@@ -914,16 +954,18 @@ function ConnectivityAnalysisPanel({
       </div>
 
       {sourceUnavailable && (
-        <p className="pp-conn-unavailable">
-          No landing points found in the dataset within {analysis.searchRadiusKm} km of the proposed site --
-          connectivity relevance is unavailable for this location.
-        </p>
+        <NoLandingPointsNearby
+          what="proposed site"
+          endpoint={analysis.source}
+          searchRadiusKm={analysis.searchRadiusKm}
+        />
       )}
-      {destinationUnavailable && (
-        <p className="pp-conn-unavailable">
-          No landing points found in the dataset within {analysis.searchRadiusKm} km of the destination --
-          destination-side connectivity is unavailable.
-        </p>
+      {destinationUnavailable && analysis.destination && (
+        <NoLandingPointsNearby
+          what="destination"
+          endpoint={analysis.destination}
+          searchRadiusKm={analysis.searchRadiusKm}
+        />
       )}
       {!hasDestination && !sourceUnavailable && (
         <p className="design-field-note">

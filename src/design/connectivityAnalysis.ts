@@ -67,6 +67,19 @@ export interface EndpointConnectivity {
   lng: number;
   /** Real landing points found within the search radius. Empty means the dataset has none nearby -- not that none exist. */
   landingPoints: RelevantLandingPoint[];
+  /**
+   * The closest landing point in the dataset REGARDLESS of the search radius,
+   * null only if the dataset is empty.
+   *
+   * WHY: an empty `landingPoints` has two very different causes that the UI
+   * was previously reporting identically. Either the dataset is missing
+   * coverage here, or the site is simply inland and no cable lands near it --
+   * which is not missing data, it is geography, and the distance to the
+   * nearest landing point is the useful answer (it is the terrestrial
+   * backhaul the site would need). Reporting both as "unavailable" told a
+   * planner nothing and misrepresented a real, knowable number as a gap.
+   */
+  nearestLandingPoint: RelevantLandingPoint | null;
 }
 
 export interface ConnectivityAnalysis {
@@ -85,16 +98,37 @@ export interface ConnectivityAnalysis {
   dataProvenance: string;
 }
 
-function findNearbyLandingPoints(
+/**
+ * Resolve one endpoint against the landing-point dataset in a single pass:
+ * everything inside the radius, plus the single closest point whether or not
+ * it is inside. One pass because both answers come from the same distances --
+ * measuring twice over 1,900 points to ask two questions about the same
+ * numbers would be wasteful and could drift.
+ */
+function resolveEndpoint(
   lat: number,
   lng: number,
   landingPoints: LandingPoint[],
   radiusKm: number
-): RelevantLandingPoint[] {
-  return landingPoints
-    .map((lp) => ({ ...lp, distanceFromQueryKm: haversineKm(lat, lng, lp.lat, lp.lng) }))
-    .filter((lp) => lp.distanceFromQueryKm <= radiusKm)
-    .sort((a, b) => a.distanceFromQueryKm - b.distanceFromQueryKm);
+): EndpointConnectivity {
+  const withDistance = landingPoints.map((lp) => ({
+    ...lp,
+    distanceFromQueryKm: haversineKm(lat, lng, lp.lat, lp.lng),
+  }));
+
+  let nearest: RelevantLandingPoint | null = null;
+  for (const lp of withDistance) {
+    if (nearest === null || lp.distanceFromQueryKm < nearest.distanceFromQueryKm) nearest = lp;
+  }
+
+  return {
+    lat,
+    lng,
+    landingPoints: withDistance
+      .filter((lp) => lp.distanceFromQueryKm <= radiusKm)
+      .sort((a, b) => a.distanceFromQueryKm - b.distanceFromQueryKm),
+    nearestLandingPoint: nearest,
+  };
 }
 
 /** First and last point of every path segment -- where a MultiLineString cable's branches actually terminate. */
@@ -133,10 +167,12 @@ export function analyzeConnectivity(
   const searchRadiusKm = opts.searchRadiusKm ?? DEFAULT_SEARCH_RADIUS_KM;
   const toleranceKm = opts.endpointMatchToleranceKm ?? DEFAULT_ENDPOINT_MATCH_TOLERANCE_KM;
 
-  const sourceLPs = findNearbyLandingPoints(source.lat, source.lng, landingPoints, searchRadiusKm);
-  const destLPs = destination
-    ? findNearbyLandingPoints(destination.lat, destination.lng, landingPoints, searchRadiusKm)
+  const sourceEndpoint = resolveEndpoint(source.lat, source.lng, landingPoints, searchRadiusKm);
+  const destEndpoint = destination
+    ? resolveEndpoint(destination.lat, destination.lng, landingPoints, searchRadiusKm)
     : null;
+  const sourceLPs = sourceEndpoint.landingPoints;
+  const destLPs = destEndpoint ? destEndpoint.landingPoints : null;
 
   const mergedCables = mergeCablesById(cables);
 
@@ -173,8 +209,8 @@ export function analyzeConnectivity(
   });
 
   return {
-    source: { lat: source.lat, lng: source.lng, landingPoints: sourceLPs },
-    destination: destination ? { lat: destination.lat, lng: destination.lng, landingPoints: destLPs! } : null,
+    source: sourceEndpoint,
+    destination: destEndpoint,
     relevantCables,
     cableSystemDiversity: relevantCables.length,
     directCableSystemDiversity: relevantCables.filter((c) => c.relevance === "direct").length,
