@@ -880,9 +880,9 @@ function NoLandingPointsNearby({
   endpoint: EndpointConnectivity;
   searchRadiusKm: number;
 }) {
-  const nearest = endpoint.nearestLandingPoint;
+  const nearest = endpoint.nearestLandingPoints;
 
-  if (!nearest) {
+  if (nearest.length === 0) {
     return (
       <p className="pp-conn-unavailable">
         The landing-point dataset is empty, so connectivity relevance is unavailable for the {what}.
@@ -891,13 +891,25 @@ function NoLandingPointsNearby({
   }
 
   return (
-    <p className="pp-conn-unavailable">
-      No submarine cable lands within {searchRadiusKm} km of the {what}. The nearest landing point in
-      the dataset is <strong>{nearest.name}</strong>,{" "}
-      <span className="dc-mono">{Math.round(nearest.distanceFromQueryKm)} km</span> away — so this
-      location needs roughly that much terrestrial backhaul to reach the subsea network. That is a
-      measured distance, not missing data.
-    </p>
+    <div className="pp-conn-unavailable">
+      <p className="pp-conn-unavailable-lead">
+        No submarine cable lands within {searchRadiusKm} km of the {what} — it is inland. The
+        nearest landing points in the dataset:
+      </p>
+      <ul className="pp-nearest-list">
+        {nearest.map((lp) => (
+          <li key={lp.id}>
+            <span className="pp-nearest-name">{lp.name}</span>
+            <span className="pp-nearest-dist dc-mono">{Math.round(lp.distanceFromQueryKm)} km</span>
+          </li>
+        ))}
+      </ul>
+      <p className="pp-conn-unavailable-foot">
+        The closest is the terrestrial backhaul this site would need. These are measured distances,
+        not missing data — the {searchRadiusKm} km radius above is held fixed so that
+        &ldquo;cables nearby&rdquo; stays comparable between sites.
+      </p>
+    </div>
   );
 }
 

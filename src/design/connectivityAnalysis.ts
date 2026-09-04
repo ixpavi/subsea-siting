@@ -68,8 +68,9 @@ export interface EndpointConnectivity {
   /** Real landing points found within the search radius. Empty means the dataset has none nearby -- not that none exist. */
   landingPoints: RelevantLandingPoint[];
   /**
-   * The closest landing point in the dataset REGARDLESS of the search radius,
-   * null only if the dataset is empty.
+   * The closest landing points in the dataset REGARDLESS of the search
+   * radius, nearest first, capped at NEAREST_LANDING_POINT_COUNT. Empty only
+   * if the dataset itself is empty.
    *
    * WHY: an empty `landingPoints` has two very different causes that the UI
    * was previously reporting identically. Either the dataset is missing
@@ -78,8 +79,13 @@ export interface EndpointConnectivity {
    * nearest landing point is the useful answer (it is the terrestrial
    * backhaul the site would need). Reporting both as "unavailable" told a
    * planner nothing and misrepresented a real, knowable number as a gap.
+   *
+   * Deliberately NOT a user-adjustable radius. The 80km figure is what every
+   * "cables nearby" count in this app is scored against, and letting it be
+   * dragged would make those counts incomparable between sites while looking
+   * identical. This widens the *explanation* without widening the measurement.
    */
-  nearestLandingPoint: RelevantLandingPoint | null;
+  nearestLandingPoints: RelevantLandingPoint[];
 }
 
 export interface ConnectivityAnalysis {
@@ -99,11 +105,18 @@ export interface ConnectivityAnalysis {
 }
 
 /**
+ * How many nearest landing points to report when nothing falls inside the
+ * radius. Enough to show whether the coast is one option or several -- a site
+ * with four landing points within 500km has real choice, one with a single
+ * option at 900km does not -- without turning an explanation into a directory.
+ */
+export const NEAREST_LANDING_POINT_COUNT = 4;
+
+/**
  * Resolve one endpoint against the landing-point dataset in a single pass:
- * everything inside the radius, plus the single closest point whether or not
- * it is inside. One pass because both answers come from the same distances --
- * measuring twice over 1,900 points to ask two questions about the same
- * numbers would be wasteful and could drift.
+ * everything inside the radius, plus the nearest few whether or not they are
+ * inside it. Sorted once and read twice, so the two answers cannot disagree
+ * about which point is closest.
  */
 function resolveEndpoint(
   lat: number,
@@ -111,23 +124,15 @@ function resolveEndpoint(
   landingPoints: LandingPoint[],
   radiusKm: number
 ): EndpointConnectivity {
-  const withDistance = landingPoints.map((lp) => ({
-    ...lp,
-    distanceFromQueryKm: haversineKm(lat, lng, lp.lat, lp.lng),
-  }));
-
-  let nearest: RelevantLandingPoint | null = null;
-  for (const lp of withDistance) {
-    if (nearest === null || lp.distanceFromQueryKm < nearest.distanceFromQueryKm) nearest = lp;
-  }
+  const byDistance = landingPoints
+    .map((lp) => ({ ...lp, distanceFromQueryKm: haversineKm(lat, lng, lp.lat, lp.lng) }))
+    .sort((a, b) => a.distanceFromQueryKm - b.distanceFromQueryKm);
 
   return {
     lat,
     lng,
-    landingPoints: withDistance
-      .filter((lp) => lp.distanceFromQueryKm <= radiusKm)
-      .sort((a, b) => a.distanceFromQueryKm - b.distanceFromQueryKm),
-    nearestLandingPoint: nearest,
+    landingPoints: byDistance.filter((lp) => lp.distanceFromQueryKm <= radiusKm),
+    nearestLandingPoints: byDistance.slice(0, NEAREST_LANDING_POINT_COUNT),
   };
 }
 

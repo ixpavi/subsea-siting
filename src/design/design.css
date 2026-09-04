@@ -1083,6 +1083,47 @@
   line-height: 1.5;
 }
 
+/* The lead and foot are <p> inside the block now, not the block itself. */
+.pp-conn-unavailable-lead,
+.pp-conn-unavailable-foot {
+  margin: 0;
+}
+.pp-conn-unavailable-foot {
+  opacity: 0.82;
+}
+
+/* Nearest landing points, when nothing falls inside the search radius.
+   A name/distance pair per row: the distance column is the number the reader
+   came for, so it is right-aligned and tabular to compare down the list. */
+.pp-nearest-list {
+  list-style: none;
+  margin: 7px 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.pp-nearest-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 3px 0;
+  border-bottom: 1px solid var(--dc-modeled-border);
+}
+.pp-nearest-list li:last-child {
+  border-bottom: 0;
+}
+.pp-nearest-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.pp-nearest-dist {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.9;
+}
+
 /* --- Hypothetical Routes (RouteInspector.tsx) --- */
 
 .ri-endpoint-card {
