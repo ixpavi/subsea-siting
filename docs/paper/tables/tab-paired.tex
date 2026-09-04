@@ -1,0 +1,24 @@
+\begin{table}[t]
+\caption{Paired per-route comparisons, regional band. Sign test on the share of
+routes where the first method lands closer to the as-laid cable. These
+comparisons are the sound ones: both members share the grid, the search and the
+endpoints, so the discretisation handicap cancels.}
+\label{tab:paired}
+\centering\footnotesize
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Comparison & $n$ & Better on & $p$ \\
+\midrule
+Fitted terrain vs.\ shortest sea path & 217 & \textbf{62\%} & \textbf{$7\!\times\!10^{-4}$} \\
+Corridor vs.\ shortest sea path & 196 & \textbf{66\%} & \textbf{$<$\,$10^{-4}$} \\
+Corridor vs.\ \textit{fitted} terrain & 217 & 55\% & 0.135 \\
+Corridor vs.\ hand-set terrain & 217 & \textbf{60\%} & \textbf{0.0028} \\
+Adding terrain on top of corridor & 217 & 53\% & 0.415 \\
+\bottomrule
+\multicolumn{4}{@{}p{0.94\columnwidth}@{}}{\vspace{2pt}\footnotesize
+Discretisation control: a zero-weight grid search reproducing a known great
+circle still lands a median 7.85\,km from it
+($n=51$ open-water pairs), which exceeds the
+2.63\,km gap the raw table attributes to bathymetry.} \\
+\end{tabular}
+\end{table}

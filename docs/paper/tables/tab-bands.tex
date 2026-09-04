@@ -1,0 +1,18 @@
+\begin{table}[t]
+\caption{Median prediction error by route length, all bands on the same
+1.85\,km grid. Bold is the best method in that band. Corridor following
+improves monotonically with length; every terrain variant does not.}
+\label{tab:bands}
+\centering\footnotesize
+\begin{tabular}{@{}lrrrrrr@{}}
+\toprule
+Band & $n$ & GC & Sea path & Terrain & Corridor & Cor$+$ter \\
+ & & \multicolumn{5}{c@{}}{median error (km)} \\
+\midrule
+40--500\,km & 253 & 7.1 & 9.8 & 8.1 & 6.5 & \textbf{5.8} \\
+500--1,000\,km & 47 & 43.1 & 51.6 & \textbf{27.8} & 37.6 & 29.8 \\
+1,000--2,000\,km & 28 & 149.4 & 86.1 & 84.3 & 52.7 & \textbf{36.9} \\
+2,000+\,km & 15 & 268.3 & 248.0 & 178.6 & \textbf{55.6} & 97.4 \\
+\bottomrule
+\end{tabular}
+\end{table}

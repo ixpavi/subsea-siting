@@ -1,0 +1,21 @@
+\begin{table*}[t]
+\caption{Replacing the candidate set. Each cell is median error (km) / share of
+routes beating a great circle, for the EMODnet corpus under same-agency
+exclusion and for 724 TeleGeography systems with the $k$
+closest-tracking systems removed. Bold is significantly better than a great
+circle, \underline{underlined} significantly worse. Long-haul survives an
+independent candidate set and an unrelated exclusion mechanism; the regional
+band does not.}
+\label{tab:candidates}
+\centering\footnotesize
+\begin{tabular}{@{}lrcccc@{}}
+\toprule
+Band & $n$ & Corpus & TG $k{=}0$ & TG $k{=}1$ & TG $k{=}3$ \\
+\midrule
+40--500\,km & 259 & 6.4 \,/\, \textbf{57\%} & 7.3 \,/\, 52\% & 11.0 \,/\, \underline{36\%} & 12.3 \,/\, \underline{32\%} \\
+500--1,000\,km & 47 & 37.6 \,/\, 57\% & 28.5 \,/\, 64\% & 39.0 \,/\, 53\% & 39.1 \,/\, 55\% \\
+1,000--2,000\,km & 28 & 52.7 \,/\, \textbf{82\%} & 36.2 \,/\, \textbf{79\%} & 63.0 \,/\, \textbf{79\%} & 79.7 \,/\, \textbf{75\%} \\
+2,000+\,km & 15 & 55.6 \,/\, \textbf{100\%} & 130.1 \,/\, \textbf{100\%} & 149.6 \,/\, \textbf{100\%} & 155.5 \,/\, \textbf{100\%} \\
+\bottomrule
+\end{tabular}
+\end{table*}

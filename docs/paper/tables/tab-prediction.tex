@@ -1,0 +1,23 @@
+\begin{table}[t]
+\caption{Regional route prediction, 40--500\,km at 460\,m, on
+$n=217$ held-out routes. Error is the mean distance from the cable
+actually laid, given only the two endpoints. Bold beats the great circle.
+Every terrain-aware row carries the 7.85\,km discretisation
+handicap of Table~\ref{tab:paired}'s footnote; the great circle does not.}
+\label{tab:prediction}
+\centering\footnotesize
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Method & Median & Mean & p90 & vs.\ GC \\
+ & (km) & (km) & (km) & \\
+\midrule
+Corridor $+$ terrain & \textbf{6.4} & 9.8 & 21.0 & \textbf{$-$9.9\%} \\
+Corridor only & \textbf{6.9} & 10.8 & 25.1 & \textbf{$-$3.1\%} \\
+Great circle \textit{(no bathymetry)} & 7.1 & 11.2 & 26.3 & +0.0\% \\
+Terrain: all terms, fitted & 7.1 & 11.0 & 24.6 & +0.2\% \\
+Terrain: slope only & 7.3 & 10.7 & 22.6 & +3.7\% \\
+Terrain: all terms, hand-set & 7.9 & 11.2 & 24.9 & +11.7\% \\
+Shortest sea path \textit{(terrain ignored)} & 9.7 & 13.6 & 30.3 & +37.2\% \\
+\bottomrule
+\end{tabular}
+\end{table}
