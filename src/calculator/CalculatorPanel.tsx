@@ -115,7 +115,12 @@ export default function CalculatorPanel({
         </div>
         <div className="calc-stat">
           <span className="calc-stat-label">CUE</span>
-          <span className="calc-stat-value">{profile.cue} kg/kWh</span>
+          {/* CUE needs the site's grid carbon intensity, and this calculator
+              has no location. Reported as unavailable rather than filled with
+              a global average, which would vary the real answer by 30x. */}
+          <span className="calc-stat-value" title="Needs a site location: CUE is PUE x the local grid's carbon intensity">
+            {profile.cue == null ? "n/a" : `${profile.cue} kg/kWh`}
+          </span>
         </div>
         <div className="calc-stat">
           <span className="calc-stat-label">WUE</span>
@@ -147,7 +152,12 @@ export default function CalculatorPanel({
           </div>
           <div className="calc-results">
             <div className="calc-stat">
-              <span className="calc-stat-label">Ecological sensitivity</span>
+              <span className="calc-stat-label">
+                Ecological sensitivity{" "}
+                <span className="calc-basis">
+                  {routeRisk.ecologicalBasis === "measured" ? "measured (WDPA)" : "heuristic"}
+                </span>
+              </span>
               <span className={`risk-pill risk-${routeRisk.ecologicalSensitivity}`}>
                 {routeRisk.ecologicalSensitivity}
               </span>
@@ -169,9 +179,11 @@ export default function CalculatorPanel({
             ))}
           </ul>
           <p className="calc-disclaimer">
-            Geographic heuristic (depth, latitude band, route length) -- not a lookup against WDPA
-            protected-area, Allen Coral Atlas, or GEBCO bathymetry data. Those sources aren't
-            integrated in this app yet.
+            {routeRisk.ecologicalBasis === "measured"
+              ? "Ecological sensitivity is measured against the World Database on Protected Areas (European extract, ~11 km cells) -- it indicates proximity to protected water, not a legal boundary. "
+              : "Ecological sensitivity falls back to a geographic heuristic (depth, latitude band) because no protected-area data covers this route. "}
+            Bathymetric hazard is a heuristic in both cases: the shipped depth data is a 0.5-degree
+            band index, not a sounding. Reef data (Allen Coral Atlas) is not integrated.
           </p>
         </div>
       )}

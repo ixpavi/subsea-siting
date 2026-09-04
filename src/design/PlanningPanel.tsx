@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ALL_REDUNDANCIES,
   ALL_TIERS,
@@ -33,6 +33,7 @@ import type { ConnectivityAnalysis, EndpointConnectivity, RelevantCable } from "
 import RouteInspector from "./RouteInspector";
 import ClimateAdjustedPue from "./ClimateAdjustedPue";
 import CoolingAdvisor from "./CoolingAdvisor";
+import { getCountryFactors } from "../siting/countryFactors";
 import type { RouteEngineResult, RoutingProfileId } from "../routing/routingTypes";
 import CloseButton from "../CloseButton";
 import "./design.css";
@@ -72,7 +73,10 @@ const EMPTY_REQUIREMENT: DesignRequirement = {
   priorities: { primary: null, secondary: null },
 };
 
-function computeResult(requirement: DesignRequirement): DesignResult | null {
+function computeResult(
+  requirement: DesignRequirement,
+  gridCarbonGco2PerKwh: number | null
+): DesignResult | null {
   const { businessContext, priorities } = requirement;
   if (!businessContext.availabilityRequirement || !priorities.primary) return null;
 
@@ -80,7 +84,13 @@ function computeResult(requirement: DesignRequirement): DesignResult | null {
   if (!availability) return null;
 
   const weights = buildPriorityWeights(priorities.primary, priorities.secondary);
-  const pool = recommendConfigurations(false, DEFAULT_DOWNTIME_COST_PER_HOUR_USD, weights, LAND_POOL_SIZE);
+  const pool = recommendConfigurations(
+    false,
+    DEFAULT_DOWNTIME_COST_PER_HOUR_USD,
+    weights,
+    LAND_POOL_SIZE,
+    gridCarbonGco2PerKwh
+  );
   const filtered = pool.filter((c) => tierAtLeast(c.config.tier, availability.minTier));
   const shortlist = filtered.slice(0, 5);
   if (shortlist.length === 0) return null;
@@ -142,6 +152,38 @@ export default function PlanningPanel({
   const [expandedWeights, setExpandedWeights] = useState(false);
   /** False = build-only: site and specify a facility, no subsea connection planned. */
   const [connectivityPlanning, setConnectivityPlanning] = useState(true);
+
+  // The site's national grid carbon intensity, so the reported CUE is that
+  // site's rather than a global average. null until a country resolves, and
+  // stays null for the three countries with no published figure -- CUE is then
+  // reported as unavailable rather than defaulted.
+  // Stored WITH the country it was fetched for, so a change of site invalidates
+  // it during render rather than through a setState inside the effect. That
+  // avoids a frame in which the previous country's carbon figure is shown
+  // against the new site.
+  const [gridCarbon, setGridCarbon] = useState<{ code: string; value: number | null } | null>(null);
+  const siteCountryCode = requirement.locationConnectivity.location.countryCode;
+  const gridCarbonGco2PerKwh =
+    siteCountryCode && gridCarbon?.code === siteCountryCode ? gridCarbon.value : null;
+
+  useEffect(() => {
+    if (!siteCountryCode) return;
+    let cancelled = false;
+    getCountryFactors(siteCountryCode)
+      .then((r) => {
+        if (!cancelled)
+          setGridCarbon({
+            code: siteCountryCode,
+            value: r.factors?.carbonIntensityGco2PerKwh ?? null,
+          });
+      })
+      .catch(() => {
+        if (!cancelled) setGridCarbon({ code: siteCountryCode, value: null });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [siteCountryCode]);
 
   // BUILD-ONLY MODE. Not every user is planning a subsea connection -- plenty
   // simply want to site and specify a facility. Everything except the route
@@ -217,7 +259,7 @@ export default function PlanningPanel({
   }
 
   function generateRecommendation() {
-    const r = computeResult(requirement);
+    const r = computeResult(requirement, gridCarbonGco2PerKwh);
     setResult(r);
     onResult(r);
     setStep("recommendation");
@@ -680,7 +722,19 @@ export default function PlanningPanel({
                   </div>
                   <div className="design-metric">
                     <span className="design-label">CUE</span>
-                    <span className="dc-mono">{result.top.profile.cue} kg/kWh</span>
+                    {result.top.profile.cue == null ? (
+                      <span className="dc-mono" title="No published grid carbon intensity for this country">
+                        unavailable
+                      </span>
+                    ) : (
+                      <span className="dc-mono">
+                        {result.top.profile.cue} kg/kWh
+                        <span className="pp-cue-basis">
+                          {" "}
+                          @ {Math.round(gridCarbonGco2PerKwh ?? 0)} gCO&#8322;/kWh
+                        </span>
+                      </span>
+                    )}
                   </div>
                   <div className="design-metric">
                     <span className="design-label">Deployment complexity</span>

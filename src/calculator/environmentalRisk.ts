@@ -1,12 +1,22 @@
-// Illustrative environmental risk heuristic for a subsea DC's cable route to
-// its nearest landing point.
+// Environmental risk for a subsea DC's cable route to its nearest landing
+// point.
 //
-// IMPORTANT: this is a simplified geographic heuristic (depth + latitude band
-// + route length), NOT a lookup against real WDPA (protected areas), Allen
-// Coral Atlas (reef), or GEBCO (bathymetry) datasets -- this app does not
-// currently integrate those sources. Always present this as a modeled
-// estimate for planning-discussion purposes, never as a measured/sourced
-// risk score.
+// TWO SOURCES, AND THE CALLER GETS TOLD WHICH. Ecological sensitivity is
+// measured against the shipped WDPA protected-area grid wherever that grid
+// covers the route, and falls back to a geographic heuristic (depth + latitude
+// band) only outside its extent -- which today is everything but the European
+// one of the four known subsea sites.
+//
+// The fallback was previously the ONLY path, while the routing engine two
+// modules away was already reading real protected-area data. A latitude rule
+// standing in for a dataset the app ships is not a limitation, it is a
+// duplicate answer to a question already answered better.
+//
+// Bathymetric hazard remains a heuristic in both cases: the app's depth data
+// is a 0.5-degree band index, not a sounding, and no shipped dataset scores
+// lay-difficulty.
+import type { EnvironmentalAssessment } from "../routing/routingTypes";
+
 export type RiskLevel = "low" | "medium" | "high";
 
 export interface RouteRiskEstimate {
@@ -14,6 +24,13 @@ export interface RouteRiskEstimate {
   bathymetricHazard: RiskLevel;
   overall: RiskLevel;
   rationale: string[];
+  /**
+   * Where ecologicalSensitivity came from. "measured" means the shipped WDPA
+   * grid covered the route and was used; "heuristic" means it did not and the
+   * depth/latitude rule stood in. The UI must say which -- they are not the
+   * same kind of claim.
+   */
+  ecologicalBasis: "measured" | "heuristic";
 }
 
 const RISK_ORDER: RiskLevel[] = ["low", "medium", "high"];
@@ -22,26 +39,57 @@ export function estimateRouteRisk(params: {
   depthM: number;
   latitude: number;
   routeDistanceKm: number;
+  /**
+   * Measured exposure to marine protected areas along the route, from the
+   * shipped WDPA grid. Omit, or pass one whose `available` is false, when the
+   * route lies outside the grid's extent -- the heuristic then stands in.
+   */
+  protectedAreaExposure?: EnvironmentalAssessment | null;
 }): RouteRiskEstimate {
-  const { depthM, latitude, routeDistanceKm } = params;
+  const { depthM, latitude, routeDistanceKm, protectedAreaExposure } = params;
   const rationale: string[] = [];
 
-  // Ecological sensitivity: shallow + tropical/subtropical waters are where
-  // coral reefs and coastal marine protected areas concentrate.
-  const isTropicalBand = Math.abs(latitude) <= 30;
+  // Ecological sensitivity, measured if the data reaches this route.
   let ecologicalSensitivity: RiskLevel = "low";
-  if (depthM <= 50 && isTropicalBand) {
-    ecologicalSensitivity = "high";
-    rationale.push("Shallow (<=50m) route within the tropical/subtropical band (|lat| <= 30 deg), where reef and MPA density is typically highest.");
-  } else if (depthM <= 50 || isTropicalBand) {
-    ecologicalSensitivity = "medium";
+  let ecologicalBasis: RouteRiskEstimate["ecologicalBasis"] = "heuristic";
+
+  if (protectedAreaExposure?.available) {
+    ecologicalBasis = "measured";
+    const km = protectedAreaExposure.constrainedDistanceKm ?? 0;
+    const zones = protectedAreaExposure.affectedZoneCount ?? 0;
+    const share = routeDistanceKm > 0 ? km / routeDistanceKm : 0;
+
+    // Thresholds are a presentation choice over a measured quantity, not a
+    // substitute for one: the kilometres are real, the three buckets are ours.
+    if (share >= 0.25 || zones >= 3) ecologicalSensitivity = "high";
+    else if (km > 0) ecologicalSensitivity = "medium";
+
     rationale.push(
-      depthM <= 50
-        ? "Shallow (<=50m) route -- higher chance of crossing nearshore reef or protected habitat."
-        : "Route falls within the tropical/subtropical latitude band associated with reef ecosystems."
+      km > 0
+        ? `Measured against the World Database on Protected Areas: ${km.toFixed(1)} km of the route (${Math.round(share * 100)}%) lies within ${zones} protected area${zones === 1 ? "" : "s"}.`
+        : "Measured against the World Database on Protected Areas: no protected water on this route."
     );
   } else {
-    rationale.push("Deeper, higher-latitude route -- lower likelihood of reef/MPA overlap.");
+    // Fallback: shallow + tropical/subtropical waters are where coral reefs
+    // and coastal marine protected areas concentrate.
+    const isTropicalBand = Math.abs(latitude) <= 30;
+    if (depthM <= 50 && isTropicalBand) {
+      ecologicalSensitivity = "high";
+      rationale.push("Shallow (<=50m) route within the tropical/subtropical band (|lat| <= 30 deg), where reef and MPA density is typically highest.");
+    } else if (depthM <= 50 || isTropicalBand) {
+      ecologicalSensitivity = "medium";
+      rationale.push(
+        depthM <= 50
+          ? "Shallow (<=50m) route -- higher chance of crossing nearshore reef or protected habitat."
+          : "Route falls within the tropical/subtropical latitude band associated with reef ecosystems."
+      );
+    } else {
+      rationale.push("Deeper, higher-latitude route -- lower likelihood of reef/MPA overlap.");
+    }
+    rationale.push(
+      protectedAreaExposure?.reason ??
+        "No protected-area data covers this route, so ecological sensitivity is inferred from depth and latitude rather than measured."
+    );
   }
 
   // Bathymetric hazard: very shallow landing approaches carry surf-zone/
@@ -80,5 +128,6 @@ export function estimateRouteRisk(params: {
     bathymetricHazard,
     overall: RISK_ORDER[overallIndex],
     rationale,
+    ecologicalBasis,
   };
 }

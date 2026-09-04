@@ -197,7 +197,6 @@ function figureErrorRatio() {
 
   bins.forEach((b, i) => {
     const x = X(i), y = Y(b.pctHelped);
-    const h = M.t + plotH - y;
     // Colour carries polarity against the 50% line, and the 50% line carries it
     // again -- so the split survives greyscale.
     const fill = b.pctHelped >= 50 ? C.s1 : C.s2;

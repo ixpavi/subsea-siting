@@ -86,9 +86,18 @@ export const COOLING_SPECS: Record<CoolingConfig, CoolingSpec> = {
   },
 };
 
-// Illustrative grid-carbon proxy (kg CO2e / kWh) used only to derive a
-// benchmark CUE figure. Real CUE depends on the site's actual grid mix.
-const ILLUSTRATIVE_GRID_CARBON_INTENSITY = 0.4;
+// CUE is PUE x the grid's carbon intensity, so it is only meaningful once the
+// site's grid is known. This used to substitute a flat 0.4 kg/kWh, which is
+// wrong nearly everywhere: the real national figures this app already ships
+// (Our World in Data, 213 of 216 countries) run from 0 to 1,306 gCO2/kWh,
+// median 474. A France site was reported ~10x its actual carbon, an Indian one
+// at 60% of it -- and the number was displayed as a computed result.
+//
+// It is now passed in, and null when the country has no published figure.
+// Reporting it as unavailable rather than defaulting is the same rule the rest
+// of the app follows: a fabricated number that looks like a measurement is
+// worse than an honest gap. CUE feeds no ranking (sustainability scores on
+// PUE + WUE), so a null changes no recommendation.
 
 // Cooling types that are physically meaningful for each deployment context.
 // A land facility doesn't draw ambient seawater; a subsea pressure vessel
@@ -122,7 +131,16 @@ export function estimateDeploymentComplexity(config: FacilityConfig): number {
   );
 }
 
-export function calculateFacilityProfile(config: FacilityConfig): FacilityProfile {
+/**
+ * @param gridCarbonGco2PerKwh The site's national grid carbon intensity, from
+ *   the shipped country dataset. Pass null (the default) when no location is
+ *   known or the country has no published figure -- CUE is then reported as
+ *   unavailable rather than invented.
+ */
+export function calculateFacilityProfile(
+  config: FacilityConfig,
+  gridCarbonGco2PerKwh: number | null = null
+): FacilityProfile {
   const tier = TIER_SPECS[config.tier];
   const cooling = COOLING_SPECS[config.cooling];
   const redundancyMultiplier = REDUNDANCY_DOWNTIME_MULTIPLIER[config.redundancy];
@@ -136,7 +154,11 @@ export function calculateFacilityProfile(config: FacilityConfig): FacilityProfil
     annualDowntimeHours,
     annualDowntimeCostUsd,
     pue: cooling.pue,
-    cue: round(cooling.pue * ILLUSTRATIVE_GRID_CARBON_INTENSITY, 3),
+    // g -> kg, so the reported unit stays kg CO2e per kWh of IT load.
+    cue:
+      gridCarbonGco2PerKwh == null
+        ? null
+        : round(cooling.pue * (gridCarbonGco2PerKwh / 1000), 3),
     wue: cooling.wue,
   };
 }

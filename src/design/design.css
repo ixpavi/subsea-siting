@@ -1598,3 +1598,10 @@
 .ri-sensitivity-flips strong { color: #cbd5e1; font-weight: 600; }
 
 .ri-sensitivity-contenders { margin-top: 8px; }
+
+/* The grid intensity the CUE was computed from, shown beside it so the figure
+   is auditable rather than a bare number: CUE is only meaningful with it. */
+.pp-cue-basis {
+  opacity: 0.65;
+  font-size: 10.5px;
+}

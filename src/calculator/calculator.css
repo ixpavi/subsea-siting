@@ -265,3 +265,13 @@
 .rec-apply-btn:hover {
   background: rgba(167, 139, 250, 0.28);
 }
+
+/* Whether a risk figure was measured against a dataset or inferred from a
+   heuristic. Small, but it is the difference between two kinds of claim. */
+.calc-basis {
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.6;
+  white-space: nowrap;
+}

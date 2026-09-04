@@ -68,14 +68,21 @@ function paretoFrontier(items: ScoredInternal[]): ScoredInternal[] {
   });
 }
 
+/**
+ * @param gridCarbonGco2PerKwh The site's national grid carbon intensity, so
+ *   the reported CUE is the real one. Null when no location is known; CUE is
+ *   then unavailable. It is a reported figure only -- sustainability ranks on
+ *   PUE + WUE -- so this never changes which configuration wins.
+ */
 export function recommendConfigurations(
   isSubsea: boolean,
   downtimeCostPerHourUsd: number,
   weights: PriorityWeights,
-  maxResults = 5
+  maxResults = 5,
+  gridCarbonGco2PerKwh: number | null = null
 ): RecommendedCandidate[] {
   const configs = generateCandidateConfigs(isSubsea, downtimeCostPerHourUsd);
-  const profiles = configs.map((c) => calculateFacilityProfile(c));
+  const profiles = configs.map((c) => calculateFacilityProfile(c, gridCarbonGco2PerKwh));
   const complexities = configs.map((c) => estimateDeploymentComplexity(c));
 
   const nCost = normalize(

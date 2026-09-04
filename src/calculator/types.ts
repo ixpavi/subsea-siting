@@ -27,8 +27,12 @@ export interface FacilityProfile {
   annualDowntimeCostUsd: number;
   /** Power Usage Effectiveness (total facility power / IT power) */
   pue: number;
-  /** Carbon Usage Effectiveness proxy (kg CO2e / kWh IT load), illustrative benchmark */
-  cue: number;
+  /**
+   * Carbon Usage Effectiveness (kg CO2e / kWh IT load), computed from the
+   * site's real national grid carbon intensity. null when no location is known
+   * or the country has no published figure -- never a substituted default.
+   */
+  cue: number | null;
   /** Water Usage Effectiveness (litres / kWh IT load), illustrative benchmark */
   wue: number;
 }
