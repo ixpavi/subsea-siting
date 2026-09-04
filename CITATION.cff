@@ -1,0 +1,49 @@
+cff-version: 1.2.0
+message: >-
+  If you use this software or refer to the study it contains, please cite it
+  using the metadata below. GitHub renders this as the "Cite this repository"
+  button.
+title: >-
+  Subsea Cable Routing & Data Centre Planning: an interactive planning tool and
+  a controlled evaluation of least-cost-path cable routing
+abstract: >-
+  An interactive planning tool for submarine cable routing and data centre
+  siting, and an original study testing the premise underlying least-cost-path
+  cable route planners: that real cable positions are substantially explained by
+  seabed terrain. Measured against 412 as-laid routes republished by seven
+  national hydrographic offices, terrain preference is real but small, and a
+  bathymetry-free alternative -- proximity to existing cables -- predicts real
+  routes better and strengthens with route length.
+type: software
+authors:
+  - family-names: Sharma
+    given-names: Pavitra
+    email: pavitrasharma2306@gmail.com
+repository-code: https://github.com/ixpavi/subsea-siting
+url: https://subsea-siting.vercel.app
+license: Apache-2.0
+keywords:
+  - submarine cables
+  - route planning
+  - least-cost path
+  - model validation
+  - bathymetry
+  - data centre siting
+  - marine spatial planning
+  - placebo control
+
+# The paper is a draft and is not yet published. Update `journal`, `year`,
+# `volume`, `start`/`end` and add the DOI on acceptance, then point
+# `preferred-citation` at the published record rather than the preprint.
+preferred-citation:
+  type: unpublished
+  title: >-
+    Corridor Reuse Outperforms Bathymetry in Submarine Cable Route Prediction:
+    A Controlled Evaluation on 412 As-Laid Routes
+  authors:
+    - family-names: Sharma
+      given-names: Pavitra
+  year: 2026
+  notes: >-
+    Manuscript in preparation. Source and compiled draft in docs/paper/ of the
+    repository above.

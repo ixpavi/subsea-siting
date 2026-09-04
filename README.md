@@ -5,10 +5,11 @@
 **An interactive planning tool for submarine cable routing and data centre siting — built on published infrastructure data, with every number traceable to its source.**
 
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)](https://react.dev)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
 [![Vite](https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white)](https://vite.dev)
-[![Tests](https://img.shields.io/badge/tests-144%20passing-2ea44f)](#testing)
-[![Data](https://img.shields.io/badge/cable%20systems-724-0e7c86)](#data-provenance)
+[![Tests](https://img.shields.io/badge/tests-144%20passing-2ea44f)](#-testing)
+[![Data](https://img.shields.io/badge/cable%20systems-724-0e7c86)](#-data-provenance)
+[![Paper](https://img.shields.io/badge/paper-IEEE%20draft-b31b1b)](docs/paper/main.pdf)
 [![Licence](https://img.shields.io/badge/licence-Apache%202.0-blue)](LICENSE)
 
 </div>
@@ -36,7 +37,7 @@ Its distinguishing feature is not the globe. It is that **every figure is labell
 | **724** | **1,920** | **5,260** | **216** |
 | cable systems | landing points | facilities | countries scored |
 | **702** | **412** | **144** | **0.5°** |
-| protected areas | as-laid routes studied | tests passing | ocean grid |
+| protected areas | as-laid route corpus | tests passing | ocean grid |
 
 </div>
 
@@ -80,6 +81,17 @@ Nothing is presented without its standing. This is enforced in the type system �
 | Bathymetry grid | Natural Earth / GEBCO contours | `DERIVED` |
 | Climate-adjusted PUE | Fitted to **31 measured facility-years** | `MODELLED` |
 | Route cost estimate | Assumed coefficients | `MODELLED` |
+
+The [study](#-research) draws on a separate, higher-fidelity set — the app's schematic cable geometry cannot support claims about where a cable actually goes:
+
+| Quantity | Source | Note |
+|---|---|---|
+| As-laid cable routes | [EMODnet Human Activities](https://emodnet.ec.europa.eu/en/human-activities) — seven national hydrographic offices | 89–3,369 vertices per 1,000 km, against TeleGeography's 7.3 |
+| Bathymetry, 460 m | [EMODnet Bathymetry DTM](https://emodnet.ec.europa.eu/en/bathymetry) | native 1/16′; downsampling validated before use |
+| Bathymetry, 1.85 km global | [NOAA NCEI](https://www.ncei.noaa.gov) DEM mosaic | a multi-source composite, **not** GEBCO |
+| Fishing effort | EMODnet vessel density (AIS, fishing subset, 2022) | ~1.7 km native |
+
+> **A defect worth knowing about if you use EMODnet Bathymetry.** It encodes out-of-coverage as exactly `0`, not as a nodata sentinel — 4.85% of the cells we built, with 36 tiles entirely zero. Since depth reads as null for any elevation ≥ 0, those cells read as **land**, and a router will confidently route around open ocean. Found while building the long-haul grid; documented in the study and back-filled from NOAA.
 
 ---
 
@@ -131,7 +143,11 @@ Routing runs in a **Web Worker** so pathfinding never blocks the UI. Bathymetry,
 
 The repository includes an original study testing an assumption behind least-cost-path cable routing tools: **do submarine cables actually avoid difficult seabed?**
 
-Run against **355 as-laid routes (131,506 km)** from national hydrographic offices, matched to 460 m bathymetry — extended to every length band up to 6,400 km on a 1.85 km grid.
+Run against a **412-route as-laid corpus (206,175 km)** from seven national hydrographic offices — **355 of them matched to 460 m bathymetry** — and extended to every length band up to 6,400 km on a 1.85 km grid.
+
+<div align="center">
+<img src="docs/figures/fig1-prediction-by-band.svg" width="460" alt="Median prediction error by route length band, relative to a great circle. Corridor following improves steadily with length while every terrain variant flattens out.">
+</div>
 
 <div align="center">
 
@@ -147,12 +163,26 @@ Run against **355 as-laid routes (131,506 km)** from national hydrographic offic
 
 </div>
 
-**Two methodological controls each changed a headline:**
+**Three methodological controls, each of which changed a headline:**
 
 - **Placebo-displaced controls** — displacing the observed route sideways and re-measuring establishes what the instrument reads when no preference exists. Without it, the depth effect would have been overstated by ~70%.
 - **Discretisation control** — measuring what a grid search costs when reproducing a known answer. Without it, the study would have reported that bathymetry-aware routing is worse than a straight line, which is wrong.
+- **Resolution gate** — re-running the original measurement at both grid resolutions before quoting anything from the coarser one. It retained 47% / 55% / 98% of the slope, relief and depth effects, which is why the long-haul results are a finding rather than an artefact.
 
-📄 Full write-up: [`docs/seabed-route-preference-study.md`](docs/seabed-route-preference-study.md) · Positioning: [`docs/related-work.md`](docs/related-work.md)
+And one rule that **predicts its own failure**: corridor following helps only when the neighbour geometry's error is small relative to the prediction's scale — monotonic across six bins, Spearman ρ = +0.656 on 348 routes.
+
+> **What is not claimed as novel.** The displaced control is not an invention — it is the used-availability design that step-selection analysis in movement ecology has used for two decades. What is new is the transfer to *engineered linear infrastructure* and the measured consequence of omitting it. Likewise, the app's weight-robustness reporting is rank acceptability analysis, which has a name (SMAA) and a literature. Both are cited as such in [`docs/related-work.md`](docs/related-work.md).
+
+### 📄 Read it
+
+| | |
+|---|---|
+| **Paper** (IEEE draft, 9 pp.) | [`docs/paper/main.pdf`](docs/paper/main.pdf) · [source](docs/paper) |
+| Full write-up, every test and threat | [`docs/seabed-route-preference-study.md`](docs/seabed-route-preference-study.md) |
+| Positioning against prior art | [`docs/related-work.md`](docs/related-work.md) |
+| Annotated bibliography | [`docs/literature.md`](docs/literature.md) |
+
+The paper's tables, inline numbers and figures are **generated from the analysis cache**, so a number in the prose cannot drift from the run that produced it. `docs/paper/build.ps1` regenerates and compiles the whole thing.
 
 ---
 
@@ -172,6 +202,16 @@ npm run build      # production build
 npm test           # 144 tests
 npm run lint       # oxlint
 ```
+
+**Reproducing the study.** Also Node only — no API key, no account. The largest result touches no bathymetry at all, so it can be checked in a couple of minutes without downloading a single tile:
+
+```bash
+node scripts/research/build-cable-corpus.mjs                 # fetch + characterise 412 routes
+node scripts/research/analyse-corridor-following.mjs         # the raw corridor effect
+node scripts/research/analyse-corridor-endpoint-control.mjs  # the controlled 29% figure
+```
+
+Full pipeline, runtimes and the order to run things in: [study §7](docs/seabed-route-preference-study.md#7-reproducing).
 
 ---
 
@@ -204,9 +244,15 @@ src/
 
 scripts/
 ├── build-*.mjs               build-time data pipeline
-└── research/                 reproducible study pipeline
+└── research/                 reproducible study pipeline (30 scripts)
 
-docs/                         study write-up + related work
+docs/
+├── seabed-route-preference-study.md   the full study
+├── related-work.md                    positioning against prior art
+├── literature.md                      annotated bibliography
+├── figures/                           publication figures (SVG, generated)
+└── paper/                             IEEE submission draft + build
+
 public/data/                  committed, app-ready datasets
 ```
 
