@@ -5,7 +5,8 @@ IEEE submission draft of the study in
 The study document is the full engineering record; this is the ~10-page argument
 built from it.
 
-**Compiles clean.** 9 pages, 0 errors, 0 undefined references, 0 overfull
+**Final draft. Compiles clean.** 10 pages, 8 figures, 11 tables, 23 references;
+0 errors, 0 undefined references, 0 overfull
 boxes, 1 underfull hbox (cosmetic). Built with MiKTeX 25.12 / pdfTeX 1.40.28.
 
 ## Build

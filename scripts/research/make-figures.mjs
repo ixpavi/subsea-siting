@@ -433,10 +433,263 @@ function figurePlacebo() {
   return "fig5-placebo-control.svg";
 }
 
+// ============================================================================
+// FIGURE A -- corpus geographic coverage
+// ============================================================================
+// A paper whose most-quoted limitation is "75% of corpus length is NW Europe
+// and the Mediterranean" should show that rather than assert it. A reviewer
+// checking geographic scope can read this in one glance, and it makes the
+// long-haul band's concentration -- two corridors, transatlantic and
+// Marseille-Levant -- visible instead of a sentence in Threats to Validity.
+//
+// Double-column (516 pt): a world map at 252 pt would render the Danish and
+// Maltese routes as single pixels.
+//
+// Equirectangular, deliberately. An equal-area projection would be the honest
+// choice for a density claim, but this figure makes a COVERAGE claim -- where
+// there are routes and where there are none -- and equirectangular keeps
+// lat/lng legible against the coordinates quoted in the text.
+function figureCorpusMap() {
+  const corpus = read("cable-corpus.json");
+  const land = JSON.parse(
+    readFileSync(join(__dirname, "..", "raw", "land", "ne_land.geojson"), "utf-8"),
+  );
+
+  const W = 516, H = 268;
+  const M = { t: 10, r: 8, b: 26, l: 8 };
+  const plotW = W - M.l - M.r, plotH = H - M.t - M.b;
+  // Clip the poles: no cable lands above 71N and Antarctica is empty, so the
+  // full -90..90 would spend a third of the figure on white space.
+  const LAT0 = -60, LAT1 = 78;
+  const X = (lng) => M.l + (plotW * (lng + 180)) / 360;
+  const Y = (lat) => M.t + plotH * (1 - (lat - LAT0) / (LAT1 - LAT0));
+
+  let g = `<rect x="${M.l}" y="${M.t}" width="${plotW}" height="${plotH}" fill="#f7f9fa"/>`;
+
+  // Land first, as a quiet ground. Rings are drawn as one path each; Natural
+  // Earth's 50m land is 1,409 rings, which is well inside what a vector PDF
+  // handles without complaint.
+  let landPath = "";
+  for (const f of land.features) {
+    const polys = f.geometry.type === "Polygon" ? [f.geometry.coordinates] : f.geometry.coordinates;
+    for (const poly of polys) {
+      for (const ring of poly) {
+        if (ring.length < 3) continue;
+        let d = "";
+        let skip = false;
+        for (let i = 0; i < ring.length; i++) {
+          const [lng, lat] = ring[i];
+          if (lat < LAT0 - 12 || lat > LAT1 + 12) { skip = true; break; }
+          d += `${i ? "L" : "M"}${X(lng).toFixed(1)},${Y(lat).toFixed(1)}`;
+        }
+        if (!skip && d) landPath += d + "Z";
+      }
+    }
+  }
+  g += `<path d="${landPath}" fill="#e6e4de" stroke="#d2cfc7" stroke-width="0.3"/>`;
+
+  // Graticule, faint, so a reader can place a route without a coordinate table.
+  for (let lat = -60; lat <= 60; lat += 30) {
+    g += `<line x1="${M.l}" y1="${Y(lat)}" x2="${M.l + plotW}" y2="${Y(lat)}" stroke="${C.grid}" stroke-width="0.4"/>`;
+    g += text(M.l + 2, Y(lat) - 1.5, `${Math.abs(lat)}${lat === 0 ? "" : lat > 0 ? "N" : "S"}`, { size: 5.4, fill: C.muted });
+  }
+  for (let lng = -120; lng <= 120; lng += 60) {
+    g += `<line x1="${X(lng)}" y1="${M.t}" x2="${X(lng)}" y2="${M.t + plotH}" stroke="${C.grid}" stroke-width="0.4"/>`;
+  }
+
+  // Routes, coloured by publishing agency so the source confound that Test 3
+  // turns on is visible: the ruggedness gradient is partly a map of who
+  // surveyed where.
+  const bySource = new Map();
+  for (const r of corpus.routes) {
+    const k = r.source ?? r.layer;
+    if (!bySource.has(k)) bySource.set(k, []);
+    bySource.get(k).push(r);
+  }
+  const order = [...bySource.entries()].sort((a, b) => b[1].length - a[1].length);
+  const palette = [C.s1, C.s2, C.s3, C.s4, "#b0175e", "#6b7b8c", "#8a8983"];
+
+  let drawn = 0;
+  order.forEach(([, routes], si) => {
+    const col = palette[Math.min(si, palette.length - 1)];
+    for (const r of routes) {
+      const coords = r.coordinates;
+      if (!coords || coords.length < 2) continue;
+      let d = "";
+      let prevLng = null;
+      for (let i = 0; i < coords.length; i++) {
+        const [lng, lat] = coords[i];
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+        // Break the path at the antimeridian rather than drawing a line back
+        // across the whole map.
+        const jump = prevLng !== null && Math.abs(lng - prevLng) > 180;
+        d += `${!d || jump ? "M" : "L"}${X(lng).toFixed(1)},${Y(lat).toFixed(1)}`;
+        prevLng = lng;
+      }
+      if (d) { g += `<path d="${d}" fill="none" stroke="${col}" stroke-width="0.85" stroke-opacity="0.85"/>`; drawn++; }
+    }
+  });
+
+  // Legend along the bottom, sized by route count so the Europe weighting is
+  // stated numerically as well as shown.
+  let lx = M.l;
+  const ly = H - 8;
+  order.forEach(([name, routes], si) => {
+    const col = palette[Math.min(si, palette.length - 1)];
+    const label = `${name} (${routes.length})`;
+    g += `<line x1="${lx}" y1="${ly - 2.4}" x2="${lx + 9}" y2="${ly - 2.4}" stroke="${col}" stroke-width="1.6"/>`;
+    g += text(lx + 11.5, ly, label, { size: 6.2, fill: C.ink2 });
+    // Times at 6.2 pt averages about 2.7 pt per character; the extra 5 pt is
+    // the gap, which at 3.05 was tight enough for two labels to touch.
+    lx += 18 + label.length * 2.9;
+  });
+
+  const totalKm = corpus.routes.reduce((a, r) => a + (r.lengthKm ?? 0), 0);
+  g += text(W - M.r - 2, M.t + 9, `${drawn} routes`, { anchor: "end", size: 6.6, fill: C.ink, weight: "bold" });
+  g += text(W - M.r - 2, M.t + 17, `${Math.round(totalKm).toLocaleString("en-US")} km`, { anchor: "end", size: 6.4, fill: C.ink2 });
+
+  writeFileSync(
+    join(OUT, "fig6-corpus-map.svg"),
+    svg(W, H, g,
+      "Geographic coverage of the as-laid route corpus",
+      "World map of the 412 as-laid cable routes, coloured by the national hydrographic office that published them. Coverage is concentrated in northwest Europe and the Mediterranean, with French overseas territories reaching the Caribbean, Indian Ocean and Pacific."),
+  );
+  return "fig6-corpus-map.svg";
+}
+
+// ============================================================================
+// FIGURE B -- the evaluation protocol
+// ============================================================================
+// The single most important thing to understand before reading any result, and
+// the thing that distinguishes this work from the routing literature it argues
+// with: every method is handed ONLY two endpoints and scored on distance from
+// the cable that was really laid. A reader who takes this in does not need the
+// protocol prose at all.
+function figureProtocol() {
+  const W = 252, H = 176;
+  let g = "";
+
+  const box = (x, y, w, h, fill, stroke, dash) =>
+    `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="2" fill="${fill}" stroke="${stroke}" stroke-width="1"${dash ? ` stroke-dasharray="${dash}"` : ""}/>`;
+
+  // Step 1: what the method is given.
+  g += box(8, 10, 236, 30, "#f7f9fa", C.grid);
+  g += text(14, 22, "GIVEN", { size: 6, weight: "bold", fill: C.muted });
+  g += text(14, 33, "two endpoints only — no route, no hint", { size: 7.4, fill: C.ink });
+  g += `<circle cx="196" cy="26" r="3" fill="${C.ink}"/>`;
+  g += `<circle cx="228" cy="26" r="3" fill="${C.ink}"/>`;
+  g += `<line x1="199" y1="26" x2="225" y2="26" stroke="${C.grid}" stroke-width="1" stroke-dasharray="2 2"/>`;
+
+  // Step 2: the methods, sharing one search.
+  g += box(8, 50, 236, 46, C.surface, C.s1);
+  g += text(14, 62, "EACH METHOD PREDICTS", { size: 6, weight: "bold", fill: C.s1 });
+  const methods = [
+    ["great circle", C.muted],
+    ["sea path", C.s2],
+    ["terrain", C.s4],
+    ["corridor", C.s1],
+  ];
+  methods.forEach(([m, col], i) => {
+    const x = 16 + i * 56;
+    g += `<rect x="${x}" y="${68}" width="50" height="18" rx="2" fill="${col}" fill-opacity="0.11" stroke="${col}" stroke-width="0.8"/>`;
+    g += text(x + 25, 80, m, { size: 6.2, anchor: "middle", fill: C.ink });
+  });
+  g += text(126, 92.5, "same A* · same grid · same endpoints", { size: 5.8, anchor: "middle", fill: C.muted, style: "italic" });
+
+  // Step 3: scored against reality.
+  g += box(8, 106, 236, 34, C.surface, C.s3);
+  g += text(14, 118, "SCORED AGAINST", { size: 6, weight: "bold", fill: C.s3 });
+  g += text(14, 130, "the cable that was actually laid — mean km apart", { size: 7.4, fill: C.ink });
+
+  // Arrows down the spine.
+  const arrow = (y1, y2) =>
+    `<line x1="126" y1="${y1}" x2="126" y2="${y2 - 4}" stroke="${C.ink2}" stroke-width="1"/>` +
+    `<polygon points="126,${y2} 123,${y2 - 4.5} 129,${y2 - 4.5}" fill="${C.ink2}"/>`;
+  g += arrow(40, 50);
+  g += arrow(96, 106);
+
+  // The control that makes the comparison legal.
+  g += box(8, 148, 236, 22, "#fdf6f2", C.s2, "3 2");
+  g += text(14, 157, "CONTROL", { size: 6, weight: "bold", fill: C.s2 });
+  g += text(52, 157, "every grid search carries a 7.85 km discretisation", { size: 6.4, fill: C.ink2 });
+  g += text(14, 166.5, "handicap. It cancels between two of them, and never against the great circle.", { size: 6.4, fill: C.ink2 });
+
+  writeFileSync(
+    join(OUT, "fig7-protocol.svg"),
+    svg(W, H, g,
+      "The evaluation protocol",
+      "Each method receives only the two endpoints, predicts a route, and is scored by mean distance from the cable actually laid. All terrain-aware methods share one A* search, grid and endpoint handling, so differences are attributable to the cost weights."),
+  );
+  return "fig7-protocol.svg";
+}
+
+// ============================================================================
+// FIGURE C -- the corridor control ladder
+// ============================================================================
+// The corridor result is the paper's largest claim and it moved from 68% to
+// 29% under controls. Reporting only the final number hides the work; reporting
+// only the table makes the reader reconstruct the sequence. A ladder shows the
+// claim shrinking as each confound is removed, which is the actual argument.
+function figureControlLadder() {
+  const ec = read("corridor-endpoint-control.json").results;
+  const W = 252, H = 168;
+  // Right margin holds the value and the sample size beside each bar; at
+  // 12 pt the widest pair ran off the canvas and "n=301" rendered as "n=30".
+  const M = { t: 26, r: 36, b: 30, l: 96 };
+  const plotW = W - M.l - M.r;
+
+  const steps = [
+    ["same-agency excluded", ec.trim0],
+    ["+ trim 10 km", ec.trim10],
+    ["+ trim 30 km", ec.trim30],
+    ["+ trim 50 km", ec.trim50],
+    ["+ shared landfall excl.", ec["trim30-landing10"]],
+  ];
+  const red = (r) =>
+    r.reductionPct !== undefined
+      ? r.reductionPct
+      : ((r.placeboMedianKm - r.realMedianKm) / r.placeboMedianKm) * 100;
+
+  const hi = 80;
+  const X = (v) => M.l + (plotW * v) / hi;
+  const rowH = (H - M.t - M.b) / steps.length;
+
+  let g = "";
+  for (let v = 0; v <= hi; v += 20) {
+    g += `<line x1="${X(v)}" y1="${M.t - 6}" x2="${X(v)}" y2="${H - M.b}" stroke="${C.grid}" stroke-width="0.6"/>`;
+    g += text(X(v), H - M.b + 10, `${v}%`, { anchor: "middle", size: 6.2, fill: C.muted });
+  }
+  g += text(M.l + plotW / 2, H - 6, "how much closer than the displaced control", {
+    anchor: "middle", size: 6.6, fill: C.ink2,
+  });
+  g += text(M.l, M.t - 12, "each row removes one more confound", { size: 6.2, fill: C.muted, style: "italic" });
+
+  steps.forEach(([label, r], i) => {
+    const y = M.t + i * rowH + rowH / 2;
+    const v = red(r);
+    const last = i === steps.length - 1;
+    const col = last ? C.s1 : C.s3;
+    g += `<rect x="${M.l}" y="${y - 5}" width="${Math.max(1, X(v) - M.l)}" height="10" rx="1.5" fill="${col}" fill-opacity="${last ? 1 : 0.42}"/>`;
+    g += text(M.l - 5, y + 2.4, label, { anchor: "end", size: 6.3, fill: last ? C.ink : C.ink2, weight: last ? "bold" : "normal" });
+    g += text(X(v) + 4, y + 2.4, `${Math.round(v)}%`, { size: 6.4, fill: C.ink, weight: last ? "bold" : "normal" });
+    g += text(X(v) + 22, y + 2.4, `n=${r.n}`, { size: 5.8, fill: C.muted });
+  });
+
+  writeFileSync(
+    join(OUT, "fig8-control-ladder.svg"),
+    svg(W, H, g,
+      "The corridor effect under successive controls",
+      "The corridor proximity effect measured against a displaced control, as each confound is removed: identity exclusion alone gives 68%, trimming the landfall approaches and excluding cables sharing a named landing point brings it to 29%."),
+  );
+  return "fig8-control-ladder.svg";
+}
+
+
 // --- Run --------------------------------------------------------------------
 const required = [
   "longhaul-prediction.json", "error-ratio.json",
   "fishing-preference.json", "longhaul-grid-validation.json",
+  "cable-corpus.json", "corridor-endpoint-control.json",
 ];
 const missing = required.filter((f) => !existsSync(join(CACHE, f)));
 if (missing.length) {
@@ -445,7 +698,10 @@ if (missing.length) {
   process.exit(1);
 }
 
-const made = [figureBands(), figureErrorRatio(), figureFishing(), figureResolution(), figurePlacebo()];
+const made = [
+  figureCorpusMap(), figureProtocol(), figureBands(), figureErrorRatio(),
+  figureControlLadder(), figureFishing(), figureResolution(), figurePlacebo(),
+];
 console.log(`Wrote ${made.length} figures to ${OUT}`);
 for (const f of made) console.log(`  ${f}`);
 console.log("\nAll values are read from .cache/ -- if a figure disagrees with the");

@@ -48,7 +48,7 @@ The author is with [Affiliation], [City], [Country]
 \thanks{Analysis code and the full reproduction pipeline are available at
 \url{https://github.com/ixpavi/subsea-siting}.}}
 
-\markboth{IEEE Journal (preprint)}%
+\markboth{IEEE Journal}%
 {Sharma: Corridor Reuse Outperforms Bathymetry in Submarine Cable Route Prediction}
 
 \maketitle
@@ -223,13 +223,26 @@ routes long enough to have had alternatives and sampled finely enough to show
 which was taken ($\geq 25$\,km, $\geq 50$ vtx/1{,}000\,km) gives
 \nCorpusRoutes{} routes and \nCorpusKm{}\,km (Table~\ref{tab:corpus}).
 
-The corpus is Europe-weighted but not shelf-limited: the French SHOM layer
-covers overseas territories, reaching the Pacific, Indian Ocean and Caribbean.
+The corpus is Europe-weighted but not shelf-limited (Fig.~\ref{fig:corpus}):
+the French SHOM layer covers overseas territories, reaching the Pacific, Indian
+Ocean and Caribbean.
 Median depth along the corpus is 64\,m, but 17\% lies below 2{,}000\,m and 4\%
 is abyssal, to a maximum of 5{,}272\,m. Deep-water routing decisions are
 present.
 
 \input{tables/tab-corpus}
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{fig6-corpus-map.pdf}
+\caption{Geographic coverage of the corpus, coloured by publishing agency.
+Three quarters of corpus length is northwest Europe and the Mediterranean, and
+the trans-oceanic reach comes almost entirely from one agency's overseas
+territories --- the concentration Section~\ref{sec:scope} reports, shown rather
+than asserted. It is also why Section~\ref{sec:dose}'s ruggedness gradient is
+confounded: in this corpus, agency and sea are not separable.}
+\label{fig:corpus}
+\end{figure*}
 
 \subsection{Bathymetry}
 Two grids are used, and they are not interchangeable.
@@ -306,13 +319,24 @@ route.}
 
 \subsection{Route prediction and its baselines}\label{sec:protocol}
 Each method is given \emph{only} the two endpoints, predicts the route, and is
-scored by the mean distance from the cable actually laid. Every terrain-aware
+scored by the mean distance from the cable actually laid
+(Fig.~\ref{fig:protocol}). Every terrain-aware
 method uses the same A$^\star$ over the same bathymetry, differing only in cost
 weights, so a difference between them cannot come from the search, the grid,
 the corridor bound or endpoint handling. Weight fitting uses
 leave-one-source-out cross-validation, because routes from one agency share a
 sea and a survey convention; a fold is only run where at least eight routes
 remain.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{fig7-protocol.pdf}
+\caption{The evaluation protocol. Every method receives only the two endpoints
+and is scored on distance from the cable actually laid. All terrain-aware
+methods share one search, one grid and one endpoint treatment, so a difference
+between them is attributable to the cost weights rather than to the machinery.}
+\label{fig:protocol}
+\end{figure}
 
 \subsection{The discretisation control}\label{sec:disc}
 The geodesic is analytic. Every other method is a path over an 8-connected grid
@@ -462,6 +486,17 @@ cables published by a different country's hydrographic office, it sits
 
 \input{tables/tab-corridor}
 
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{fig8-control-ladder.pdf}
+\caption{The corridor effect as each confound is removed. Identity exclusion
+alone reports \nCorridorRaw\%; trimming the landfall approaches and then
+excluding cables that share a named landing point brings it to
+\nCorridorCtl\%. The first row is the figure a paper that stopped at identity
+exclusion would have published.}
+\label{fig:ladder}
+\end{figure}
+
 \emph{But identity exclusion is not enough}, and this is where the uncontrolled
 figure fails. Cables converge at landing points because they have to. Two
 systems making landfall on the same beach are close there for reasons unrelated
@@ -479,7 +514,8 @@ points as an independent source, is stable across the association radius
 (31\%/29\%/26\% at 5/10/20\,km), which is what a real effect looks like and a
 threshold artefact does not.
 
-\textbf{So the honest figure is \nCorridorCtl\%, not \nCorridorRaw\%.} Roughly
+\textbf{So the honest figure is \nCorridorCtl\%, not \nCorridorRaw\%}
+(Fig.~\ref{fig:ladder}). Roughly
 half the uncontrolled effect was the landfall approaches and a further part was
 cables genuinely sharing a landfall. What remains is corridor reuse in open
 water, on \nCorridorCtlPct\% of the \nCorridorCtlN{} routes that survive both

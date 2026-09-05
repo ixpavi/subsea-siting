@@ -9,7 +9,7 @@
 [![Vite](https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white)](https://vite.dev)
 [![Tests](https://img.shields.io/badge/tests-188%20passing-2ea44f)](#-testing)
 [![Data](https://img.shields.io/badge/cable%20systems-724-0e7c86)](#-data-provenance)
-[![Paper](https://img.shields.io/badge/paper-IEEE%20draft-b31b1b)](docs/paper/main.pdf)
+[![Paper](https://img.shields.io/badge/paper-IEEE%20final%20draft-b31b1b)](docs/paper/main.pdf)
 [![Licence](https://img.shields.io/badge/licence-Apache%202.0-blue)](LICENSE)
 
 </div>
@@ -178,7 +178,7 @@ And one rule that **predicts its own failure**: corridor following helps only wh
 
 | | |
 |---|---|
-| **Paper** (IEEE draft, 9 pp.) | [`docs/paper/main.pdf`](docs/paper/main.pdf) · [source](docs/paper) |
+| **Paper** (IEEE, 10 pp., 8 figures) | [`docs/paper/main.pdf`](docs/paper/main.pdf) · [source](docs/paper) |
 | Full write-up, every test and threat | [`docs/seabed-route-preference-study.md`](docs/seabed-route-preference-study.md) |
 | Positioning against prior art | [`docs/related-work.md`](docs/related-work.md) |
 | Annotated bibliography | [`docs/literature.md`](docs/literature.md) |
