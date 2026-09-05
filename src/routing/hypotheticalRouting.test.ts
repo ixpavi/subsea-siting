@@ -20,8 +20,15 @@ let landingPoints: LandingPoint[];
 let chennaiToSingapore: RouteEngineResult;
 
 beforeAll(() => {
-  const raw = JSON.parse(readFileSync(join(DATA, "ocean-grid.json"), "utf-8"));
-  grid = { ...raw, data: new Uint8Array(raw.data) };
+  // The real shipped grid, so these integration tests route over the same
+  // depths the app does. Metadata and payload are separate files; the Int16
+  // view is built the same way loadOceanGrid() builds it at runtime.
+  const meta = JSON.parse(readFileSync(join(DATA, "ocean-depth.json"), "utf-8"));
+  const bin = readFileSync(join(DATA, meta.binary));
+  grid = {
+    ...meta,
+    depthM: new Int16Array(bin.buffer, bin.byteOffset, bin.length / 2),
+  };
   cables = JSON.parse(readFileSync(join(DATA, "cables.json"), "utf-8"));
   landingPoints = JSON.parse(readFileSync(join(DATA, "landing-points.json"), "utf-8"));
 
@@ -97,11 +104,14 @@ describe("runHypotheticalRouting (real data)", () => {
     // Every vertex of every candidate must sit in a classified ocean cell.
     // Endpoints are snapped to real landing points, which legitimately sit on
     // the coast, so they are exempt.
+    // Deliberately re-derived here rather than imported, so the assertion does
+    // not inherit a bug from the module it is checking. 0 is land in both the
+    // old band grid and the depth grid.
     const bandAt = (lat: number, lng: number) => {
       const row = Math.min(grid.rows - 1, Math.max(0, Math.floor((lat + 90) / grid.resolutionDeg)));
       const wrapped = (((lng + 180) % 360) + 360) % 360 - 180;
       const col = Math.min(grid.cols - 1, Math.max(0, Math.floor((wrapped + 180) / grid.resolutionDeg)));
-      return grid.data[row * grid.cols + col];
+      return grid.depthM[row * grid.cols + col];
     };
     let interiorChecked = 0;
     for (const rc of chennaiToSingapore.candidates) {

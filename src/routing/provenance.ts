@@ -41,7 +41,7 @@ export type RouteMetricId =
   | "marineEndpointReal"
   | "marineEndpointModeled"
   | "depthBand"
-  | "meanBandLowerBound"
+  | "meanDepth"
   | "dominantDepthBand"
   | "difficultyIndex"
   | "corridorOverlap"
@@ -91,12 +91,12 @@ export const ROUTE_METRIC_PROVENANCE: Record<RouteMetricId, ProvenanceDescriptor
   depthBand: {
     provenance: "DERIVED",
     basis:
-      "Natural Earth 10m bathymetry contours (itself a cartographic simplification of GEBCO/ETOPO) rasterized to 0.5 degrees and classified into 12 depth bands. A band, never a sounding.",
+      "Band classification derived from the modelled depth at this cell, using the same 12 thresholds the grid has always used. The depth itself is NOAA NCEI's global DEM mosaic resampled to 0.5 degrees; the band is a summary of it, and neither is a sounding.",
   },
-  meanBandLowerBound: {
+  meanDepth: {
     provenance: "DERIVED",
     basis:
-      "Arithmetic mean of the LOWER BOUNDS of the bands crossed. Useful only for comparing candidates against each other; it is not a mean depth.",
+      "Arithmetic mean of the modelled depth at each sampled point along the route. A real mean of modelled depths -- it was previously a mean of band lower bounds, which was not a depth at all.",
   },
   dominantDepthBand: {
     provenance: "DERIVED",

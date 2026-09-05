@@ -3,7 +3,7 @@
 // the derived ocean grid -- see oceanGrid.ts and provenance.ts for why every
 // depth value here is a contour-band bound, never a sounding.
 import type { OceanGrid } from "./oceanGrid";
-import { bandAt, bandDepthM } from "./oceanGrid";
+import { bandForDepth, depthAt } from "./oceanGrid";
 import { bandRange, computeDifficultyIndex, depthDifficultyMultiplier } from "./marineCostSurface";
 import type { DepthBandRange, DepthProfileSample, RouteAnalysis } from "./routingTypes";
 
@@ -89,12 +89,20 @@ export function computeRouteAnalysis(
   const depthProfile: DepthProfileSample[] = [];
   let unclassifiedSampleCount = 0;
   for (const s of samples) {
-    const band = bandAt(grid, s.lat, s.lng);
-    if (band === 0) {
+    // The grid now stores a modelled depth, so the profile carries what the
+    // model says at each sample rather than the lower bound of the band it
+    // fell into. The band index is still derived and kept, because the
+    // difficulty multipliers and the dominant-band summary are band-shaped.
+    const depth = depthAt(grid, s.lat, s.lng);
+    if (depth === 0) {
       unclassifiedSampleCount++;
       continue;
     }
-    depthProfile.push({ distanceAlongRouteKm: s.distanceKm, depthM: bandDepthM(grid, band), depthBandIndex: band });
+    depthProfile.push({
+      distanceAlongRouteKm: s.distanceKm,
+      depthM: depth,
+      depthBandIndex: bandForDepth(grid, depth),
+    });
   }
 
   const totalDistanceKm = marineDistanceKm + (terrestrialAccessKmSource ?? 0) + (terrestrialAccessKmDest ?? 0);
@@ -110,8 +118,8 @@ export function computeRouteAnalysis(
       shallowestBand: null,
       deepestBand: null,
       dominantBand: null,
-      meanBandLowerBoundM: null,
-      bandLowerBoundStdDevM: 0,
+      meanDepthM: null,
+      depthStdDevM: 0,
       unclassifiedSampleCount,
       classifiedSampleCount,
       difficultyIndex: 1,
@@ -122,9 +130,9 @@ export function computeRouteAnalysis(
 
   const bandIndices = depthProfile.map((d) => d.depthBandIndex);
   const lowerBounds = depthProfile.map((d) => d.depthM);
-  const meanBandLowerBoundM = lowerBounds.reduce((a, b) => a + b, 0) / lowerBounds.length;
-  const variance = lowerBounds.reduce((a, b) => a + (b - meanBandLowerBoundM) ** 2, 0) / lowerBounds.length;
-  const bandLowerBoundStdDevM = Math.sqrt(variance);
+  const meanDepthM = lowerBounds.reduce((a, b) => a + b, 0) / lowerBounds.length;
+  const variance = lowerBounds.reduce((a, b) => a + (b - meanDepthM) ** 2, 0) / lowerBounds.length;
+  const depthStdDevM = Math.sqrt(variance);
 
   const shallowestBand = bandRange(grid, Math.min(...bandIndices));
   const deepestBand = bandRange(grid, Math.max(...bandIndices));
@@ -149,7 +157,7 @@ export function computeRouteAnalysis(
     bandIndices.reduce((a, b) => a + depthDifficultyMultiplier(b), 0) / bandIndices.length;
   const { index: difficultyIndex, basis: difficultyIndexBasis } = computeDifficultyIndex(
     meanMultiplier,
-    bandLowerBoundStdDevM
+    depthStdDevM
   );
 
   return {
@@ -159,8 +167,8 @@ export function computeRouteAnalysis(
     shallowestBand,
     deepestBand,
     dominantBand,
-    meanBandLowerBoundM,
-    bandLowerBoundStdDevM,
+    meanDepthM,
+    depthStdDevM,
     unclassifiedSampleCount,
     classifiedSampleCount,
     difficultyIndex,

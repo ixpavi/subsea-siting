@@ -1,0 +1,156 @@
+{
+  "resolutionDeg": 0.5,
+  "rows": 360,
+  "cols": 720,
+  "units": "metres below sea level, Int16 little-endian, row-major",
+  "landValue": 0,
+  "binary": "ocean-depth.bin",
+  "provenance": "Global seabed depth from NOAA NCEI's DEM_global_mosaic (a multi-source composite of GEBCO plus higher-resolution regional surveys, NOT a single uniform-accuracy product), resampled to a 0.5 degree grid by bilinear interpolation at build time. Values are modelled depths in metres, not point soundings, and a 0.5 degree cell is about 56 km across -- so a value is the interpolated depth of a 56 km square, not of any surveyed position within it. WHICH cells are water is decided by the Natural Earth land/water mask shipped in ocean-grid.json, not by this elevation model: that mask is a cartographic generalisation that keeps real channels navigable, and substituting the elevation model's own land/water decision was measured to seal Bab-el-Mandeb and strand 109 landing points. Depth is therefore NOAA's and geography is Natural Earth's. Where the mask says water but the elevation model is at or above sea level -- coastal cells and the named strait corrections -- the contour band's lower bound is used, which is exactly what was reported there before. Artificial canals (Suez, Panama) are deliberately NOT opened.",
+  "source": {
+    "name": "NOAA NCEI DEM global mosaic",
+    "url": "https://gis.ngdc.noaa.gov/arcgis/rest/services/DEM_mosaics/DEM_global_mosaic/ImageServer/exportImage",
+    "note": "Multi-source composite; label as NOAA NCEI, not as GEBCO."
+  },
+  "depthBands": [
+    {
+      "index": 1,
+      "minDepthM": 0
+    },
+    {
+      "index": 2,
+      "minDepthM": 200
+    },
+    {
+      "index": 3,
+      "minDepthM": 1000
+    },
+    {
+      "index": 4,
+      "minDepthM": 2000
+    },
+    {
+      "index": 5,
+      "minDepthM": 3000
+    },
+    {
+      "index": 6,
+      "minDepthM": 4000
+    },
+    {
+      "index": 7,
+      "minDepthM": 5000
+    },
+    {
+      "index": 8,
+      "minDepthM": 6000
+    },
+    {
+      "index": 9,
+      "minDepthM": 7000
+    },
+    {
+      "index": 10,
+      "minDepthM": 8000
+    },
+    {
+      "index": 11,
+      "minDepthM": 9000
+    },
+    {
+      "index": 12,
+      "minDepthM": 10000
+    }
+  ],
+  "straitCorrections": [
+    {
+      "name": "Strait of Gibraltar",
+      "lat": 35.95,
+      "lng": -5.6,
+      "connects": "Mediterranean <-> Atlantic"
+    },
+    {
+      "name": "Strait of Juan de Fuca",
+      "lat": 48.35,
+      "lng": -124.2,
+      "connects": "Salish Sea <-> Pacific"
+    },
+    {
+      "name": "Queen Charlotte Strait",
+      "lat": 50.85,
+      "lng": -127.6,
+      "connects": "Inside Passage <-> Pacific"
+    },
+    {
+      "name": "Strait of Tiran",
+      "lat": 28.75,
+      "lng": 34.75,
+      "radius": 1,
+      "connects": "Gulf of Aqaba <-> Red Sea"
+    },
+    {
+      "name": "Sumner Strait",
+      "lat": 56.15,
+      "lng": -133.3,
+      "connects": "SE Alaska Inside Passage <-> Pacific"
+    },
+    {
+      "name": "Cook Inlet",
+      "lat": 60.15,
+      "lng": -152.2,
+      "connects": "Cook Inlet <-> Gulf of Alaska"
+    },
+    {
+      "name": "Strait of Magellan (west)",
+      "lat": -52.55,
+      "lng": -74.9,
+      "connects": "Magellan <-> Pacific"
+    },
+    {
+      "name": "Tablazo Strait",
+      "lat": 10.9,
+      "lng": -71.55,
+      "connects": "Lake Maracaibo <-> Gulf of Venezuela"
+    },
+    {
+      "name": "Strait of Malacca",
+      "lat": 2.4,
+      "lng": 101.2,
+      "connects": "Andaman Sea <-> Strait of Singapore"
+    },
+    {
+      "name": "Bosphorus",
+      "lat": 41.15,
+      "lng": 29.1,
+      "radius": 1,
+      "connects": "Black Sea <-> Sea of Marmara"
+    },
+    {
+      "name": "Dardanelles",
+      "lat": 40.25,
+      "lng": 26.75,
+      "radius": 1,
+      "connects": "Sea of Marmara <-> Aegean"
+    },
+    {
+      "name": "Kerch Strait",
+      "lat": 45.3,
+      "lng": 36.6,
+      "connects": "Sea of Azov <-> Black Sea"
+    },
+    {
+      "name": "Cook Inlet (upper)",
+      "lat": 61.25,
+      "lng": -150.75,
+      "radius": 1,
+      "connects": "Upper Cook Inlet <-> Gulf of Alaska"
+    },
+    {
+      "name": "Strait of Magellan (eastern narrows)",
+      "lat": -53.75,
+      "lng": -70.75,
+      "radius": 1,
+      "connects": "Magellan <-> Atlantic"
+    }
+  ],
+  "generatedAt": "2026-09-05T08:14:23.254Z"
+}

@@ -7,7 +7,7 @@
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)](https://react.dev)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
 [![Vite](https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white)](https://vite.dev)
-[![Tests](https://img.shields.io/badge/tests-172%20passing-2ea44f)](#-testing)
+[![Tests](https://img.shields.io/badge/tests-188%20passing-2ea44f)](#-testing)
 [![Data](https://img.shields.io/badge/cable%20systems-724-0e7c86)](#-data-provenance)
 [![Paper](https://img.shields.io/badge/paper-IEEE%20draft-b31b1b)](docs/paper/main.pdf)
 [![Licence](https://img.shields.io/badge/licence-Apache%202.0-blue)](LICENSE)
@@ -36,7 +36,7 @@ Its distinguishing feature is not the globe. It is that **every figure is labell
 |:--:|:--:|:--:|:--:|
 | **724** | **1,920** | **5,260** | **216** |
 | cable systems | landing points | facilities | countries scored |
-| **702** | **412** | **172** | **0.5°** |
+| **702** | **412** | **188** | **0.5°** |
 | protected areas | as-laid route corpus | tests passing | ocean grid |
 
 </div>
@@ -78,7 +78,8 @@ Nothing is presented without its standing. This is enforced in the type system �
 | Water stress | [WRI Aqueduct](https://www.wri.org/aqueduct) | `REAL` |
 | Marine protected areas | WDPA via [EMODnet](https://emodnet.ec.europa.eu) *(European extract)* | `REAL` |
 | Free-cooling hours | ERA5 reanalysis via [Open-Meteo](https://open-meteo.com) | `DERIVED` |
-| Bathymetry grid | Natural Earth / GEBCO contours | `DERIVED` |
+| Seabed depth | [NOAA NCEI](https://www.ncei.noaa.gov) global DEM mosaic, 0.5° | `DERIVED` |
+| Land/water mask | Natural Earth coastline + 14 strait corrections | `DERIVED` |
 | Climate-adjusted PUE | Fitted to **31 measured facility-years** | `MODELLED` |
 | Route cost estimate | Assumed coefficients | `MODELLED` |
 
@@ -199,7 +200,7 @@ Then open the printed local URL. No API keys, no accounts, no backend — the ap
 
 ```bash
 npm run build      # production build
-npm test           # 172 tests
+npm test           # 188 tests
 npm run lint       # oxlint
 ```
 
@@ -217,7 +218,7 @@ Full pipeline, runtimes and the order to run things in: [study §7](docs/seabed-
 
 ## 🧪 Testing
 
-172 tests, and many assert properties of the **data** rather than the code — because that is where the hardest bugs lived.
+188 tests, and many assert properties of the **data** rather than the code — because that is where the hardest bugs lived.
 
 | Suite | What it locks down |
 |---|---|
@@ -225,6 +226,7 @@ Full pipeline, runtimes and the order to run things in: [study §7](docs/seabed-
 | `oceanGridConnectivity` | Seas that must connect do; canals stay closed; Caspian stays landlocked |
 | `cableHitTest` | The spatial prefilter never changes which cable a click resolves to |
 | `protectedAreas` | Missing data is never reported as an absence of constraints |
+| `oceanDepthGrid` | Depths are the model's, and the land/water mask is untouched cell for cell |
 | `siteComparison` | A site never ranks higher for having less data |
 | `hypotheticalRouting` | Degenerate route pairs detected symmetrically |
 | `connectivityAnalysis` | An inland site reports the distance to the coast, not "unavailable" |
@@ -269,7 +271,7 @@ Stated here rather than discovered later:
 - **Canals are not navigable.** Suez and Panama are not in the source coastline, so Europe–Asia routes come out around Africa. Natural straits narrower than the grid cell *are* corrected — 14 of them, listed in the shipped grid.
 - **Protected areas are European.** EMODnet serves the European extract of WDPA. Outside its extent the criterion reports **unavailable**, never "no constraints found".
 - **Route costs are assumed.** The coefficients are not sourced and are labelled `MODELLED`.
-- **Bathymetry is band-derived.** Depths are contour-band bounds, not point soundings.
+- **Bathymetry is coarse.** Depths are modelled values on a 0.5° (~56 km) grid, not point soundings — and the land/water mask is a cartographic coastline, not the elevation model.
 - **Not survey-grade.** This is a decision-support prototype, not a certified route survey.
 
 ---

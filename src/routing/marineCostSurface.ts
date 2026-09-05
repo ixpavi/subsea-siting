@@ -32,9 +32,9 @@ export function depthDifficultyMultiplier(bandIndex: number): number {
 }
 
 /** Depth-variability contribution to the difficulty index. A route crossing many depth bands is harder to engineer and install consistently than one holding a narrow band at similar mean depth. Thresholds are disclosed modeling assumptions. */
-export function depthVariabilityPenalty(bandLowerBoundStdDevM: number): number {
-  if (bandLowerBoundStdDevM > 2500) return 0.3;
-  if (bandLowerBoundStdDevM > 1000) return 0.15;
+export function depthVariabilityPenalty(depthStdDevM: number): number {
+  if (depthStdDevM > 2500) return 0.3;
+  if (depthStdDevM > 1000) return 0.15;
   return 0;
 }
 
@@ -57,15 +57,15 @@ export function depthVariabilityPenalty(bandLowerBoundStdDevM: number): number {
  */
 export function computeDifficultyIndex(
   meanDepthBandMultiplier: number,
-  bandLowerBoundStdDevM: number
+  depthStdDevM: number
 ): { index: number; basis: string } {
-  const variability = depthVariabilityPenalty(bandLowerBoundStdDevM);
+  const variability = depthVariabilityPenalty(depthStdDevM);
   const index = meanDepthBandMultiplier + variability;
   return {
     index,
     basis:
       `mean per-band difficulty multiplier ${meanDepthBandMultiplier.toFixed(3)} ` +
-      `+ depth-variability term ${variability.toFixed(2)} (band-lower-bound std dev ${Math.round(bandLowerBoundStdDevM).toLocaleString()} m)`,
+      `+ depth-variability term ${variability.toFixed(2)} (band-lower-bound std dev ${Math.round(depthStdDevM).toLocaleString()} m)`,
   };
 }
 

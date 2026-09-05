@@ -58,8 +58,8 @@ export interface RouteAnalysis {
   deepestBand: DepthBandRange | null;
   dominantBand: DepthBandRange | null;
   /** Mean of band LOWER BOUNDS -- explicitly not a mean depth. Comparable across candidates; not meaningful in isolation. */
-  meanBandLowerBoundM: number | null;
-  bandLowerBoundStdDevM: number;
+  meanDepthM: number | null;
+  depthStdDevM: number;
   /** Samples that landed on a land/unclassified grid cell and were excluded from depth statistics rather than silently clamped to the shallowest ocean band. */
   unclassifiedSampleCount: number;
   classifiedSampleCount: number;

@@ -38,10 +38,12 @@ function fmtUsd(usd: number): string {
 }
 
 const BATHYMETRY_PROVENANCE_TEXT =
-  "Derived bathymetric depth-band grid: Natural Earth v5.1.1 10m bathymetry contours (Natural Earth's own " +
-  "cartographic simplification of the GEBCO/ETOPO compilations, not raw GEBCO values), rasterized to a 0.5° x 0.5° " +
-  "grid (~55km cell width at the equator) and classified into depth BANDS, not continuous depth. Not suitable for " +
-  "final engineering or survey-grade route planning.";
+  "Global seabed depth grid at 0.5° x 0.5° (~55km cell width at the equator). Depth comes from NOAA NCEI's " +
+  "DEM_global_mosaic, a multi-source composite of GEBCO plus higher-resolution regional surveys -- modelled " +
+  "depths in metres, not point soundings: a value is the interpolated depth of a 55km square. Which cells are " +
+  "water is decided separately, by Natural Earth's coastline plus 14 named strait corrections, because that " +
+  "cartographic generalisation keeps real channels navigable where the elevation model seals them. Not suitable " +
+  "for final engineering or survey-grade route planning.";
 
 /** Renders a provenance class chip. The id must exist in the registry, so an unclassified metric is a type error. */
 function ProvenanceChip({ metric }: { metric: RouteMetricId }) {
@@ -140,7 +142,7 @@ export default function RouteInspector({
       <h2 className="pp-section-title">Hypothetical Routes</h2>
       <p className="design-step-intro">
         A candidate new-cable route is computed with a deterministic A* search over a{" "}
-        <strong>derived bathymetric depth-band grid</strong> (<span title={BATHYMETRY_PROVENANCE_TEXT}>provenance</span>
+        <strong>global seabed-depth grid</strong> (<span title={BATHYMETRY_PROVENANCE_TEXT}>provenance</span>
         ), not a straight line between the two cities. This grid does not model artificial waterways (Suez, Panama)
         as navigable -- a route whose realistic path uses one of those canals is instead routed around the
         connecting continent, which can significantly overstate marine distance and cost for those pairs.
@@ -481,13 +483,13 @@ function RiCandidateDetail({ ranked }: { ranked: RankedRouteCandidate }) {
         />
         <Metric label="Deepest band crossed" value={analysis.deepestBand?.label ?? "unavailable"} metric="depthBand" />
         <Metric
-          label="Mean band lower bound"
+          label="Mean depth"
           value={
-            analysis.meanBandLowerBoundM == null
+            analysis.meanDepthM == null
               ? "unavailable"
-              : `${Math.round(analysis.meanBandLowerBoundM / 50) * 50} m`
+              : `${Math.round(analysis.meanDepthM / 50) * 50} m`
           }
-          metric="meanBandLowerBound"
+          metric="meanDepth"
         />
         <Metric
           label="Seabed difficulty index"
@@ -521,7 +523,7 @@ function RiCandidateDetail({ ranked }: { ranked: RankedRouteCandidate }) {
       )}
 
       <span className="design-label ri-chart-label">
-        Depth profile (distance along route → depth band lower bound) <ProvenanceChip metric="depthBand" />
+        Depth profile (distance along route → modelled depth) <ProvenanceChip metric="depthBand" />
       </span>
       <DepthProfileChart profile={analysis.depthProfile} />
 

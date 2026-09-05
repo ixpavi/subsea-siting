@@ -43,3 +43,6 @@ docs/paper/*.blg
 docs/paper/*.fls
 docs/paper/*.fdb_latexmk
 docs/paper/*.synctex.gz
+
+# NOAA strips cached by build-ocean-depth-grid.mjs. ~6 MB, re-fetchable.
+scripts/.cache-depth-strips/

@@ -2,34 +2,52 @@ import { describe, it, expect } from "vitest";
 import { computeRouteAnalysis } from "./routeAnalysis";
 import type { OceanGrid } from "./oceanGrid";
 
+const TEST_BANDS = [
+  { index: 1, minDepthM: 0 },
+  { index: 2, minDepthM: 200 },
+  { index: 3, minDepthM: 1000 },
+  { index: 4, minDepthM: 2000 },
+  { index: 5, minDepthM: 3000 },
+];
+
 /**
- * Small synthetic grid: 0 = land, otherwise the depth-band index. Built so a
- * test can place a route across chosen bands deliberately rather than hoping
- * the real world contains a useful example.
+ * Small synthetic grid. `fill` still returns a BAND INDEX, because that is what
+ * these tests are about; the grid now stores metres, so each band is written as
+ * a depth that lands squarely inside it. Land (band 0) stays 0, which is the
+ * grid's land sentinel in both representations.
+ *
+ * Written mid-band rather than at the band floor so a test cannot pass by
+ * accident on a boundary: bandForDepth uses >=, so a floor value would sit on
+ * the edge of two bands' semantics.
  */
 function makeGrid(fill: (lat: number, lng: number) => number): OceanGrid {
   const resolutionDeg = 1;
   const rows = 180;
   const cols = 360;
-  const data = new Uint8Array(rows * cols);
+  const depthForBand = (band: number): number => {
+    if (band <= 0) return 0;
+    const here = TEST_BANDS.find((b) => b.index === band);
+    if (!here) return 0;
+    const next = TEST_BANDS.find((b) => b.index === band + 1);
+    // Deepest band has no ceiling; put it a clear margin past its floor.
+    if (!next) return here.minDepthM + 500;
+    return Math.round((here.minDepthM + next.minDepthM) / 2);
+  };
+
+  const depthM = new Int16Array(rows * cols);
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
-      data[r * cols + c] = fill(-90 + (r + 0.5) * resolutionDeg, -180 + (c + 0.5) * resolutionDeg);
+      const band = fill(-90 + (r + 0.5) * resolutionDeg, -180 + (c + 0.5) * resolutionDeg);
+      depthM[r * cols + c] = depthForBand(band);
     }
   }
   return {
     resolutionDeg,
     rows,
     cols,
-    depthBands: [
-      { index: 1, minDepthM: 0 },
-      { index: 2, minDepthM: 200 },
-      { index: 3, minDepthM: 1000 },
-      { index: 4, minDepthM: 2000 },
-      { index: 5, minDepthM: 3000 },
-    ],
+    depthBands: TEST_BANDS,
     provenance: "synthetic test grid",
-    data,
+    depthM,
   };
 }
 
@@ -76,7 +94,7 @@ describe("computeRouteAnalysis", () => {
     expect(analysis.classifiedSampleCount).toBe(0);
     expect(analysis.shallowestBand).toBeNull();
     expect(analysis.deepestBand).toBeNull();
-    expect(analysis.meanBandLowerBoundM).toBeNull();
+    expect(analysis.meanDepthM).toBeNull();
     expect(analysis.dominantDepthBandLabel).toMatch(/unavailable/i);
   });
 
