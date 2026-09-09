@@ -9,6 +9,7 @@
 import type { CableFeature, LandingPoint } from "../types";
 import type { OceanGrid } from "./oceanGrid";
 import { findNearestOceanCell } from "./oceanGrid";
+import { interpolateLatLng } from "./geo";
 import { generateRouteCandidates, getCableProximityIndex } from "./routeCandidates";
 import { computeRouteAnalysis } from "./routeAnalysis";
 import { computeRouteResilience } from "./routeResilience";
@@ -230,7 +231,10 @@ function resample(path: [number, number][], stepKm: number): [number, number][] 
       si++;
     }
     const t = Math.max(0, Math.min(1, (target - cum) / (segs[si] || 1e-9)));
-    out.push([path[si][0] + (path[si + 1][0] - path[si][0]) * t, path[si][1] + (path[si + 1][1] - path[si][1]) * t]);
+    // Short way round in longitude -- see geo.ts. Without this, a
+    // dateline-crossing candidate's samples land on the far side of the
+    // planet and the separation test below compares the wrong geometry.
+    out.push(interpolateLatLng(path[si][0], path[si][1], path[si + 1][0], path[si + 1][1], t));
   }
   return out;
 }

@@ -18,6 +18,7 @@
 // thing this layer could do.
 import type { EnvironmentalAssessment } from "./routingTypes";
 import { assetUrl } from "../assetUrl";
+import { interpolateLatLng } from "./geo";
 
 interface ProtectedAreasFile {
   resolutionDeg: number;
@@ -98,6 +99,37 @@ function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): nu
 }
 
 /**
+ * Splits every segment of `path` so no sub-segment is longer than `maxStepKm`.
+ *
+ * WHY THE CALLER CANNOT BE TRUSTED TO DO THIS. The walk below attributes a
+ * whole segment to the one cell containing its midpoint, which is only sound
+ * while segments are short relative to the ~11 km cell. The routing engine
+ * hands us the RDP-SIMPLIFIED candidate path (simplified at 0.4 of a 0.5deg
+ * grid cell), where a straight run across open water collapses into a single
+ * segment hundreds of kilometres long. Such a segment was tested at one
+ * mid-ocean midpoint, so a protected area it crossed near either end was
+ * scored as no exposure at all -- reporting missing detection as environmental
+ * safety, which is the exact failure this module's header forbids.
+ *
+ * Densifying here rather than at the call site means every caller gets it,
+ * including any future one. DetailPanel.tsx already densifies its own
+ * straight-line corridor before calling in; doing it twice is harmless.
+ */
+function densify(path: [number, number][], maxStepKm: number): [number, number][] {
+  if (path.length < 2) return path;
+  const out: [number, number][] = [path[0]];
+  for (let i = 0; i < path.length - 1; i++) {
+    const [lat1, lng1] = path[i];
+    const [lat2, lng2] = path[i + 1];
+    const steps = Math.max(1, Math.ceil(haversineKm(lat1, lng1, lat2, lng2) / maxStepKm));
+    for (let k = 1; k <= steps; k++) {
+      out.push(interpolateLatLng(lat1, lng1, lat2, lng2, k / steps));
+    }
+  }
+  return out;
+}
+
+/**
  * Environmental exposure for one candidate route.
  *
  * @param marinePath the route's own geometry, [lat, lng] pairs.
@@ -118,8 +150,14 @@ export function assessEnvironmentalWithGrid(
     };
   }
 
-  const outside = marinePath.filter(([lat, lng]) => !inExtent(grid, lat, lng)).length;
-  const outsideFraction = outside / marinePath.length;
+  // Half a cell, so no cell the route passes through can be stepped over.
+  // Done before the coverage test too: measuring coverage on the caller's
+  // vertices let a long segment leave the data extent and come back between
+  // two covered endpoints, and be counted as fully covered.
+  const path = densify(marinePath, (grid.resolutionDeg * 111.32) / 2);
+
+  const outside = path.filter(([lat, lng]) => !inExtent(grid, lat, lng)).length;
+  const outsideFraction = outside / path.length;
 
   // Any meaningful excursion beyond the data extent makes the whole answer
   // unreliable, so the threshold is deliberately strict.
@@ -143,16 +181,15 @@ export function assessEnvironmentalWithGrid(
   let wasInside = false;
   let totalKm = 0;
 
-  for (let i = 0; i < marinePath.length - 1; i++) {
-    const [lat1, lng1] = marinePath[i];
-    const [lat2, lng2] = marinePath[i + 1];
+  for (let i = 0; i < path.length - 1; i++) {
+    const [lat1, lng1] = path[i];
+    const [lat2, lng2] = path[i + 1];
     const segKm = haversineKm(lat1, lng1, lat2, lng2);
     totalKm += segKm;
-    // Attribute a segment by its midpoint: at 11 km cells a segment rarely
-    // spans more than one cell, and midpoint sampling avoids double-counting
-    // the shared vertex between consecutive segments.
-    const midLat = (lat1 + lat2) / 2;
-    const midLng = (lng1 + lng2) / 2;
+    // Attribute a segment by its midpoint. Sound because `densify` above has
+    // already bounded every segment to half a cell; midpoint sampling then
+    // avoids double-counting the shared vertex between consecutive segments.
+    const [midLat, midLng] = interpolateLatLng(lat1, lng1, lat2, lng2, 0.5);
     const inside = isProtected(grid, midLat, midLng);
     if (inside) {
       constrainedKm += segKm;

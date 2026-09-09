@@ -31,6 +31,16 @@ export function depthDifficultyMultiplier(bandIndex: number): number {
   return DEPTH_DIFFICULTY_MULTIPLIER[bandIndex] ?? 1.5;
 }
 
+/**
+ * Cheapest per-km multiplier this table can produce.
+ *
+ * The A* search needs it: its heuristic has to be a LOWER bound on the true
+ * remaining cost, so it must be scaled by the smallest cost a kilometre of
+ * route can possibly incur. Derived from the table rather than written as a
+ * literal, so editing a band cannot silently break admissibility.
+ */
+export const MIN_DEPTH_DIFFICULTY_MULTIPLIER = Math.min(...Object.values(DEPTH_DIFFICULTY_MULTIPLIER));
+
 /** Depth-variability contribution to the difficulty index. A route crossing many depth bands is harder to engineer and install consistently than one holding a narrow band at similar mean depth. Thresholds are disclosed modeling assumptions. */
 export function depthVariabilityPenalty(depthStdDevM: number): number {
   if (depthStdDevM > 2500) return 0.3;

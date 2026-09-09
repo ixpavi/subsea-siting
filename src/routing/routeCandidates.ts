@@ -3,14 +3,24 @@
 // varying the edge-cost profile -- not by perturbing one path cosmetically.
 //
 // Why A*, not Dijkstra: the grid is a regular lat/lng lattice with a
-// well-defined, always-admissible heuristic (great-circle distance to the
-// goal -- every edge-cost multiplier in marineCostSurface.ts is >= 1.0, so
-// straight-line distance never overestimates true remaining cost). That
+// well-defined admissible heuristic (great-circle distance to the goal,
+// scaled by the cheapest per-km cost the active profile can charge). That
 // makes A* strictly better than plain Dijkstra here: same guaranteed-optimal
 // result for whichever cost profile is active, far fewer nodes expanded.
+//
+// THE SCALING IS LOAD-BEARING, NOT A REFINEMENT. This used to use raw
+// great-circle distance, on the stated grounds that "every edge-cost
+// multiplier in marineCostSurface.ts is >= 1.0". That is true of
+// marineCostSurface -- but the diverse-corridor profile below multiplies by
+// corridorDiversityFactor, which ramps down to 0.70, so a kilometre of route
+// can cost 0.70 km-equivalents. An unscaled heuristic therefore OVERestimated
+// the remaining cost by up to 43%, which makes it inadmissible: A* could pop
+// the goal while a cheaper detour through empty water was still on the heap
+// and return a route that is not the optimum for its own cost function. Each
+// profile now declares minCostPerKm and the heuristic is scaled by it.
 import type { OceanGrid } from "./oceanGrid";
 import { bandAt, colForLng, findNearestOceanCell, latForRow, lngForCol, rowForLat } from "./oceanGrid";
-import { depthDifficultyMultiplier } from "./marineCostSurface";
+import { depthDifficultyMultiplier, MIN_DEPTH_DIFFICULTY_MULTIPLIER } from "./marineCostSurface";
 import { buildCableProximityIndex, nearestCableDistanceKm, type CableProximityIndex } from "./cableProximityIndex";
 import type { CableFeature } from "../types";
 import type { RoutingProfileId } from "./routingTypes";
@@ -70,6 +80,12 @@ class MinHeap<T> {
 export interface RoutingProfile {
   id: RoutingProfileId;
   label: string;
+  /**
+   * Lower bound on this profile's edge cost per kilometre travelled. The A*
+   * heuristic is multiplied by it so the heuristic can never exceed the true
+   * remaining cost. Must be <= every multiplier `edgeCost` can apply.
+   */
+  minCostPerKm: number;
   /** Compact all-caps display name for tight UI spaces (candidate rows, globe labels) -- e.g. "SHORTEST", "DEPTH-FAVORING". */
   shortName: string;
   description: string;
@@ -114,6 +130,8 @@ export const ROUTING_PROFILES: RoutingProfile[] = [
     id: "shortest",
     label: "Shortest Marine Path",
     shortName: "SHORTEST",
+    // Raw distance: a kilometre costs exactly a kilometre.
+    minCostPerKm: 1,
     description: "Minimizes raw marine distance only; depth and existing-cable corridors are not factored in.",
     edgeCost: (_grid, _idx, flat, flng, tlat, tlng) => haversineKm(flat, flng, tlat, tlng),
   },
@@ -121,6 +139,7 @@ export const ROUTING_PROFILES: RoutingProfile[] = [
     id: "shallow-favoring",
     label: "Depth-Favorable Path",
     shortName: "DEPTH-FAVORING",
+    minCostPerKm: MIN_DEPTH_DIFFICULTY_MULTIPLIER,
     description:
       "Minimizes marine distance weighted by a modeled seabed-difficulty penalty (see marineCostSurface.ts) -- prefers continental-shelf/slope depths over deep trenches where a detour is small.",
     edgeCost: (_grid, _idx, flat, flng, tlat, tlng, toBand) =>
@@ -130,6 +149,10 @@ export const ROUTING_PROFILES: RoutingProfile[] = [
     id: "diverse-corridor",
     label: "Diverse-Corridor Path",
     shortName: "DIVERSITY-SEEKING",
+    // Depth and diversity both multiply, so the floor is the product of both
+    // floors -- 1.0 x 0.70 today. This is the profile that made an unscaled
+    // heuristic inadmissible.
+    minCostPerKm: MIN_DEPTH_DIFFICULTY_MULTIPLIER * DIVERSITY_REWARD_FACTOR,
     description:
       "Minimizes marine distance weighted by depth difficulty AND a modeled bonus for staying away from existing real cable corridors (physical route diversity) -- see cableProximityIndex.ts.",
     edgeCost: (_grid, idx, flat, flng, tlat, tlng, toBand) => {
@@ -219,7 +242,10 @@ function runAStar(
       if (existing === undefined || tentativeG < existing) {
         gScore.set(nKey, tentativeG);
         cameFrom.set(nKey, currentKey);
-        const h = haversineKm(nLat, nLng, goalLat, goalLng);
+        // Scaled by the profile's cheapest possible per-km cost, so the
+        // estimate is a genuine lower bound on the remaining cost and A*
+        // stays optimal. See this file's header.
+        const h = haversineKm(nLat, nLng, goalLat, goalLng) * profile.minCostPerKm;
         heap.push(tentativeG + h, nKey);
       }
     }

@@ -1,5 +1,34 @@
 // Rule-based multi-criteria recommendation engine.
 //
+// COST IS NOT AN INDEPENDENT CRITERION, for the same reason it is not one in
+// the routing engine (see routing/routeCostModel.ts). The only cost this
+// module knows is annual downtime cost, which is
+// `annualDowntimeHours x downtimeCostPerHourUsd`, while availability is
+// `100 - annualDowntimeHours / 87.6`. Both are affine in the same variable, so
+// after min-max normalisation they are THE SAME NUMBER -- measured across all
+// 48 land candidates, max |nCost - nAvailability| was 1.6e-4, which is nothing
+// but the rounding of the dollar figure.
+//
+// Scoring both therefore double-counted downtime against sustainability and
+// speed, and made the user's choice of priority inert: "Cost" and
+// "Availability" as primary priority produced an identical shortlist in an
+// identical order.
+//
+// The two weights are now combined with MAX, not SUM. Summing is what the old
+// code effectively did -- with the two normalised values identical,
+// `w.cost * n + w.availability * n` is just `(w.cost + w.availability) * n` --
+// and that is the inflation itself: with the default 20/20/20/20 weights,
+// downtime took 50% of the score and sustainability and speed 25% each, when
+// three independent axes should be a third apiece. Taking the max treats
+// selecting the same axis under two names as selecting it once, at the
+// strength of the stronger selection. Downtime cost is still computed and
+// displayed -- it just no longer votes twice.
+//
+// There is deliberately no capex/opex model standing in as a second axis:
+// this module has no sourced build-cost data, and inventing coefficients to
+// manufacture an independent criterion would be worse than admitting there is
+// only one.
+//
 // This is closed-form weighted scoring (standard MCDA: normalize each metric,
 // apply user priority weights, filter to the Pareto-efficient frontier, rank
 // by weighted score) -- there is no LLM/external API call anywhere in this
@@ -44,7 +73,6 @@ interface ScoredInternal {
   config: FacilityConfig;
   profile: ReturnType<typeof calculateFacilityProfile>;
   deploymentComplexity: number;
-  nCost: number;
   nAvailability: number;
   nSustainability: number;
   nSpeed: number;
@@ -55,13 +83,15 @@ function paretoFrontier(items: ScoredInternal[]): ScoredInternal[] {
   return items.filter((a) => {
     const dominatedByOther = items.some((b) => {
       if (b === a) return false;
+      // Three axes, not four: downtime cost is the availability axis
+      // restated, and counting it twice here shrank the frontier on a
+      // dimension that carried no extra information.
       const atLeastAsGoodOnAll =
-        b.nCost >= a.nCost &&
         b.nAvailability >= a.nAvailability &&
         b.nSustainability >= a.nSustainability &&
         b.nSpeed >= a.nSpeed;
       const strictlyBetterOnOne =
-        b.nCost > a.nCost || b.nAvailability > a.nAvailability || b.nSustainability > a.nSustainability || b.nSpeed > a.nSpeed;
+        b.nAvailability > a.nAvailability || b.nSustainability > a.nSustainability || b.nSpeed > a.nSpeed;
       return atLeastAsGoodOnAll && strictlyBetterOnOne;
     });
     return !dominatedByOther;
@@ -85,10 +115,6 @@ export function recommendConfigurations(
   const profiles = configs.map((c) => calculateFacilityProfile(c, gridCarbonGco2PerKwh));
   const complexities = configs.map((c) => estimateDeploymentComplexity(c));
 
-  const nCost = normalize(
-    profiles.map((p) => p.annualDowntimeCostUsd),
-    false // lower cost is better
-  );
   const nAvailability = normalize(
     profiles.map((p) => p.availabilityPct),
     true // higher availability is better
@@ -99,10 +125,13 @@ export function recommendConfigurations(
   );
   const nSpeed = normalize(complexities, false); // lower complexity is faster
 
-  const totalWeight = weights.cost + weights.availability + weights.sustainability + weights.speed || 1;
+  const downtimeWeight = Math.max(weights.cost, weights.availability);
+  const totalWeight = downtimeWeight + weights.sustainability + weights.speed || 1;
   const w = {
-    cost: weights.cost / totalWeight,
-    availability: weights.availability / totalWeight,
+    // Downtime cost and availability are the same preference expressed two
+    // ways (see this file's header), so they collapse to one axis at the
+    // stronger of the two weights rather than accumulating both.
+    availability: downtimeWeight / totalWeight,
     sustainability: weights.sustainability / totalWeight,
     speed: weights.speed / totalWeight,
   };
@@ -111,15 +140,10 @@ export function recommendConfigurations(
     config,
     profile: profiles[i],
     deploymentComplexity: complexities[i],
-    nCost: nCost[i],
     nAvailability: nAvailability[i],
     nSustainability: nSustainability[i],
     nSpeed: nSpeed[i],
-    score:
-      w.cost * nCost[i] +
-      w.availability * nAvailability[i] +
-      w.sustainability * nSustainability[i] +
-      w.speed * nSpeed[i],
+    score: w.availability * nAvailability[i] + w.sustainability * nSustainability[i] + w.speed * nSpeed[i],
   }));
 
   const frontier = paretoFrontier(scored);
@@ -128,8 +152,10 @@ export function recommendConfigurations(
   const pool = frontier.length >= 3 ? frontier : scored;
   const ranked = [...pool].sort((a, b) => b.score - a.score).slice(0, maxResults);
 
-  const bestCost = ranked.reduce((best, c) => (c.profile.annualDowntimeCostUsd < best.profile.annualDowntimeCostUsd ? c : best), ranked[0]);
-  const bestAvailability = ranked.reduce((best, c) => (c.profile.availabilityPct > best.profile.availabilityPct ? c : best), ranked[0]);
+  // One tag, not two: the candidate with the lowest downtime cost is always
+  // the candidate with the best availability, so emitting both put two labels
+  // saying the same thing on one row.
+  const bestUptime = ranked.reduce((best, c) => (c.profile.availabilityPct > best.profile.availabilityPct ? c : best), ranked[0]);
   const bestSustainability = ranked.reduce(
     (best, c) => (c.profile.pue + c.profile.wue < best.profile.pue + best.profile.wue ? c : best),
     ranked[0]
@@ -138,8 +164,7 @@ export function recommendConfigurations(
 
   return ranked.map((c) => {
     const tags: string[] = [];
-    if (c === bestCost) tags.push("Lowest cost");
-    if (c === bestAvailability) tags.push("Best availability");
+    if (c === bestUptime) tags.push("Best availability, lowest downtime cost");
     if (c === bestSustainability) tags.push("Best sustainability trade-off");
     if (c === bestSpeed) tags.push("Fastest to deploy");
     if (tags.length === 0) tags.push("Balanced trade-off across your priorities");

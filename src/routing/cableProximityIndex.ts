@@ -54,6 +54,25 @@ function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): nu
   return 2 * R * Math.asin(Math.sqrt(a));
 }
 
+/** Longitude buckets that cover the globe: lng is in [-180, 180), so indices run [-90, 89] at BUCKET_DEG = 2. */
+const LNG_BUCKET_COUNT = 360 / BUCKET_DEG;
+
+/**
+ * Wraps a longitude bucket index back into the indexed range.
+ *
+ * The ring search below walks `baseLng + dc`, which runs off the end of the
+ * range for any query point near the antimeridian: at 179E the base bucket is
+ * 89 and a six-ring search asks for 90..95, none of which exist, while the
+ * cables it is looking for sit in buckets -90..-85. A real cable 166 km away
+ * across the dateline was therefore invisible, so trans-Pacific routes -- where
+ * Southern Cross and Hawaiki actually run -- were scored as though they were
+ * in empty water: full diversity reward in the edge cost, and a near-zero
+ * corridor overlap in the resilience assessment.
+ */
+function wrapLngBucket(lngBucket: number): number {
+  return ((((lngBucket + LNG_BUCKET_COUNT / 2) % LNG_BUCKET_COUNT) + LNG_BUCKET_COUNT) % LNG_BUCKET_COUNT) - LNG_BUCKET_COUNT / 2;
+}
+
 function bucketKey(latBucket: number, lngBucket: number): string {
   return `${latBucket},${lngBucket}`;
 }
@@ -163,18 +182,32 @@ export function nearestCableDistanceKm(
   const baseLng = Math.floor(lng / BUCKET_DEG);
   let best = Infinity;
 
-  // Conservative lower bound on how far away anything in ring r+1 must be.
-  // Longitude degrees shrink with latitude, so use the narrower of the two
-  // axes -- underestimating the ring distance only ever makes us search MORE
-  // rings, never fewer, so this cannot cause a miss.
-  const ringFloorKm = BUCKET_DEG * 111.32 * Math.max(0.1, Math.cos((lat * Math.PI) / 180));
+  /**
+   * Conservative lower bound on how far away anything in ring `r + 1` can be.
+   *
+   * Longitude degrees shrink with latitude, so the bound has to use the
+   * narrowest longitude spacing anywhere in the band the next ring reaches --
+   * which is at the HIGHEST absolute latitude it touches, not at the query
+   * point. Only underestimating is safe: it makes us search more rings, never
+   * fewer.
+   *
+   * This previously read `Math.max(0.1, Math.cos(lat))`, whose floor of 0.1
+   * OVERestimates the spacing above about 84 degrees -- at 89N it claims a
+   * 22.3 km ring floor where the truth is 3.9 km -- so the loop could exit
+   * with `best` at 30 km while a bucket 7.6 km away was still unsearched.
+   * That is exactly the miss the comment claimed was impossible.
+   */
+  const nextRingFloorKm = (ring: number) => {
+    const maxAbsLat = Math.min(90, Math.abs(lat) + (ring + 1) * BUCKET_DEG);
+    return ring * BUCKET_DEG * 111.32 * Math.cos((maxAbsLat * Math.PI) / 180);
+  };
 
   for (let ring = 0; ring <= maxRingSteps; ring++) {
     for (let dr = -ring; dr <= ring; dr++) {
       const onEdgeRow = Math.abs(dr) === ring;
       const colStep = ring === 0 ? 1 : onEdgeRow ? 1 : ring * 2;
       for (let dc = -ring; dc <= ring; dc += colStep) {
-        const segs = index.buckets.get(bucketKey(baseLat + dr, baseLng + dc));
+        const segs = index.buckets.get(bucketKey(baseLat + dr, wrapLngBucket(baseLng + dc)));
         if (!segs) continue;
         for (const seg of segs) {
           const d = pointToSegmentKm(lat, lng, seg);
@@ -186,7 +219,7 @@ export function nearestCableDistanceKm(
     // than the nearest possible point of the next ring out. Replaces a
     // "stop one ring after the first hit" heuristic, which both over-searched
     // in dense water and could under-search near a bucket boundary.
-    if (best <= ring * ringFloorKm) break;
+    if (best <= nextRingFloorKm(ring)) break;
   }
 
   const result = best === Infinity ? NO_CABLE_NEARBY_KM : best;

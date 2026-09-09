@@ -5,6 +5,7 @@
 import type { OceanGrid } from "./oceanGrid";
 import { bandForDepth, depthAt } from "./oceanGrid";
 import { bandRange, computeDifficultyIndex, depthDifficultyMultiplier } from "./marineCostSurface";
+import { interpolateLatLng } from "./geo";
 import type { DepthBandRange, DepthProfileSample, RouteAnalysis } from "./routingTypes";
 
 function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
@@ -42,7 +43,13 @@ function resamplePath(path: [number, number][], stepKm: number): { lat: number; 
     const t = Math.max(0, Math.min(1, (targetDist - cum) / segLen));
     const [lat1, lng1] = path[segIndex];
     const [lat2, lng2] = path[segIndex + 1];
-    samples.push({ lat: lat1 + (lat2 - lat1) * t, lng: lng1 + (lng2 - lng1) * t, distanceKm: targetDist });
+    // Short-way interpolation: the A* path wraps grid columns, so a Pacific
+    // route contains a +179.75 -> -179.75 step. Interpolating that naively
+    // swept the sample through longitude 0 and read its depth from the
+    // Atlantic -- and since shallowestBand/deepestBand below are a min and a
+    // max over these samples, one such sample corrupted both.
+    const [lat, lng] = interpolateLatLng(lat1, lng1, lat2, lng2, t);
+    samples.push({ lat, lng, distanceKm: targetDist });
   }
   return samples;
 }

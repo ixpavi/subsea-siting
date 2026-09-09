@@ -7,6 +7,7 @@
 // of its length gets a lower one. This says nothing about any cable's
 // actual failure rate.
 import { nearestCableDistanceKm, type CableProximityIndex } from "./cableProximityIndex";
+import { interpolateLatLng } from "./geo";
 import type { ResilienceAssessment } from "./routingTypes";
 
 function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
@@ -55,8 +56,9 @@ export function computeRouteResilience(cableIndex: CableProximityIndex, marinePa
     const t = Math.max(0, Math.min(1, (targetDist - cum) / segLen));
     const [lat1, lng1] = marinePath[segIndex];
     const [lat2, lng2] = marinePath[segIndex + 1];
-    const lat = lat1 + (lat2 - lat1) * t;
-    const lng = lng1 + (lng2 - lng1) * t;
+    // Short way round in longitude -- see geo.ts. A dateline-crossing route
+    // otherwise measured its corridor overlap from a point mid-Atlantic.
+    const [lat, lng] = interpolateLatLng(lat1, lng1, lat2, lng2, t);
     // 6 rings at the index's 2-degree buckets covers ~1,330km. diversityScore
     // saturates its distance term at 1,000km, so this bounds the search
     // without truncating any distance the score can actually distinguish.
