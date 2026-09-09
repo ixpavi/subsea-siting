@@ -23,6 +23,32 @@ export interface MarineEndpoint {
   /** Straight-line distance from the business site to the marine access point -- a separate, disclosed terrestrial segment, not part of the marine route length. */
   terrestrialAccessKm: number | null;
   note: string;
+
+  // --- Why this point, and where is it? -----------------------------------
+  //
+  // Without these the engine could only say what it picked, never why. For an
+  // inland site the fallback picks the nearest routable OCEAN CELL, which can
+  // sit on a different coast from the nearest real landing point -- Bangalore
+  // resolves to the Kerala coast (Arabian Sea, 277 km) while its nearest
+  // landing point is Chennai (Bay of Bengal, 287 km). Shown a marker on the
+  // west coast with no explanation, a user reasonably reads it as "the app
+  // chose Kochi", which is not what happened at all.
+
+  /** Radius within which a real landing point is accepted as the access point. Stated so the rule is visible, not buried in prose. */
+  searchRadiusKm: number;
+  /**
+   * Nearest real landing point to the BUSINESS location, whether or not it was
+   * used. Present even when it was rejected -- that rejection is the thing
+   * that needs explaining.
+   */
+  nearestLandingPoint: { name: string; id: string; distanceKm: number } | null;
+  /**
+   * For a modelled access point: the nearest real landing point to the ACCESS
+   * POINT itself, as a locality reference only. It says roughly where on the
+   * coast the point sits; it is emphatically NOT a claim that a cable lands
+   * there or that this landing point is being used.
+   */
+  localityReference: { name: string; distanceKm: number } | null;
 }
 
 /**

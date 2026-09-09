@@ -1142,6 +1142,32 @@
   margin-bottom: 6px;
 }
 
+/* Why this marine access point, as fields rather than prose. A two-column
+   definition list so the label and the value stay aligned down the card and
+   the rejected landing point is scannable next to the chosen one. */
+.ri-endpoint-basis {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 3px 10px;
+  margin: 0 0 8px;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.ri-endpoint-basis dt {
+  color: var(--dc-text-dim);
+  text-transform: uppercase;
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  padding-top: 1px;
+  white-space: nowrap;
+}
+
+.ri-endpoint-basis dd {
+  margin: 0;
+  color: var(--dc-text);
+}
+
 .ri-weight-row {
   display: flex;
   align-items: center;

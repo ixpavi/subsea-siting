@@ -310,6 +310,59 @@ function RiEndpointCard({ label, endpoint }: { label: string; endpoint: RouteEng
           {endpoint.businessLabel} <ProvenanceChip metric="terrestrialAccessKm" />
         </div>
       )}
+
+      {/* Which point, and why that one. A marker on the globe beside a city
+          the user recognises reads as a claim about that city unless the panel
+          says otherwise, so the chosen point, its coordinates and the
+          landing point that was passed over are all stated as fields rather
+          than left inside the prose note below. */}
+      <dl className="ri-endpoint-basis">
+        <dt>Chosen</dt>
+        <dd>
+          {isReal ? (
+            <>Real landing point &mdash; {endpoint.landingPointName}</>
+          ) : endpoint.kind === "modeled-access-point" ? (
+            <>Modelled ocean cell (no landing point used)</>
+          ) : (
+            <>None &mdash; routing cannot start here</>
+          )}
+        </dd>
+
+        {endpoint.lat != null && endpoint.lng != null && (
+          <>
+            <dt>Position</dt>
+            <dd className="dc-mono">
+              {endpoint.lat.toFixed(2)}, {endpoint.lng.toFixed(2)}
+            </dd>
+          </>
+        )}
+
+        {!isReal && endpoint.localityReference && (
+          <>
+            <dt>Whereabouts</dt>
+            <dd>
+              coast near {endpoint.localityReference.name} ({fmtKm(endpoint.localityReference.distanceKm)} away) &mdash;
+              a locality reference only, not a cable landing
+            </dd>
+          </>
+        )}
+
+        {endpoint.nearestLandingPoint && (
+          <>
+            <dt>Nearest landing point</dt>
+            <dd>
+              {endpoint.nearestLandingPoint.name} ({fmtKm(endpoint.nearestLandingPoint.distanceKm)})
+              {!isReal && (
+                <>
+                  {" "}
+                  &mdash; beyond the {fmtKm(endpoint.searchRadiusKm)} radius, so not used
+                </>
+              )}
+            </dd>
+          </>
+        )}
+      </dl>
+
       <p className="design-field-note">{endpoint.note}</p>
     </div>
   );

@@ -709,6 +709,23 @@ const Globe = forwardRef<GlobeApi, Props>(function Globe(
   // resolveMarineEndpoint). Rendered only while routes are actually shown.
   const routeEndpointMarkers: RouteEndpointMarker[] = useMemo(() => {
     if (!hypotheticalRoutesActive || !routeEngineResult) return [];
+  /**
+   * What to write under a marine-access marker.
+   *
+   * "Modeled access point" alone was the start of a real misreading: a marker
+   * dropped on the Kerala coast for an inland Bangalore site sits near Kochi
+   * on a zoomed-out globe, and with no place name on it people read it as
+   * "the app picked Kochi as the landing point". It had picked no landing
+   * point at all. Naming the nearest coastal reference -- with its distance,
+   * so it cannot be mistaken for the point itself -- says where the marker is
+   * without claiming a cable lands there.
+   */
+  function endpointSublabel(endpoint: RouteEngineResult["sourceEndpoint"]): string {
+    if (endpoint.kind === "real-landing-point") return endpoint.landingPointName!;
+    const ref = endpoint.localityReference;
+    return ref ? `Modelled cell · coast ${Math.round(ref.distanceKm)} km from ${ref.name}` : "Modelled access point";
+  }
+
     const markers: RouteEndpointMarker[] = [];
     const { sourceEndpoint, destinationEndpoint } = routeEngineResult;
     if (sourceEndpoint.lat != null && sourceEndpoint.lng != null) {
@@ -719,7 +736,7 @@ const Globe = forwardRef<GlobeApi, Props>(function Globe(
         lat: sourceEndpoint.lat,
         lng: sourceEndpoint.lng,
         label: "SOURCE MARINE ACCESS",
-        sublabel: sourceEndpoint.kind === "real-landing-point" ? sourceEndpoint.landingPointName! : "Modeled access point",
+        sublabel: endpointSublabel(sourceEndpoint),
         real: sourceEndpoint.kind === "real-landing-point",
       });
     }
@@ -731,8 +748,7 @@ const Globe = forwardRef<GlobeApi, Props>(function Globe(
         lat: destinationEndpoint.lat,
         lng: destinationEndpoint.lng,
         label: "DESTINATION MARINE ACCESS",
-        sublabel:
-          destinationEndpoint.kind === "real-landing-point" ? destinationEndpoint.landingPointName! : "Modeled access point",
+        sublabel: endpointSublabel(destinationEndpoint),
         real: destinationEndpoint.kind === "real-landing-point",
       });
     }

@@ -56,48 +56,96 @@ export function resolveMarineEndpoint(
     }
   }
 
+  // Recorded whether or not it is used, because when it is NOT used the user
+  // needs to see which point was passed over and by how far it missed.
+  const nearestLandingPoint = nearestLP
+    ? { name: nearestLP.name, id: nearestLP.id, distanceKm: nearestLPDist }
+    : null;
+
+  const common = {
+    businessLat,
+    businessLng,
+    businessLabel,
+    searchRadiusKm: REAL_LANDING_POINT_SEARCH_RADIUS_KM,
+    nearestLandingPoint,
+  };
+
   if (nearestLP && nearestLPDist <= REAL_LANDING_POINT_SEARCH_RADIUS_KM) {
     return {
+      ...common,
       kind: "real-landing-point",
-      businessLat,
-      businessLng,
-      businessLabel,
       lat: nearestLP.lat,
       lng: nearestLP.lng,
       landingPointName: nearestLP.name,
       landingPointId: nearestLP.id,
       terrestrialAccessKm: nearestLPDist,
-      note: `Nearest real cable landing point (${nearestLP.name}, ${nearestLPDist.toFixed(0)} km away) used as the marine access point. This does not mean this landing point would actually host a new cable -- it is the closest real, verified coastal cable infrastructure to the proposed site, used here as a plausible marine start point.`,
+      localityReference: null,
+      note:
+        `Nearest real cable landing point (${nearestLP.name}) is ${nearestLPDist.toFixed(0)} km from ${businessLabel}, ` +
+        `inside the ${REAL_LANDING_POINT_SEARCH_RADIUS_KM} km radius, so it is used as the marine access point. ` +
+        `This does not mean this landing point would actually host a new cable -- it is the closest real, verified ` +
+        `coastal cable infrastructure to the proposed site, used here as a plausible marine start point.`,
     };
   }
 
   const nearestOcean = findNearestOceanCell(grid, businessLat, businessLng);
   if (nearestOcean) {
+    // Where on the coast is this? A bare lat/lng tells the user nothing, and a
+    // marker on the globe next to a city they recognise reads as a claim about
+    // that city. Name the closest real landing point to the CELL purely so the
+    // point can be located, and say plainly that it is not being used.
+    let refLP: LandingPoint | null = null;
+    let refDist = Infinity;
+    for (const lp of landingPoints) {
+      const d = haversineKm(nearestOcean.lat, nearestOcean.lng, lp.lat, lp.lng);
+      if (d < refDist) {
+        refDist = d;
+        refLP = lp;
+      }
+    }
+    const localityReference = refLP ? { name: refLP.name, distanceKm: refDist } : null;
+
+    const rejected = nearestLandingPoint
+      ? `The nearest real landing point, ${nearestLandingPoint.name}, is ${nearestLandingPoint.distanceKm.toFixed(0)} km away -- ` +
+        `beyond the ${REAL_LANDING_POINT_SEARCH_RADIUS_KM} km radius, so it was not used. `
+      : "";
+    const where = localityReference
+      ? `The cell is at ${nearestOcean.lat.toFixed(2)}, ${nearestOcean.lng.toFixed(2)}, on the coast about ` +
+        `${refDist.toFixed(0)} km from ${localityReference.name} -- named only to say where it is, not because a cable lands there. `
+      : `The cell is at ${nearestOcean.lat.toFixed(2)}, ${nearestOcean.lng.toFixed(2)}. `;
+
     return {
+      ...common,
       kind: "modeled-access-point",
-      businessLat,
-      businessLng,
-      businessLabel,
       lat: nearestOcean.lat,
       lng: nearestOcean.lng,
       landingPointName: null,
       landingPointId: null,
       terrestrialAccessKm: nearestOcean.distanceKm,
-      note: `No real cable landing point found within ${REAL_LANDING_POINT_SEARCH_RADIUS_KM} km. A MODELED coastal access point was derived from the nearest routable ocean cell in this engine's ${grid.resolutionDeg}° grid (${nearestOcean.distanceKm.toFixed(0)} km away) -- this is a proposed access point, not a surveyed or verified cable landing site.`,
+      localityReference,
+      note:
+        rejected +
+        `A MODELED coastal access point was used instead: the nearest routable ocean cell in this engine's ` +
+        `${grid.resolutionDeg}deg grid, ${nearestOcean.distanceKm.toFixed(0)} km from ${businessLabel}. ` +
+        where +
+        `Note that the nearest ocean cell and the nearest landing point can sit on opposite coasts, which is why ` +
+        `these two distances do not have to agree. This is a proposed access point, not a surveyed or verified ` +
+        `cable landing site.`,
     };
   }
 
   return {
+    ...common,
     kind: "unavailable",
-    businessLat,
-    businessLng,
-    businessLabel,
     lat: null,
     lng: null,
     landingPointName: null,
     landingPointId: null,
     terrestrialAccessKm: null,
-    note: "No real landing point and no reachable ocean cell were found near this location -- a marine access point could not be established, so hypothetical routing cannot proceed from this endpoint.",
+    localityReference: null,
+    note:
+      "No real landing point and no reachable ocean cell were found near this location -- a marine access point " +
+      "could not be established, so hypothetical routing cannot proceed from this endpoint.",
   };
 }
 
