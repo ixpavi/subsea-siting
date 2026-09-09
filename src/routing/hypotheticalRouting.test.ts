@@ -221,15 +221,51 @@ describe("runHypotheticalRouting (real data)", () => {
     expect(chennaiToSingapore.sourceEndpoint.terrestrialAccessKm).toBeLessThan(120);
   });
 
-  it("falls back to a MODELED access point for an inland site, and says so", () => {
+  it("routes both access points for an inland site and keeps the shorter total", () => {
+    // Hyderabad has no landing point inside the 120 km radius, so its default
+    // is a modelled cell -- but a real landing point is close enough to
+    // contend, and the winner is whichever gives the shorter TOTAL connection.
+    // This used to assert the modelled cell unconditionally, which is exactly
+    // the behaviour that lost 559 km of marine route on Bangalore -> Moscow by
+    // saving 11 km of overland.
     const inland = runHypotheticalRouting({
       sourceLat: 17.385, sourceLng: 78.4867, sourceLabel: "Hyderabad",
       destLat: 1.3571, destLng: 103.8195, destLabel: "Singapore",
       cables, landingPoints, grid,
     });
-    expect(inland.sourceEndpoint.kind).toBe("modeled-access-point");
-    expect(inland.sourceEndpoint.landingPointName).toBeNull();
-    expect(inland.sourceEndpoint.note).toMatch(/not a surveyed or verified/i);
+    const src = inland.sourceEndpoint;
+    expect(src.selection.rule).toBe("shorter-total-connection");
+
+    // Whatever it chose, it must have measured both and kept the better one.
+    expect(src.selection.rejected).not.toBeNull();
+    expect(src.selection.totalConnectionKm).not.toBeNull();
+    expect(src.selection.totalConnectionKm!).toBeLessThanOrEqual(src.selection.rejected!.totalConnectionKm);
+
+    // And it must still say which options it weighed.
+    expect(src.note).toMatch(/total connection distance/i);
+    expect(src.note).toMatch(/modelled coastal cell/i);
+  }, 120_000);
+
+  it("keeps a modelled cell when the nearer landing point routes worse", () => {
+    // Moscow's nearest landing point (Kingisepp, Baltic) is 264 km CLOSER
+    // overland than the White Sea cell, and still loses: its total connection
+    // to India is about 2,000 km worse. A rule that simply preferred real
+    // landing points, or one gated on a flat radius, would get this wrong.
+    const r = runHypotheticalRouting({
+      sourceLat: 12.9716, sourceLng: 77.5946, sourceLabel: "Bangalore",
+      destLat: 55.7558, destLng: 37.6173, destLabel: "Moscow",
+      cables, landingPoints, grid,
+    });
+    const dst = r.destinationEndpoint;
+    expect(dst.kind).toBe("modeled-access-point");
+    expect(dst.selection.rejected).not.toBeNull();
+    // The rejected option really was closer overland -- that is the point.
+    expect(dst.selection.rejected!.terrestrialAccessKm).toBeLessThan(dst.terrestrialAccessKm!);
+    expect(dst.selection.totalConnectionKm!).toBeLessThan(dst.selection.rejected!.totalConnectionKm);
+
+    // And the source went the other way: Chennai beat its modelled cell.
+    expect(r.sourceEndpoint.kind).toBe("real-landing-point");
+    expect(r.sourceEndpoint.landingPointName).toMatch(/Chennai/i);
   }, 120_000);
 });
 

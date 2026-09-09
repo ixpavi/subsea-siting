@@ -69,6 +69,13 @@ export function resolveMarineEndpoint(
     searchRadiusKm: REAL_LANDING_POINT_SEARCH_RADIUS_KM,
     nearestLandingPoint,
   };
+  // Default: this function chooses geometrically and on its own. When the
+  // access-point contest below runs, it overwrites `selection` with what it
+  // actually measured.
+  const soleSelection = {
+    totalConnectionKm: null,
+    rejected: null,
+  };
 
   if (nearestLP && nearestLPDist <= REAL_LANDING_POINT_SEARCH_RADIUS_KM) {
     return {
@@ -80,6 +87,7 @@ export function resolveMarineEndpoint(
       landingPointId: nearestLP.id,
       terrestrialAccessKm: nearestLPDist,
       localityReference: null,
+      selection: { rule: "real-landing-point-within-radius" as const, ...soleSelection },
       note:
         `Nearest real cable landing point (${nearestLP.name}) is ${nearestLPDist.toFixed(0)} km from ${businessLabel}, ` +
         `inside the ${REAL_LANDING_POINT_SEARCH_RADIUS_KM} km radius, so it is used as the marine access point. ` +
@@ -123,6 +131,7 @@ export function resolveMarineEndpoint(
       landingPointId: null,
       terrestrialAccessKm: nearestOcean.distanceKm,
       localityReference,
+      selection: { rule: "nearest-ocean-cell" as const, ...soleSelection },
       note:
         rejected +
         `A MODELED coastal access point was used instead: the nearest routable ocean cell in this engine's ` +
@@ -143,10 +152,177 @@ export function resolveMarineEndpoint(
     landingPointId: null,
     terrestrialAccessKm: null,
     localityReference: null,
+    selection: { rule: "nearest-ocean-cell" as const, ...soleSelection },
     note:
       "No real landing point and no reachable ocean cell were found near this location -- a marine access point " +
       "could not be established, so hypothetical routing cannot proceed from this endpoint.",
   };
+}
+
+// --- Access-point selection ------------------------------------------------
+
+/**
+ * How much farther than the nearest ocean cell a real landing point may sit
+ * and still be routed as a contender.
+ *
+ * This number decides only whether to SPEND A SEARCH, never which answer is
+ * right -- the winner is always decided by measured total connection
+ * distance. That is the whole reason it can be picked for cost rather than
+ * argued for on the merits: widening it makes the engine slower, never
+ * less correct.
+ */
+const ACCESS_CONTEST_MULTIPLE = 2;
+
+/** Great-circle length of a polyline, in km. */
+function pathLengthKm(path: [number, number][]): number {
+  let total = 0;
+  for (let i = 0; i < path.length - 1; i++) {
+    total += haversineKm(path[i][0], path[i][1], path[i + 1][0], path[i + 1][1]);
+  }
+  return total;
+}
+
+/**
+ * The real landing point worth routing against the nearest-ocean-cell default,
+ * or null when there is no contest.
+ *
+ * A contest exists only for an INLAND site -- one whose default is a modelled
+ * cell because no landing point fell inside the 120 km radius. A site that
+ * already resolved to a real landing point has nothing to beat.
+ */
+function contendingLandingPoint(
+  fallback: MarineEndpoint,
+  landingPoints: LandingPoint[]
+): LandingPoint | null {
+  if (fallback.kind !== "modeled-access-point") return null;
+  const nearest = fallback.nearestLandingPoint;
+  if (!nearest || fallback.terrestrialAccessKm == null) return null;
+  if (nearest.distanceKm > fallback.terrestrialAccessKm * ACCESS_CONTEST_MULTIPLE) return null;
+  return landingPoints.find((lp) => lp.id === nearest.id) ?? null;
+}
+
+/** Turns a contending landing point into a fully formed endpoint. */
+function landingPointEndpoint(base: MarineEndpoint, lp: LandingPoint, distanceKm: number): MarineEndpoint {
+  return {
+    ...base,
+    kind: "real-landing-point",
+    lat: lp.lat,
+    lng: lp.lng,
+    landingPointName: lp.name,
+    landingPointId: lp.id,
+    terrestrialAccessKm: distanceKm,
+    localityReference: null,
+    note: "",
+  };
+}
+
+/** Marine length of the representative (shortest-profile) route between two access points, or null if none exists. */
+function probeMarineKm(
+  grid: OceanGrid,
+  cables: CableFeature[],
+  from: MarineEndpoint,
+  to: MarineEndpoint
+): number | null {
+  if (from.lat == null || from.lng == null || to.lat == null || to.lng == null) return null;
+  const [probe] = generateRouteCandidates(
+    grid,
+    cables,
+    { lat: from.lat, lng: from.lng },
+    { lat: to.lat, lng: to.lng },
+    ["shortest"]
+  );
+  return probe?.found ? pathLengthKm(probe.path) : null;
+}
+
+function totalConnectionKm(marineKm: number, a: MarineEndpoint, b: MarineEndpoint): number {
+  return marineKm + (a.terrestrialAccessKm ?? 0) + (b.terrestrialAccessKm ?? 0);
+}
+
+/** Rewrites an endpoint's note and selection record to state what the contest measured. */
+function withContestOutcome(
+  winner: MarineEndpoint,
+  winnerTotal: number,
+  loser: MarineEndpoint,
+  loserTotal: number
+): MarineEndpoint {
+  const winnerLabel =
+    winner.kind === "real-landing-point" ? winner.landingPointName! : "the modelled coastal cell";
+  const loserLabel = loser.kind === "real-landing-point" ? loser.landingPointName! : "the modelled coastal cell";
+  const saved = loserTotal - winnerTotal;
+
+  // "the modelled coastal cell" is written lowercase because it reads mid
+  // sentence everywhere else; capitalise it only where it opens one.
+  const winnerSentenceStart = winnerLabel.charAt(0).toUpperCase() + winnerLabel.slice(1);
+
+  return {
+    ...winner,
+    selection: {
+      rule: "shorter-total-connection",
+      totalConnectionKm: winnerTotal,
+      rejected: {
+        label: loserLabel,
+        kind: loser.kind,
+        terrestrialAccessKm: loser.terrestrialAccessKm ?? 0,
+        totalConnectionKm: loserTotal,
+      },
+    },
+    note:
+      `${winnerSentenceStart} is used as the marine access point. ${winner.businessLabel} is inland, so both plausible ` +
+      `access points were routed and compared on TOTAL connection distance (marine + overland), which is the same ` +
+      `length the candidate ranking uses: ${winnerLabel} totals ${Math.round(winnerTotal).toLocaleString()} km ` +
+      `against ${Math.round(loserTotal).toLocaleString()} km via ${loserLabel}, a saving of ` +
+      `${Math.round(saved).toLocaleString()} km. Nearest-coast alone would have chosen on overland distance, which ` +
+      `the cost model does not charge for. ` +
+      (winner.kind === "real-landing-point"
+        ? `This does not mean this landing point would host a new cable -- it is real, verified coastal cable ` +
+          `infrastructure, used here as a plausible marine start point.`
+        : `This is a proposed access point, not a surveyed or verified cable landing site.`),
+  };
+}
+
+/**
+ * Resolves BOTH access points, routing the contenders where one exists.
+ *
+ * Sequential rather than combinatorial: the source is decided against the
+ * destination's default, then the destination against the winning source. The
+ * source-winner-to-destination-default route is already in hand from the first
+ * pass, so a both-inland pair costs three probe searches, not four.
+ */
+export function selectAccessPoints(
+  grid: OceanGrid,
+  cables: CableFeature[],
+  landingPoints: LandingPoint[],
+  source: MarineEndpoint,
+  destination: MarineEndpoint
+): { source: MarineEndpoint; destination: MarineEndpoint } {
+  let src = source;
+  let dst = destination;
+
+  const srcContender = contendingLandingPoint(src, landingPoints);
+  if (srcContender && src.nearestLandingPoint) {
+    const alt = landingPointEndpoint(src, srcContender, src.nearestLandingPoint.distanceKm);
+    const baseKm = probeMarineKm(grid, cables, src, dst);
+    const altKm = probeMarineKm(grid, cables, alt, dst);
+    if (baseKm != null && altKm != null) {
+      const baseTotal = totalConnectionKm(baseKm, src, dst);
+      const altTotal = totalConnectionKm(altKm, alt, dst);
+      src = altTotal < baseTotal ? withContestOutcome(alt, altTotal, src, baseTotal) : withContestOutcome(src, baseTotal, alt, altTotal);
+    }
+  }
+
+  const dstContender = contendingLandingPoint(dst, landingPoints);
+  if (dstContender && dst.nearestLandingPoint) {
+    const alt = landingPointEndpoint(dst, dstContender, dst.nearestLandingPoint.distanceKm);
+    const baseKm = probeMarineKm(grid, cables, src, dst);
+    const altKm = probeMarineKm(grid, cables, src, alt);
+    if (baseKm != null && altKm != null) {
+      const baseTotal = totalConnectionKm(baseKm, src, dst);
+      const altTotal = totalConnectionKm(altKm, src, alt);
+      dst = altTotal < baseTotal ? withContestOutcome(alt, altTotal, dst, baseTotal) : withContestOutcome(dst, baseTotal, alt, altTotal);
+    }
+  }
+
+  return { source: src, destination: dst };
 }
 
 /**
@@ -438,8 +614,19 @@ export function runHypotheticalRouting(inputs: HypotheticalRoutingInputs): Route
   // One grid cell at the equator -- the resolution limit of the data driving the search.
   const separationThresholdKm = inputs.grid.resolutionDeg * 111.32;
 
-  const sourceEndpoint = resolveMarineEndpoint(inputs.sourceLat, inputs.sourceLng, inputs.sourceLabel, inputs.landingPoints, inputs.grid);
-  const destinationEndpoint = resolveMarineEndpoint(inputs.destLat, inputs.destLng, inputs.destLabel, inputs.landingPoints, inputs.grid);
+  const sourceDefault = resolveMarineEndpoint(inputs.sourceLat, inputs.sourceLng, inputs.sourceLabel, inputs.landingPoints, inputs.grid);
+  const destinationDefault = resolveMarineEndpoint(inputs.destLat, inputs.destLng, inputs.destLabel, inputs.landingPoints, inputs.grid);
+  // For an inland site with a real landing point close enough to contend, both
+  // options are routed and the shorter TOTAL connection wins. See
+  // selectAccessPoints -- nearest-coast alone optimises overland distance,
+  // which the cost model does not charge for.
+  const { source: sourceEndpoint, destination: destinationEndpoint } = selectAccessPoints(
+    inputs.grid,
+    inputs.cables,
+    inputs.landingPoints,
+    sourceDefault,
+    destinationDefault
+  );
 
   const emptyResult = (unavailableReason: string): RouteEngineResult => ({
     sourceEndpoint,

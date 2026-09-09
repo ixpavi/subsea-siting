@@ -347,7 +347,7 @@ function RiEndpointCard({ label, endpoint }: { label: string; endpoint: RouteEng
           </>
         )}
 
-        {endpoint.nearestLandingPoint && (
+        {endpoint.nearestLandingPoint && endpoint.selection.rule !== "shorter-total-connection" && (
           <>
             <dt>Nearest landing point</dt>
             <dd>
@@ -358,6 +358,20 @@ function RiEndpointCard({ label, endpoint }: { label: string; endpoint: RouteEng
                   &mdash; beyond the {fmtKm(endpoint.searchRadiusKm)} radius, so not used
                 </>
               )}
+            </dd>
+          </>
+        )}
+
+        {/* When two access points were actually routed against each other,
+            show the measurement rather than the radius rule -- the radius did
+            not decide this one, the total connection distance did. */}
+        {endpoint.selection.rejected && endpoint.selection.totalConnectionKm != null && (
+          <>
+            <dt>Decided by</dt>
+            <dd>
+              shorter total connection &mdash; <span className="dc-mono">{fmtKm(endpoint.selection.totalConnectionKm)}</span>{" "}
+              here against <span className="dc-mono">{fmtKm(endpoint.selection.rejected.totalConnectionKm)}</span> via{" "}
+              {endpoint.selection.rejected.label} ({fmtKm(endpoint.selection.rejected.terrestrialAccessKm)} overland)
             </dd>
           </>
         )}

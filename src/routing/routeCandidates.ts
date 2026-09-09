@@ -322,15 +322,26 @@ export function getCableProximityIndex(cables: CableFeature[]): CableProximityIn
   return index;
 }
 
-/** Runs all three routing profiles between two marine endpoints and returns their (simplified, deterministic) geometries. */
+/**
+ * Runs the routing profiles between two marine endpoints and returns their
+ * (simplified, deterministic) geometries.
+ *
+ * @param onlyProfiles restricts the run to the named profiles. Used by the
+ *   access-point contest in hypotheticalRouting.ts, which needs one
+ *   representative route per candidate endpoint pair to compare total
+ *   connection distance -- running all three there would triple the cost of a
+ *   decision that only needs a like-for-like length.
+ */
 export function generateRouteCandidates(
   grid: OceanGrid,
   cables: CableFeature[],
   marineStart: { lat: number; lng: number },
-  marineEnd: { lat: number; lng: number }
+  marineEnd: { lat: number; lng: number },
+  onlyProfiles?: RoutingProfileId[]
 ): CandidateGeometry[] {
   const cableIndex = getCableProximityIndex(cables);
-  return ROUTING_PROFILES.map((profile) => {
+  const profiles = onlyProfiles ? ROUTING_PROFILES.filter((p) => onlyProfiles.includes(p.id)) : ROUTING_PROFILES;
+  return profiles.map((profile) => {
     const result = runAStar(grid, cableIndex, profile, marineStart, marineEnd);
     if (!result.found) return { profile, path: [], found: false };
     const gridPoints: [number, number][] = result.cells.map((c) => [latForRow(grid, c.row), lngForCol(grid, c.col)]);
