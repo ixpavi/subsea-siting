@@ -1,7 +1,7 @@
 // Computes depth/distance statistics for a candidate route by resampling its
-// geometry at fixed intervals and looking up each sample's depth band from
-// the derived ocean grid -- see oceanGrid.ts and provenance.ts for why every
-// depth value here is a contour-band bound, never a sounding.
+// geometry at fixed intervals and looking up each sample's modelled depth in
+// the ocean grid -- see oceanGrid.ts and provenance.ts for why every depth
+// value here is the modelled depth of a 0.5-degree cell, never a sounding.
 import type { OceanGrid } from "./oceanGrid";
 import { bandForDepth, depthAt } from "./oceanGrid";
 import { bandRange, computeDifficultyIndex, depthDifficultyMultiplier } from "./marineCostSurface";
@@ -136,9 +136,9 @@ export function computeRouteAnalysis(
   }
 
   const bandIndices = depthProfile.map((d) => d.depthBandIndex);
-  const lowerBounds = depthProfile.map((d) => d.depthM);
-  const meanDepthM = lowerBounds.reduce((a, b) => a + b, 0) / lowerBounds.length;
-  const variance = lowerBounds.reduce((a, b) => a + (b - meanDepthM) ** 2, 0) / lowerBounds.length;
+  const depths = depthProfile.map((d) => d.depthM);
+  const meanDepthM = depths.reduce((a, b) => a + b, 0) / depths.length;
+  const variance = depths.reduce((a, b) => a + (b - meanDepthM) ** 2, 0) / depths.length;
   const depthStdDevM = Math.sqrt(variance);
 
   const shallowestBand = bandRange(grid, Math.min(...bandIndices));

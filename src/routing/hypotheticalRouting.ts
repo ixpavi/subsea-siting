@@ -10,7 +10,7 @@ import type { CableFeature, LandingPoint } from "../types";
 import type { OceanGrid } from "./oceanGrid";
 import { findNearestOceanCell } from "./oceanGrid";
 import { interpolateLatLng } from "./geo";
-import { generateRouteCandidates, getCableProximityIndex } from "./routeCandidates";
+import { generateRouteCandidates, getCableProximityIndex, ROUTING_PROFILES } from "./routeCandidates";
 import { computeRouteAnalysis } from "./routeAnalysis";
 import { computeRouteResilience } from "./routeResilience";
 import { assessEnvironmental } from "./environmentalConstraints";
@@ -96,7 +96,10 @@ export function resolveMarineEndpoint(
     };
   }
 
-  const nearestOcean = findNearestOceanCell(grid, businessLat, businessLng);
+  // Routable only: the nearest water to an inland site can be a sea no route
+  // can leave -- the Caspian, for Almaty -- and an access point there would
+  // make every route from this site fail.
+  const nearestOcean = findNearestOceanCell(grid, businessLat, businessLng, { routableOnly: true });
   if (nearestOcean) {
     // Where on the coast is this? A bare lat/lng tells the user nothing, and a
     // marker on the globe next to a city they recognise reads as a claim about
@@ -297,6 +300,9 @@ export function selectAccessPoints(
 ): { source: MarineEndpoint; destination: MarineEndpoint } {
   let src = source;
   let dst = destination;
+  // Marine length from the winning source to the destination's default, when
+  // the first pass has already routed it.
+  let winnerToDefaultKm: number | null = null;
 
   const srcContender = contendingLandingPoint(src, landingPoints);
   if (srcContender && src.nearestLandingPoint) {
@@ -306,14 +312,16 @@ export function selectAccessPoints(
     if (baseKm != null && altKm != null) {
       const baseTotal = totalConnectionKm(baseKm, src, dst);
       const altTotal = totalConnectionKm(altKm, alt, dst);
-      src = altTotal < baseTotal ? withContestOutcome(alt, altTotal, src, baseTotal) : withContestOutcome(src, baseTotal, alt, altTotal);
+      const altWins = altTotal < baseTotal;
+      winnerToDefaultKm = altWins ? altKm : baseKm;
+      src = altWins ? withContestOutcome(alt, altTotal, src, baseTotal) : withContestOutcome(src, baseTotal, alt, altTotal);
     }
   }
 
   const dstContender = contendingLandingPoint(dst, landingPoints);
   if (dstContender && dst.nearestLandingPoint) {
     const alt = landingPointEndpoint(dst, dstContender, dst.nearestLandingPoint.distanceKm);
-    const baseKm = probeMarineKm(grid, cables, src, dst);
+    const baseKm = winnerToDefaultKm ?? probeMarineKm(grid, cables, src, dst);
     const altKm = probeMarineKm(grid, cables, src, alt);
     if (baseKm != null && altKm != null) {
       const baseTotal = totalConnectionKm(baseKm, src, dst);
@@ -523,11 +531,17 @@ export function findDegeneratePairs(
   return pairs;
 }
 
-function rankCandidates(
+/** Exported for testing, and used by rerankRouteResult. */
+export function rankCandidates(
   candidates: RouteCandidate[],
   weights: RoutingWeights
 ): { ranked: RankedRouteCandidate[]; criteria: CriterionOutcome[] } {
-  const environmentalAvailable = candidates.some((c) => c.environmental.available);
+  // EVERY candidate, not any. Availability is decided per route (see
+  // protectedAreas.ts), so one route can be assessed while another runs off
+  // the dataset's European extent. Scoring the criterion then gave the
+  // unassessed route a penalty of 0 -- the best possible environmental score
+  // -- purely because nothing was known about it. Unavailable is not zero.
+  const environmentalAvailable = candidates.every((c) => c.environmental.available);
 
   const criteria: CriterionState[] = [
     buildCriterion("length", candidates.map((c) => c.analysis.totalDistanceKm), false, weights.length, true),
@@ -701,4 +715,27 @@ export function runHypotheticalRouting(inputs: HypotheticalRoutingInputs): Route
     unavailableReason: null,
     gridProvenance,
   };
+}
+
+/**
+ * The same result, ranked under different weights.
+ *
+ * Weights decide the ranking and nothing else: the access points, the route
+ * geometry and every per-route measurement are the same whatever the sliders
+ * say. Re-running the whole engine for a weight change therefore repeated
+ * seconds of A* search to redo arithmetic that takes microseconds -- and the
+ * routes vanished from the globe for the whole of it.
+ *
+ * Candidates are put back in profile order first, because that is the order
+ * the engine ranks them in and the order ties are broken by; ranking them in
+ * their previous rank order would let an earlier weighting decide a tie.
+ */
+export function rerankRouteResult(result: RouteEngineResult, weights: RoutingWeights): RouteEngineResult {
+  if (result.candidates.length === 0) return { ...result, weights };
+  const profileOrder = ROUTING_PROFILES.map((p) => p.id);
+  const candidates = result.candidates
+    .map((rc) => rc.candidate)
+    .sort((a, b) => profileOrder.indexOf(a.id) - profileOrder.indexOf(b.id));
+  const { ranked, criteria } = rankCandidates(candidates, weights);
+  return { ...result, candidates: ranked, criteria, weights };
 }

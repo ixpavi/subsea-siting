@@ -59,9 +59,29 @@ describe("ecological sensitivity", () => {
   });
 });
 
+describe("overall risk", () => {
+  it("is the worse of the two components", () => {
+    // Deep (> 1,000 m) is a high bathymetric hazard; clean measured water is a
+    // low ecological one.
+    const r = estimateRouteRisk({ depthM: 1500, latitude: 50, routeDistanceKm: 30, protectedAreaExposure: measured(0, 0) });
+    expect(r.ecologicalSensitivity).toBe("low");
+    expect(r.bathymetricHazard).toBe("high");
+    expect(r.overall).toBe("high");
+  });
+
+  it("does not claim a long route raised the rating when it did not", () => {
+    // A 400 km route at shelf depth in clean water: every component is low,
+    // so the overall is low, and the length note must not say otherwise.
+    const r = estimateRouteRisk({ depthM: 100, latitude: 50, routeDistanceKm: 400, protectedAreaExposure: measured(0, 0) });
+    expect(r.overall).toBe("low");
+    expect(r.rationale.join(" ")).toMatch(/does not quantify/);
+  });
+});
+
 describe("bathymetric hazard", () => {
   it("stays a heuristic even when protected-area data is available", () => {
-    // No shipped dataset scores lay difficulty, and the depth is a band index.
+    // No shipped dataset scores lay difficulty; this is depth thresholds applied
+    // to the site's published depth.
     const a = estimateRouteRisk(SITE);
     const b = estimateRouteRisk({ ...SITE, protectedAreaExposure: measured(0, 0) });
     expect(a.bathymetricHazard).toBe(b.bathymetricHazard);

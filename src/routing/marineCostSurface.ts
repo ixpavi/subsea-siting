@@ -75,7 +75,7 @@ export function computeDifficultyIndex(
     index,
     basis:
       `mean per-band difficulty multiplier ${meanDepthBandMultiplier.toFixed(3)} ` +
-      `+ depth-variability term ${variability.toFixed(2)} (band-lower-bound std dev ${Math.round(depthStdDevM).toLocaleString()} m)`,
+      `+ depth-variability term ${variability.toFixed(2)} (std dev of modelled depth ${Math.round(depthStdDevM).toLocaleString()} m)`,
   };
 }
 

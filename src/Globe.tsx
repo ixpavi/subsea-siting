@@ -183,7 +183,7 @@ const arcDashLengthAccessor = (d: unknown) => ((d as ArcDatum).kind === "plannin
 const arcDashGapAccessor = (d: unknown) => ((d as ArcDatum).kind === "planning" ? 0.03 : 0.15);
 const arcDashAnimateTimeAccessor = (d: unknown) => ((d as ArcDatum).kind === "planning" ? 4000 : 2500);
 const arcLabelAccessor = (d: unknown) =>
-  `<div class="globe-tooltip" style="border-color:${PLANNING_LINE_COLOR}">${(d as ArcDatum).label}</div>`;
+  `<div class="globe-tooltip" style="border-color:${PLANNING_LINE_COLOR}">${escapeHtml((d as ArcDatum).label)}</div>`;
 
 function hexToRgba(hex: string, alpha: number): string {
   const h = hex.replace("#", "");
@@ -194,6 +194,12 @@ function hexToRgba(hex: string, alpha: number): string {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
+/**
+ * Every tooltip and marker here is an HTML string, and most of what goes into
+ * them is text from outside this code: dataset names ("AT&T", "Hong Kong &
+ * Macau") and place names returned by the geocoder. Escaped at every point it
+ * is interpolated, so a name is always shown as text and never parsed as markup.
+ */
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, "&amp;")
@@ -201,6 +207,23 @@ function escapeHtml(s: string): string {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
+}
+
+/**
+ * What to write under a marine-access marker.
+ *
+ * "Modeled access point" alone was the start of a real misreading: a marker
+ * dropped on the Kerala coast for an inland Bangalore site sits near Kochi
+ * on a zoomed-out globe, and with no place name on it people read it as
+ * "the app picked Kochi as the landing point". It had picked no landing
+ * point at all. Naming the nearest coastal reference -- with its distance,
+ * so it cannot be mistaken for the point itself -- says where the marker is
+ * without claiming a cable lands there.
+ */
+function endpointSublabel(endpoint: RouteEngineResult["sourceEndpoint"]): string {
+  if (endpoint.kind === "real-landing-point") return endpoint.landingPointName!;
+  const ref = endpoint.localityReference;
+  return ref ? `Modelled cell · coast ${Math.round(ref.distanceKm)} km from ${ref.name}` : "Modelled access point";
 }
 
 const Globe = forwardRef<GlobeApi, Props>(function Globe(
@@ -702,23 +725,6 @@ const Globe = forwardRef<GlobeApi, Props>(function Globe(
   // resolveMarineEndpoint). Rendered only while routes are actually shown.
   const routeEndpointMarkers: RouteEndpointMarker[] = useMemo(() => {
     if (!hypotheticalRoutesActive || !routeEngineResult) return [];
-  /**
-   * What to write under a marine-access marker.
-   *
-   * "Modeled access point" alone was the start of a real misreading: a marker
-   * dropped on the Kerala coast for an inland Bangalore site sits near Kochi
-   * on a zoomed-out globe, and with no place name on it people read it as
-   * "the app picked Kochi as the landing point". It had picked no landing
-   * point at all. Naming the nearest coastal reference -- with its distance,
-   * so it cannot be mistaken for the point itself -- says where the marker is
-   * without claiming a cable lands there.
-   */
-  function endpointSublabel(endpoint: RouteEngineResult["sourceEndpoint"]): string {
-    if (endpoint.kind === "real-landing-point") return endpoint.landingPointName!;
-    const ref = endpoint.localityReference;
-    return ref ? `Modelled cell · coast ${Math.round(ref.distanceKm)} km from ${ref.name}` : "Modelled access point";
-  }
-
     const markers: RouteEndpointMarker[] = [];
     const { sourceEndpoint, destinationEndpoint } = routeEngineResult;
     if (sourceEndpoint.lat != null && sourceEndpoint.lng != null) {
@@ -915,14 +921,14 @@ const Globe = forwardRef<GlobeApi, Props>(function Globe(
       const borderColor = p.selected ? SELECTED_ROUTE_COLOR : ROUTE_COLORS[p.routeId];
       return `<div class="globe-tooltip" style="border-color:${borderColor}">
         <div class="detail-section-label" style="margin-bottom:4px">MODELED / HYPOTHETICAL -- NOT A REAL CABLE ROUTE</div>
-        <div style="font-weight:600">${p.label}${p.selected ? " (selected)" : ""}</div>
+        <div style="font-weight:600">${escapeHtml(p.label)}${p.selected ? " (selected)" : ""}</div>
         <div class="globe-tooltip-hint">click to inspect this candidate route</div>
       </div>`;
     }
     const rel = relevantCablesById.get(p.cableId);
     if (rel) {
       return `<div class="globe-tooltip" style="border-color:${p.color}">
-        <div style="font-weight:600">${p.cableName}</div>
+        <div style="font-weight:600">${escapeHtml(p.cableName)}</div>
         <div class="detail-section-label" style="margin:4px 0">REAL CABLE -- ${
           rel.relevance === "direct"
             ? "LANDS NEAR BOTH ENDS"
@@ -933,7 +939,7 @@ const Globe = forwardRef<GlobeApi, Props>(function Globe(
         <div class="globe-tooltip-hint">click for connectivity details</div>
       </div>`;
     }
-    return `<div class="globe-tooltip"><strong>${p.cableName}</strong><br/>Submarine cable route${
+    return `<div class="globe-tooltip"><strong>${escapeHtml(p.cableName)}</strong><br/>Submarine cable route${
       planningMode ? "" : '<div class="globe-tooltip-hint">click to inspect this cable</div>'
     }</div>`;
   },
@@ -1054,7 +1060,7 @@ const Globe = forwardRef<GlobeApi, Props>(function Globe(
     if (point.kind === "exploreLandingPoint") {
       const lp = point.data;
       return `<div class="globe-tooltip">
-        <div style="font-weight:600">${lp.name}</div>
+        <div style="font-weight:600">${escapeHtml(lp.name)}</div>
         <div class="detail-section-label" style="margin:4px 0">REAL LANDING POINT</div>
         <div class="globe-tooltip-hint">click for connected cable systems</div>
       </div>`;
@@ -1063,23 +1069,26 @@ const Globe = forwardRef<GlobeApi, Props>(function Globe(
       const lp = point.data;
       const color = lp.role === "destination" ? DESTINATION_LANDING_POINT_COLOR : SOURCE_LANDING_POINT_COLOR;
       return `<div class="globe-tooltip" style="border-color:${color}">
-        <div style="font-weight:600;color:${color}">${lp.name}</div>
+        <div style="font-weight:600;color:${color}">${escapeHtml(lp.name)}</div>
         <div class="detail-section-label" style="margin:4px 0">REAL LANDING POINT</div>
         <div>${lp.distanceFromQueryKm.toFixed(1)} km from ${lp.role === "destination" ? "destination" : "proposed site"}</div>
         <div class="globe-tooltip-hint">click for connectivity details</div>
       </div>`;
     }
+    // Facility details open in explore mode only, so only there does the
+    // tooltip promise a click.
+    const hint = planningMode ? "" : '<div class="globe-tooltip-hint">click for full details</div>';
     if (point.kind === "subsea") {
       const dc = point.data as SubseaDC;
       return `
         <div class="globe-tooltip" style="border-color:${SUBSEA_DC_COLOR}">
-          <div style="font-weight:600;color:${SUBSEA_DC_COLOR}">\u{1F30A} ${dc.name}</div>
-          <div>${dc.operator}</div>
+          <div style="font-weight:600;color:${SUBSEA_DC_COLOR}">\u{1F30A} ${escapeHtml(dc.name)}</div>
+          <div>${escapeHtml(dc.operator)}</div>
           <div>Depth: ${dc.depth_m} m &middot; Status: ${dc.status}</div>
           ${dc.capacity_mw ? `<div>Capacity: ${dc.capacity_mw} MW</div>` : ""}
           ${
             dc.nearestLandingPoint
-              ? `<div>Nearest landing: ${dc.nearestLandingPoint.name} (${dc.nearestLandingPointDistanceKm} km)</div>`
+              ? `<div>Nearest landing: ${escapeHtml(dc.nearestLandingPoint.name)} (${dc.nearestLandingPointDistanceKm} km)</div>`
               : ""
           }
           ${
@@ -1087,19 +1096,19 @@ const Globe = forwardRef<GlobeApi, Props>(function Globe(
               ? `<div style="color:#f59e0b;font-style:italic;margin-top:4px">⚠ coordinates approximate</div>`
               : ""
           }
-          <div class="globe-tooltip-hint">click for full details</div>
+          ${hint}
         </div>`;
     }
     const dc = point.data as LandDC;
     return `
       <div class="globe-tooltip" style="border-color:${LAND_DC_COLOR}">
-        <div style="font-weight:600;color:${LAND_DC_COLOR}">${dc.name}</div>
-        <div>${dc.org}</div>
-        <div>${dc.city}, ${dc.country}</div>
-        <div class="globe-tooltip-hint">click for full details</div>
+        <div style="font-weight:600;color:${LAND_DC_COLOR}">${escapeHtml(dc.name)}</div>
+        <div>${escapeHtml(dc.org)}</div>
+        <div>${escapeHtml(dc.city)}, ${escapeHtml(dc.country)}</div>
+        ${hint}
       </div>`;
   },
-    []
+    [planningMode]
   );
 
   const arcColorAccessor = useCallback(
@@ -1175,11 +1184,18 @@ const Globe = forwardRef<GlobeApi, Props>(function Globe(
           onSelectNetworkItem?.({ kind: "landingPoint", landingPointId: (item.data as LandingPoint).id });
           return;
         }
+        // The facility panel is closed for the whole of planning mode. A
+        // click here used to select the facility anyway, and its panel then
+        // popped up out of nowhere when the planner was closed.
+        if (planningMode) return;
         onSelect(p as Selection);
       }}
       onPointHover={(p: unknown) => {
         const canvas = globeRef.current?.renderer().domElement;
-        if (canvas) canvas.style.cursor = p ? "pointer" : "default";
+        if (!canvas) return;
+        const kind = (p as { kind?: string } | null)?.kind;
+        const clickable = kind != null && !(planningMode && (kind === "land" || kind === "subsea"));
+        canvas.style.cursor = clickable ? "pointer" : "default";
       }}
       // --- Connector lines: subsea DC -> nearest cable landing point, plus the
       // planning-mode "connectivity requirement" line (never a real cable) ---

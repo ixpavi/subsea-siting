@@ -16,6 +16,11 @@ export const INDUSTRIES: Industry[] = [
   "General Enterprise",
 ];
 
+// Captions follow from the Tier each option requires and the downtime the
+// calculator gives that Tier (Uptime Institute figures, adjusted by the
+// redundancy modifier): Tier I-II up to about 40 hours a year, Tier III 1.0-2.2
+// hours, Tier IV 16-34 minutes. They previously promised "single-digit
+// minutes" for mission-critical, which no configuration in this model reaches.
 export const AVAILABILITY_OPTIONS: {
   value: AvailabilityRequirement;
   label: string;
@@ -31,13 +36,13 @@ export const AVAILABILITY_OPTIONS: {
   {
     value: "high",
     label: "High",
-    caption: "Outages measured in tens of minutes per year.",
+    caption: "No more than about two hours of outage per year.",
     minTier: "III",
   },
   {
     value: "mission-critical",
     label: "Mission-critical",
-    caption: "Outages measured in single-digit minutes per year.",
+    caption: "Outages measured in tens of minutes per year.",
     minTier: "IV",
   },
 ];

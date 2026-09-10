@@ -31,7 +31,7 @@ export function findRoutesNearScreenPoint(
   globe: GlobeProjection,
   clickX: number,
   clickY: number,
-  toleranceOx: number = CABLE_HIT_TOLERANCE_PX
+  tolerancePx: number = CABLE_HIT_TOLERANCE_PX
 ): RouteHitCandidate[] {
   globe.controls().update();
   globe.camera().updateMatrixWorld(true);
@@ -57,7 +57,7 @@ export function findRoutesNearScreenPoint(
       const screen = globe.getScreenCoords(lat, lng, PATH_POINT_ALTITUDE);
       if (prevVisible) {
         const d = pointToSegmentDistance(clickX, clickY, prevVisible.x, prevVisible.y, screen.x, screen.y);
-        if (d <= toleranceOx) {
+        if (d <= tolerancePx) {
           const existing = best.get(route.routeId);
           if (!existing || d < existing.distancePx) {
             best.set(route.routeId, { routeId: route.routeId, distancePx: d });

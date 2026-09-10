@@ -15,6 +15,7 @@ import {
   INDUSTRY_DEFAULTS,
   PRIORITY_AXES,
   PRIORITY_WEIGHT_PRIMARY,
+  PRIORITY_WEIGHT_REMAINING,
   PRIORITY_WEIGHT_SECONDARY,
   buildPriorityWeights,
   tierAtLeast,
@@ -100,10 +101,18 @@ function computeResult(
   return {
     requirement,
     weights,
+    gridCarbonGco2PerKwh,
     minTier: availability.minTier,
     top: shortlist[0],
     alternatives: shortlist,
   };
+}
+
+/** "$1.10B" / "$85.3M" -- the same form the Hypothetical Routes step uses. */
+function fmtUsd(usd: number): string {
+  if (usd >= 1_000_000_000) return `$${(usd / 1_000_000_000).toFixed(2)}B`;
+  if (usd >= 1_000_000) return `$${(usd / 1_000_000).toFixed(1)}M`;
+  return `$${usd.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 }
 
 function buildExplanation(result: DesignResult): string {
@@ -202,9 +211,7 @@ export default function PlanningPanel({
   const stepIndex = activeSteps.indexOf(step);
 
   // Stages covered by steps strictly before the current one are "done";
-  // stages covered by the current step are "current". Everything else in the
-  // pipeline is either "upcoming" (implemented, not reached yet) or
-  // "planned" (not implemented -- see PIPELINE_STAGES).
+  // stages covered by the current step are "current"; the rest are upcoming.
   const doneStageIds = new Set<PipelineStageId>();
   for (let i = 0; i < stepIndex; i++) STEP_STAGES[activeSteps[i]].forEach((s) => doneStageIds.add(s));
   const currentStageIds = new Set(STEP_STAGES[step]);
@@ -221,13 +228,28 @@ export default function PlanningPanel({
     if (targetIndex >= 0 && targetIndex <= stepIndex) setStep(target);
   }
 
+  /**
+   * Every edit to the requirement goes through here. A recommendation belongs
+   * to the inputs that produced it, so any change retires it -- including on
+   * the globe, where it labels the proposed site. It used to survive: change
+   * the site after generating, and the marker moved to the new city still
+   * carrying the old city's Tier and cooling.
+   */
+  function editRequirement(update: (r: DesignRequirement) => DesignRequirement) {
+    setRequirement(update);
+    if (result) {
+      setResult(null);
+      onResult(null);
+    }
+  }
+
   function updateBusinessContext(patch: Partial<BusinessContext>) {
-    setRequirement((r) => ({ ...r, businessContext: { ...r.businessContext, ...patch } }));
+    editRequirement((r) => ({ ...r, businessContext: { ...r.businessContext, ...patch } }));
   }
 
   function selectIndustry(industry: Industry) {
     const defaults = INDUSTRY_DEFAULTS[industry];
-    setRequirement((r) => ({
+    editRequirement((r) => ({
       ...r,
       businessContext: {
         ...r.businessContext,
@@ -428,7 +450,7 @@ export default function PlanningPanel({
                       name="primary-priority"
                       checked={requirement.priorities.primary === axis.value}
                       onChange={() =>
-                        setRequirement((r) => ({
+                        editRequirement((r) => ({
                           ...r,
                           priorities: {
                             primary: axis.value,
@@ -460,7 +482,7 @@ export default function PlanningPanel({
                       name="secondary-priority"
                       checked={requirement.priorities.secondary === axis.value}
                       onChange={() =>
-                        setRequirement((r) => ({ ...r, priorities: { ...r.priorities, secondary: axis.value } }))
+                        editRequirement((r) => ({ ...r, priorities: { ...r.priorities, secondary: axis.value } }))
                       }
                     />
                     <span className="design-option-text">
@@ -476,9 +498,10 @@ export default function PlanningPanel({
             </button>
             {expandedWeights && (
               <p className="design-field-note">
-                Primary priority is weighted {PRIORITY_WEIGHT_PRIMARY}, secondary {PRIORITY_WEIGHT_SECONDARY}, and the
-                remaining two priorities 20 each -- a fixed, disclosed mapping, not an industry-standard or empirical
-                weighting.
+                Primary priority is weighted {PRIORITY_WEIGHT_PRIMARY}, secondary {PRIORITY_WEIGHT_SECONDARY}, and every
+                other priority {PRIORITY_WEIGHT_REMAINING} -- a fixed, disclosed mapping, not an industry-standard or
+                empirical weighting. Cost and availability count as one axis, at the higher of their two weights, because
+                both come from the same annual downtime figure.
               </p>
             )}
 
@@ -499,7 +522,7 @@ export default function PlanningPanel({
               placeholder="e.g. Chennai"
               value={location}
               onResolved={(loc) => {
-                setRequirement((r) => ({
+                editRequirement((r) => ({
                   ...r,
                   locationConnectivity: { ...r.locationConnectivity, location: loc },
                 }));
@@ -535,7 +558,7 @@ export default function PlanningPanel({
                     // otherwise a previously typed city would keep driving the
                     // connectivity analysis, the globe marker and the route
                     // summary while the user believes it is switched off.
-                    setRequirement((r) => ({
+                    editRequirement((r) => ({
                       ...r,
                       locationConnectivity: { ...r.locationConnectivity, connectivityDestination: { query: "" } },
                     }));
@@ -568,7 +591,7 @@ export default function PlanningPanel({
                   placeholder="e.g. Singapore"
                   value={destination}
                   onResolved={(loc) => {
-                    setRequirement((r) => ({
+                    editRequirement((r) => ({
                       ...r,
                       locationConnectivity: { ...r.locationConnectivity, connectivityDestination: loc },
                     }));
@@ -703,8 +726,13 @@ export default function PlanningPanel({
                 <>
               <h2 className="pp-section-title pp-section-title-spaced">Existing Connectivity</h2>
               {connectivityAnalysis && (
-              <ConnectivityAnalysisPanel analysis={connectivityAnalysis} onExploreCables={onExploreCables} />
-            )}
+                <ConnectivityAnalysisPanel
+                  analysis={connectivityAnalysis}
+                  onExploreCables={onExploreCables}
+                  siteLabel={location.name ?? location.query}
+                  destinationLabel={destination.name ?? destination.query}
+                />
+              )}
               {destinationResolved && (
                 <div className="pp-connectivity">
                   <div className="pp-connectivity-chain">
@@ -747,9 +775,7 @@ export default function PlanningPanel({
                         </div>
                         <div className="design-metric">
                           <span className="design-label">Estimated modeled cost</span>
-                          <span className="dc-mono">
-                            ${(chosen.candidate.cost.totalUsd / 1_000_000).toFixed(1)}M
-                          </span>
+                          <span className="dc-mono">{fmtUsd(chosen.candidate.cost.totalUsd)}</span>
                         </div>
                       </div>
                       <p className="design-field-note">
@@ -792,10 +818,14 @@ export default function PlanningPanel({
                     ) : (
                       <span className="dc-mono">
                         {result.top.profile.cue} kg/kWh
-                        <span className="pp-cue-basis">
-                          {" "}
-                          @ {Math.round(gridCarbonGco2PerKwh ?? 0)} gCO&#8322;/kWh
-                        </span>
+                        {/* The intensity this CUE was computed WITH, stored on the
+                            result -- not whatever the site's figure is now. */}
+                        {result.gridCarbonGco2PerKwh != null && (
+                          <span className="pp-cue-basis">
+                            {" "}
+                            @ {Math.round(result.gridCarbonGco2PerKwh)} gCO&#8322;/kWh
+                          </span>
+                        )}
                       </span>
                     )}
                   </div>
@@ -872,11 +902,12 @@ export default function PlanningPanel({
                   {(["cost", "availability", "sustainability", "speed"] as const)
                     .map((k) => `${k} ${result.weights[k]}`)
                     .join(", ")}
-                  .
+                  . Cost and availability are scored as one axis, at the higher of the two (
+                  {Math.max(result.weights.cost, result.weights.availability)}): the only cost this model has is annual
+                  downtime cost, which comes from the same downtime figure as availability, so counting both would score
+                  it twice.
                 </p>
               )}
-
-              <RoadmapNote />
 
               <div className="design-nav">
                 <button className="design-btn-secondary" onClick={back}>
@@ -922,13 +953,11 @@ function PipelineRail({
         const isNotApplicable = notApplicableStageIds.has(stage.id);
         const isDone = !isNotApplicable && doneStageIds.has(stage.id);
         const isCurrent = !isNotApplicable && currentStageIds.has(stage.id);
-        const isPlanned = !stage.implemented;
-        const clickable = stage.implemented && !isNotApplicable && (isDone || isCurrent);
+        const clickable = !isNotApplicable && (isDone || isCurrent);
         const cls = [
           "pp-rail-chip",
           isCurrent ? "current" : "",
           isDone && !isCurrent ? "done" : "",
-          isPlanned ? "planned" : "",
           isNotApplicable ? "not-applicable" : "",
         ]
           .filter(Boolean)
@@ -940,9 +969,7 @@ function PipelineRail({
             title={
               isNotApplicable
                 ? `${stage.label} -- not applicable: no subsea connection is being planned`
-                : isPlanned
-                  ? `${stage.label} -- planned, not yet implemented`
-                  : stage.label
+                : stage.label
             }
             onClick={() => (clickable ? onSelectStage(stage.id) : undefined)}
             disabled={!clickable}
@@ -951,23 +978,6 @@ function PipelineRail({
           </button>
         );
       })}
-    </div>
-  );
-}
-
-function RoadmapNote() {
-  const planned = PIPELINE_STAGES.filter((s) => !s.implemented);
-  if (planned.length === 0) return null;
-  return (
-    <div className="pp-roadmap-note">
-      <span className="design-label">Not yet part of this analysis</span>
-      <div className="pp-roadmap-chips">
-        {planned.map((s) => (
-          <span key={s.id} className="dc-modeled-badge pp-roadmap-chip">
-            {s.label}
-          </span>
-        ))}
-      </div>
     </div>
   );
 }
@@ -996,11 +1006,11 @@ function relevanceLabel(relevance: RelevantCable["relevance"], site: string, des
  * Nothing within the search radius. That has two causes and they are not the
  * same, so this does not report them the same way.
  *
- * An inland site has no cable landing near it because cables land on coasts --
- * that is geography, not a hole in the dataset, and the distance to the nearest
- * landing point is a genuinely useful number: it is the terrestrial backhaul
- * the site would need. Only when the dataset holds no landing points at all is
- * "unavailable" the honest word.
+ * A site with no cable landing near it -- inland, or on a stretch of coast
+ * without one -- is geography, not a hole in the dataset, and the distance to
+ * the nearest landing point is a genuinely useful number: it is the
+ * terrestrial backhaul the site would need. Only when the dataset holds no
+ * landing points at all is "unavailable" the honest word.
  */
 function NoLandingPointsNearby({
   what,
@@ -1023,9 +1033,11 @@ function NoLandingPointsNearby({
 
   return (
     <div className="pp-conn-unavailable">
+      {/* Not "it is inland": a stretch of coast with no cable landing on it
+          gives the same result, and calling a coastal city inland is wrong. */}
       <p className="pp-conn-unavailable-lead">
-        No submarine cable lands within {searchRadiusKm} km of the {what} — it is inland. The
-        nearest landing points in the dataset:
+        No submarine cable lands within {searchRadiusKm} km of the {what}. The nearest landing points in the
+        dataset:
       </p>
       <ul className="pp-nearest-list">
         {nearest.map((lp) => (
@@ -1036,9 +1048,9 @@ function NoLandingPointsNearby({
         ))}
       </ul>
       <p className="pp-conn-unavailable-foot">
-        The closest is the terrestrial backhaul this site would need. These are measured distances,
-        not missing data — the {searchRadiusKm} km radius above is held fixed so that
-        &ldquo;cables nearby&rdquo; stays comparable between sites.
+        The closest is the terrestrial backhaul the {what} would need. These are measured distances, not missing
+        data — the {searchRadiusKm} km radius above is held fixed so that &ldquo;cables nearby&rdquo; stays
+        comparable between sites.
       </p>
     </div>
   );

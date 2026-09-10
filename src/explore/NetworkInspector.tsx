@@ -45,6 +45,13 @@ function CableView({
   const cable = getCableDetail(cableId, index);
   if (!cable) return <p className="ni-unavailable">Cable not found in the current dataset.</p>;
 
+  // Alphabetical, and never joined with arrows. The dataset gives a cable's
+  // landing points only in the order its branches happen to be stored, which
+  // is not the order the cable runs in: SeaMeWe-5 came out as Yemen -> Saudi
+  // Arabia -> Indonesia -> Turkey -> Italy -> Myanmar, drawn as a "route".
+  const landingPoints = [...cable.landingPoints].sort((a, b) => a.name.localeCompare(b.name));
+  const countries = [...cable.countries].sort((a, b) => a.localeCompare(b));
+
   return (
     <>
       <span className="ni-real-badge">Real Infrastructure</span>
@@ -54,16 +61,13 @@ function CableView({
       <div className="ni-id ex-mono">{cable.id}</div>
 
       <div className="ni-section">
-        <span className="ni-label">Route</span>
-        {cable.landingPoints.length > 0 ? (
-          <div className="ni-route">
-            {cable.landingPoints.map((lp, i) => (
-              <span key={lp.id} className="ni-route-item">
-                {i > 0 && <span className="ni-route-arrow">→</span>}
-                <button className="ni-link" onClick={() => onSelectLandingPoint(lp.id)}>
-                  {lp.name}
-                </button>
-              </span>
+        <span className="ni-label">Landing points ({landingPoints.length})</span>
+        {landingPoints.length > 0 ? (
+          <div className="ni-chip-list">
+            {landingPoints.map((lp) => (
+              <button key={lp.id} className="ni-chip" onClick={() => onSelectLandingPoint(lp.id)}>
+                {lp.name}
+              </button>
             ))}
           </div>
         ) : (
@@ -74,7 +78,7 @@ function CableView({
       <div className="ni-factgrid">
         <div className="ni-fact">
           <span className="ni-label">Countries</span>
-          <div>{cable.countries.length > 0 ? cable.countries.join(", ") : "Unavailable"}</div>
+          <div>{countries.length > 0 ? countries.join(", ") : "Unavailable"}</div>
         </div>
         <div className="ni-fact">
           <span className="ni-label">Geometry</span>

@@ -1,9 +1,15 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { runHypotheticalRouting, buildCriterion, findDegeneratePairs } from "./hypotheticalRouting";
+import {
+  runHypotheticalRouting,
+  buildCriterion,
+  findDegeneratePairs,
+  rankCandidates,
+  rerankRouteResult,
+} from "./hypotheticalRouting";
 import type { OceanGrid } from "./oceanGrid";
-import type { RouteEngineResult } from "./routingTypes";
+import type { EnvironmentalAssessment, RouteCandidate, RouteEngineResult, RoutingWeights } from "./routingTypes";
 import type { CableFeature, LandingPoint } from "../types";
 
 /**
@@ -83,7 +89,77 @@ describe("buildCriterion tie handling", () => {
   });
 });
 
+/**
+ * The environmental criterion is available per ROUTE, so one candidate can be
+ * assessed while another runs off the dataset's European extent. Scoring it
+ * then gave the unassessed route a penalty of 0 -- the best possible
+ * environmental score -- purely because nothing was known about it.
+ */
+describe("environmental criterion with partial coverage", () => {
+  const candidate = (id: RouteCandidate["id"], lengthKm: number, environmental: EnvironmentalAssessment) =>
+    ({
+      id,
+      shortName: id.toUpperCase(),
+      analysis: { totalDistanceKm: lengthKm, difficultyIndex: 1.1 },
+      resilience: { diversityScore: 0.5 },
+      environmental,
+    }) as unknown as RouteCandidate;
+
+  const assessed = (penaltyScore: number): EnvironmentalAssessment => ({
+    available: true,
+    reason: "assessed",
+    constrainedDistanceKm: penaltyScore * 100,
+    affectedZoneCount: 1,
+    penaltyScore,
+  });
+  const unassessed: EnvironmentalAssessment = { available: false, reason: "outside the extent" };
+  const weights: RoutingWeights = { length: 1, seabedDifficulty: 1, resilience: 1, environmental: 1 };
+
+  it("is excluded when any candidate could not be assessed", () => {
+    const { ranked, criteria } = rankCandidates(
+      [candidate("shortest", 1000, assessed(0.4)), candidate("diverse-corridor", 1100, unassessed)],
+      weights
+    );
+    const env = criteria.find((c) => c.id === "environmental")!;
+    expect(env.available).toBe(false);
+    expect(env.effectiveWeightShare).toBe(0);
+    // The unassessed route must not win on the criterion nobody measured.
+    expect(ranked.every((r) => !r.winsOn.includes("environmental"))).toBe(true);
+    // With environmental excluded, only length separates them.
+    expect(ranked[0].candidate.id).toBe("shortest");
+  });
+
+  it("counts when every candidate was assessed", () => {
+    const { criteria } = rankCandidates(
+      [candidate("shortest", 1000, assessed(0.4)), candidate("diverse-corridor", 1100, assessed(0))],
+      weights
+    );
+    const env = criteria.find((c) => c.id === "environmental")!;
+    expect(env.available).toBe(true);
+    expect(env.discriminates).toBe(true);
+  });
+});
+
 describe("runHypotheticalRouting (real data)", () => {
+  it("re-ranks under new weights exactly as a full run with those weights would", () => {
+    // Weights only rank the candidates, so the page re-ranks locally instead of
+    // re-running the search -- and must get the same answer the search would.
+    const weights: RoutingWeights = { length: 0.5, seabedDifficulty: 2, resilience: 1.5, environmental: 1 };
+    const full = runHypotheticalRouting({
+      sourceLat: 13.0837, sourceLng: 80.2702, sourceLabel: "Chennai",
+      destLat: 1.3571, destLng: 103.8195, destLabel: "Singapore",
+      cables, landingPoints, grid, weights,
+    });
+    const reranked = rerankRouteResult(chennaiToSingapore, weights);
+    const summary = (r: RouteEngineResult) =>
+      r.candidates.map((c) => [c.candidate.id, c.rank, c.score, c.isRecommended, c.whyText]);
+    expect(summary(reranked)).toEqual(summary(full));
+    expect(reranked.criteria).toEqual(full.criteria);
+    expect(reranked.weights).toEqual(weights);
+    // And re-ranking back restores the original exactly.
+    expect(summary(rerankRouteResult(reranked, chennaiToSingapore.weights))).toEqual(summary(chennaiToSingapore));
+  }, 120_000);
+
   it("produces candidate routes between two real coastal cities", () => {
     expect(chennaiToSingapore.unavailableReason).toBeNull();
     expect(chennaiToSingapore.candidates.length).toBeGreaterThan(1);
@@ -247,25 +323,39 @@ describe("runHypotheticalRouting (real data)", () => {
   }, 120_000);
 
   it("keeps a modelled cell when the nearer landing point routes worse", () => {
-    // Moscow's nearest landing point (Kingisepp, Baltic) is 264 km CLOSER
-    // overland than the White Sea cell, and still loses: its total connection
-    // to India is about 2,000 km worse. A rule that simply preferred real
-    // landing points, or one gated on a flat radius, would get this wrong.
+    // Frankfurt's nearest landing point is Meersburg, on Lake Constance -- about
+    // 120 km CLOSER overland than its nearest North Sea cell -- and it still
+    // loses: routed to New York, its total connection is thousands of km
+    // longer. A rule that simply preferred real landing points, or one gated
+    // on a flat radius, would get this wrong.
+    const r = runHypotheticalRouting({
+      sourceLat: 50.1109, sourceLng: 8.6821, sourceLabel: "Frankfurt",
+      destLat: 40.7128, destLng: -74.006, destLabel: "New York",
+      cables, landingPoints, grid,
+    });
+    const src = r.sourceEndpoint;
+    expect(src.kind).toBe("modeled-access-point");
+    expect(src.selection.rejected).not.toBeNull();
+    // The rejected option really was closer overland -- that is the point.
+    expect(src.selection.rejected!.terrestrialAccessKm).toBeLessThan(src.terrestrialAccessKm!);
+    expect(src.selection.totalConnectionKm!).toBeLessThan(src.selection.rejected!.totalConnectionKm);
+  }, 120_000);
+
+  it("lets a real landing point win when it routes better", () => {
+    // Bangalore -> Moscow: Chennai beats Bangalore's Arabian Sea cell, and
+    // Kingisepp, on the Baltic, beats Moscow's nearest open-sea cell.
     const r = runHypotheticalRouting({
       sourceLat: 12.9716, sourceLng: 77.5946, sourceLabel: "Bangalore",
       destLat: 55.7558, destLng: 37.6173, destLabel: "Moscow",
       cables, landingPoints, grid,
     });
-    const dst = r.destinationEndpoint;
-    expect(dst.kind).toBe("modeled-access-point");
-    expect(dst.selection.rejected).not.toBeNull();
-    // The rejected option really was closer overland -- that is the point.
-    expect(dst.selection.rejected!.terrestrialAccessKm).toBeLessThan(dst.terrestrialAccessKm!);
-    expect(dst.selection.totalConnectionKm!).toBeLessThan(dst.selection.rejected!.totalConnectionKm);
-
-    // And the source went the other way: Chennai beat its modelled cell.
     expect(r.sourceEndpoint.kind).toBe("real-landing-point");
     expect(r.sourceEndpoint.landingPointName).toMatch(/Chennai/i);
+    expect(r.destinationEndpoint.kind).toBe("real-landing-point");
+    for (const e of [r.sourceEndpoint, r.destinationEndpoint]) {
+      expect(e.selection.rule).toBe("shorter-total-connection");
+      expect(e.selection.totalConnectionKm!).toBeLessThanOrEqual(e.selection.rejected!.totalConnectionKm);
+    }
   }, 120_000);
 });
 

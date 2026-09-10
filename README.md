@@ -7,7 +7,7 @@
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)](https://react.dev)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
 [![Vite](https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white)](https://vite.dev)
-[![Tests](https://img.shields.io/badge/tests-188%20passing-2ea44f)](#-testing)
+[![Tests](https://img.shields.io/badge/tests-246%20passing-2ea44f)](#-testing)
 [![Data](https://img.shields.io/badge/cable%20systems-724-0e7c86)](#-data-provenance)
 [![Paper](https://img.shields.io/badge/paper-IEEE%20final%20draft-b31b1b)](docs/paper/main.pdf)
 [![Licence](https://img.shields.io/badge/licence-Apache%202.0-blue)](LICENSE)
@@ -36,7 +36,7 @@ Its distinguishing feature is not the globe. It is that **every figure is labell
 |:--:|:--:|:--:|:--:|
 | **724** | **1,920** | **5,260** | **216** |
 | cable systems | landing points | facilities | countries scored |
-| **702** | **412** | **188** | **0.5°** |
+| **702** | **412** | **246** | **0.5°** |
 | protected areas | as-laid route corpus | tests passing | ocean grid |
 
 </div>
@@ -200,7 +200,7 @@ Then open the printed local URL. No API keys, no accounts, no backend — the ap
 
 ```bash
 npm run build      # production build
-npm test           # 188 tests
+npm test           # 246 tests
 npm run lint       # oxlint
 ```
 
@@ -218,7 +218,7 @@ Full pipeline, runtimes and the order to run things in: [study §7](docs/seabed-
 
 ## 🧪 Testing
 
-188 tests, and many assert properties of the **data** rather than the code — because that is where the hardest bugs lived.
+246 tests, and many assert properties of the **data** rather than the code — because that is where the hardest bugs lived.
 
 | Suite | What it locks down |
 |---|---|
@@ -228,7 +228,9 @@ Full pipeline, runtimes and the order to run things in: [study §7](docs/seabed-
 | `protectedAreas` | Missing data is never reported as an absence of constraints |
 | `oceanDepthGrid` | Depths are the model's, and the land/water mask is untouched cell for cell |
 | `siteComparison` | A site never ranks higher for having less data |
-| `hypotheticalRouting` | Degenerate route pairs detected symmetrically |
+| `hypotheticalRouting` | Degenerate route pairs detected symmetrically; re-ranking under new weights matches a full run |
+| `nearestOceanCell` | The "nearest ocean cell" really is the nearest, and never one in a sealed sea |
+| `cableNetwork` | Search ranks the place people type for ahead of chance substring matches |
 | `connectivityAnalysis` | An inland site reports the distance to the coast, not "unavailable" |
 | `facilityCalculator` | CUE uses the site's real grid carbon, and never steers the ranking |
 | `environmentalRisk` | A measured protected-area result is never presented as a heuristic |

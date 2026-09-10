@@ -67,6 +67,8 @@ export interface DesignRequirement {
 export interface DesignResult {
   requirement: DesignRequirement;
   weights: PriorityWeights;
+  /** The grid carbon intensity the CUE was computed with, kept so the figure is always shown beside its own basis. */
+  gridCarbonGco2PerKwh: number | null;
   minTier: TierLevel;
   /** Top-ranked candidate after filtering the engine's output to the Tier floor. */
   top: RecommendedCandidate;
@@ -85,15 +87,13 @@ export const PLANNING_STEPS = [
 export type PlanningStep = (typeof PLANNING_STEPS)[number];
 
 /**
- * The full decision-support pipeline this tool is being built toward:
+ * The full decision-support pipeline, shown as the rail across the top of the
+ * planner:
  *   Business Requirement -> Proposed Site -> Existing Connectivity ->
  *   Landing Points -> Hypothetical Routes -> Environmental Analysis ->
  *   Data Centre Design -> Resilience -> Economics -> Recommendation
  *
- * Only stages with `implemented: true` produce real screen content today.
- * The rest render as roadmap entries in the pipeline rail so the workflow's
- * shape is visible before every stage is built -- this list is UI-only and
- * must never be used to fabricate data for a stage that isn't implemented.
+ * Several stages share one wizard step (see STEP_STAGES in PlanningPanel).
  */
 export type PipelineStageId =
   | "business-requirement"
@@ -111,18 +111,17 @@ export interface PipelineStageMeta {
   id: PipelineStageId;
   label: string;
   shortLabel: string;
-  implemented: boolean;
 }
 
 export const PIPELINE_STAGES: PipelineStageMeta[] = [
-  { id: "business-requirement", label: "Business Requirement", shortLabel: "Requirement", implemented: true },
-  { id: "proposed-site", label: "Proposed Site", shortLabel: "Site", implemented: true },
-  { id: "existing-connectivity", label: "Existing Connectivity", shortLabel: "Connectivity", implemented: true },
-  { id: "landing-points", label: "Landing Points", shortLabel: "Landing Pts", implemented: true },
-  { id: "hypothetical-routes", label: "Hypothetical Routes", shortLabel: "Routes", implemented: true },
-  { id: "environmental-analysis", label: "Environmental Analysis", shortLabel: "Environment", implemented: true },
-  { id: "data-centre-design", label: "Data Centre Design", shortLabel: "DC Design", implemented: true },
-  { id: "resilience", label: "Resilience", shortLabel: "Resilience", implemented: true },
-  { id: "economics", label: "Economics", shortLabel: "Economics", implemented: true },
-  { id: "recommendation", label: "Recommendation", shortLabel: "Decision", implemented: true },
+  { id: "business-requirement", label: "Business Requirement", shortLabel: "Requirement" },
+  { id: "proposed-site", label: "Proposed Site", shortLabel: "Site" },
+  { id: "existing-connectivity", label: "Existing Connectivity", shortLabel: "Connectivity" },
+  { id: "landing-points", label: "Landing Points", shortLabel: "Landing Pts" },
+  { id: "hypothetical-routes", label: "Hypothetical Routes", shortLabel: "Routes" },
+  { id: "environmental-analysis", label: "Environmental Analysis", shortLabel: "Environment" },
+  { id: "data-centre-design", label: "Data Centre Design", shortLabel: "DC Design" },
+  { id: "resilience", label: "Resilience", shortLabel: "Resilience" },
+  { id: "economics", label: "Economics", shortLabel: "Economics" },
+  { id: "recommendation", label: "Recommendation", shortLabel: "Decision" },
 ];

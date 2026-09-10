@@ -95,7 +95,7 @@ export interface DepthBandRange {
 
 export interface DepthProfileSample {
   distanceAlongRouteKm: number;
-  /** Band lower bound in metres. A bound, never a sounding -- see provenance.ts. */
+  /** Modelled depth of the 0.5-degree cell, in metres. Never a sounding -- see provenance.ts. */
   depthM: number;
   depthBandIndex: number;
 }
@@ -108,7 +108,7 @@ export interface RouteAnalysis {
   shallowestBand: DepthBandRange | null;
   deepestBand: DepthBandRange | null;
   dominantBand: DepthBandRange | null;
-  /** Mean of band LOWER BOUNDS -- explicitly not a mean depth. Comparable across candidates; not meaningful in isolation. */
+  /** Mean of the modelled depth at each classified sample. A mean of 0.5-degree cell depths, not of soundings. */
   meanDepthM: number | null;
   depthStdDevM: number;
   /** Samples that landed on a land/unclassified grid cell and were excluded from depth statistics rather than silently clamped to the shallowest ocean band. */

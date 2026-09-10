@@ -201,15 +201,92 @@ export interface NetworkSearchResults {
   landingPoints: LandingPoint[];
 }
 
-/** Plain substring match on name/id, case-insensitive -- deliberately no fuzzy matching, so results never suggest something the user didn't type. */
+/** Lowercase with punctuation and spaces removed: "SeaMeWe-5" and "sea-me-we 5" both become "seamewe5". */
+function compact(s: string): string {
+  return s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
+}
+
+/** True when `q` occurs in `text` at the start of a word (both already lowercase). */
+function startsAWord(text: string, q: string): boolean {
+  for (let i = text.indexOf(q); i >= 0; i = text.indexOf(q, i + 1)) {
+    if (i === 0 || !/[\p{L}\p{N}]/u.test(text[i - 1])) return true;
+  }
+  return false;
+}
+
+/**
+ * How well `text` matches `q`, lower is better, null for no match:
+ * 0 starts with it, 1 a word in it starts with it, 2 contains it anywhere,
+ * 3 contains it once punctuation and spacing are ignored.
+ */
+function matchRank(text: string, q: string, qCompact: string): number | null {
+  const t = text.toLowerCase();
+  if (t.startsWith(q)) return 0;
+  if (startsAWord(t, q)) return 1;
+  if (t.includes(q)) return 2;
+  if (qCompact.length > 0 && compact(text).includes(qCompact)) return 3;
+  return null;
+}
+
+/** Best rank first, then the more important item (`weight`, higher first), then alphabetical, keeping `limit`. */
+function topMatches<T extends { name: string }>(
+  scored: { item: T; rank: number; weight: number }[],
+  limit: number
+): T[] {
+  return scored
+    .sort((a, b) => a.rank - b.rank || b.weight - a.weight || a.item.name.localeCompare(b.item.name))
+    .slice(0, limit)
+    .map((s) => s.item);
+}
+
+/**
+ * Search over cable and landing-point names.
+ *
+ * Still only literal matches -- nothing fuzzy, so a result is always there
+ * because the typed text is in it -- but RANKED. It used to return the first
+ * matches in file order, and with room for eight that hid what people type
+ * for: "sing" filled the list with RISING 8 and the "...Crossing" cables
+ * before any Singapore system, and "mar" found Markgrafenheide and Maruyama
+ * but not Marseille, one of the busiest landing sites in Europe. Punctuation
+ * is also ignored as a last resort, so "sea-me-we" finds SeaMeWe-5.
+ *
+ * A landing point is "City, Country": a match at the start of the city counts
+ * before a match on the country, so "sing" lists Singapore's landing points
+ * ahead of Mersing and Helsingborg. Among equally good matches, busier landing
+ * points come first -- alphabetical order alone still hid Marseille behind
+ * eight smaller "Mar..." places.
+ */
 export function searchNetwork(query: string, index: CableNetworkIndex, limit = 8): NetworkSearchResults {
   const q = query.trim().toLowerCase();
   if (q.length === 0) return { cables: [], landingPoints: [] };
-  const cables = [...index.cablesById.values()]
-    .filter((c) => c.name.toLowerCase().includes(q) || c.id.toLowerCase().includes(q))
-    .slice(0, limit);
-  const landingPoints = [...index.landingPointsById.values()]
-    .filter((lp) => lp.name.toLowerCase().includes(q))
-    .slice(0, limit);
-  return { cables, landingPoints };
+  const qCompact = compact(q);
+
+  const cables: { item: CableFeature; rank: number; weight: number }[] = [];
+  for (const c of index.cablesById.values()) {
+    const byName = matchRank(c.name, q, qCompact);
+    const byId = matchRank(c.id, q, qCompact);
+    // The id is a slug of the name, so it only ever adds a weaker match.
+    const rank = byName ?? (byId == null ? null : Math.max(byId, 2));
+    if (rank != null) cables.push({ item: c, rank, weight: 0 });
+  }
+
+  const landingPoints: { item: LandingPoint; rank: number; weight: number }[] = [];
+  for (const lp of index.landingPointsById.values()) {
+    const comma = lp.name.lastIndexOf(",");
+    const place = comma >= 0 ? lp.name.slice(0, comma) : lp.name;
+    const country = comma >= 0 ? lp.name.slice(comma + 1).trim() : "";
+    const byPlace = matchRank(place, q, qCompact);
+    let rank: number | null;
+    if (byPlace === 0 || byPlace === 1) rank = byPlace;
+    else if (country && (matchRank(country, q, qCompact) ?? 9) <= 1) rank = 2;
+    else {
+      const anywhere = matchRank(lp.name, q, qCompact);
+      rank = anywhere == null ? null : 3 + (anywhere === 3 ? 1 : 0);
+    }
+    if (rank != null) {
+      landingPoints.push({ item: lp, rank, weight: index.landingPointToCables.get(lp.id)?.length ?? 0 });
+    }
+  }
+
+  return { cables: topMatches(cables, limit), landingPoints: topMatches(landingPoints, limit) };
 }

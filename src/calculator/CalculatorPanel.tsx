@@ -1,5 +1,11 @@
 import { useMemo, useState } from "react";
-import { calculateFacilityProfile, COOLING_SPECS, TIER_SPECS } from "./facilityCalculator";
+import {
+  calculateFacilityProfile,
+  COOLING_SPECS,
+  LAND_COOLING_OPTIONS,
+  SUBSEA_COOLING_OPTIONS,
+  TIER_SPECS,
+} from "./facilityCalculator";
 import type { CoolingConfig, FacilityConfig, RedundancyLevel, TierLevel } from "./types";
 import type { RouteRiskEstimate } from "./environmentalRisk";
 import Recommendations from "./Recommendations";
@@ -7,7 +13,6 @@ import "./calculator.css";
 
 const REDUNDANCY_OPTIONS: RedundancyLevel[] = ["N", "N+1", "2N"];
 const TIER_OPTIONS: TierLevel[] = ["I", "II", "III", "IV"];
-const COOLING_OPTIONS: CoolingConfig[] = Object.keys(COOLING_SPECS) as CoolingConfig[];
 
 interface Props {
   siteName: string;
@@ -37,6 +42,10 @@ export default function CalculatorPanel({
     [redundancy, tier, cooling, downtimeCost]
   );
   const profile = useMemo(() => calculateFacilityProfile(config), [config]);
+  // Only the cooling types that make physical sense here -- the same sets the
+  // recommendations below are drawn from. Offering all five let a land site be
+  // "configured" with seawater exchange and a subsea vessel with a chiller plant.
+  const coolingOptions = isSubsea ? SUBSEA_COOLING_OPTIONS : LAND_COOLING_OPTIONS;
 
   return (
     <div className="calc-panel">
@@ -74,7 +83,7 @@ export default function CalculatorPanel({
         <label className="calc-field">
           <span>Cooling</span>
           <select value={cooling} onChange={(e) => setCooling(e.target.value as CoolingConfig)}>
-            {COOLING_OPTIONS.map((c) => (
+            {coolingOptions.map((c) => (
               <option key={c} value={c}>
                 {COOLING_SPECS[c].label}
               </option>
@@ -89,7 +98,9 @@ export default function CalculatorPanel({
             min={0}
             step={500}
             value={downtimeCost}
-            onChange={(e) => setDowntimeCost(Number(e.target.value) || 0)}
+            // `min` only guides the spinner; a typed "-500" still arrives, and
+            // a negative downtime cost would reward downtime.
+            onChange={(e) => setDowntimeCost(Math.max(0, Number(e.target.value) || 0))}
           />
         </label>
       </div>
@@ -182,8 +193,8 @@ export default function CalculatorPanel({
             {routeRisk.ecologicalBasis === "measured"
               ? "Ecological sensitivity is measured against the World Database on Protected Areas (European extract, ~11 km cells) -- it indicates proximity to protected water, not a legal boundary. "
               : "Ecological sensitivity falls back to a geographic heuristic (depth, latitude band) because no protected-area data covers this route. "}
-            Bathymetric hazard is a heuristic in both cases: the shipped depth data is a 0.5-degree
-            band index, not a sounding. Reef data (Allen Coral Atlas) is not integrated.
+            Bathymetric hazard is a heuristic in both cases, applied to the site&apos;s published depth. Reef
+            data (Allen Coral Atlas) is not integrated.
           </p>
         </div>
       )}

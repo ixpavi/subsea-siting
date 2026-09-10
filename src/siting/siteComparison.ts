@@ -246,7 +246,14 @@ function buildWhy(
   }
   const strength = wins ? ` It is still the best candidate on ${wins}.` : "";
   const weakness = loses ? ` It ranks last on ${loses}.` : "";
-  return `${label} ranks ${rank} behind ${topLabel}.${strength}${weakness}`;
+  return `${label} ranks ${ordinal(rank)}, behind ${topLabel}.${strength}${weakness}`;
+}
+
+/** 2 -> "2nd", 3 -> "3rd", 11 -> "11th". */
+function ordinal(n: number): string {
+  const lastTwo = n % 100;
+  if (lastTwo >= 11 && lastTwo <= 13) return `${n}th`;
+  return `${n}${["th", "st", "nd", "rd"][n % 10] ?? "th"}`;
 }
 
 /**

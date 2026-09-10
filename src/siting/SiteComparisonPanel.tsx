@@ -11,11 +11,10 @@
 //   - Every column carries its provenance. The PUE column is modelled and the
 //     rest are measured or directly derived, and a table that presents them
 //     identically misrepresents all of them.
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { geocodeLocation } from "../design/geocoding";
 import type { GeocodeResult } from "../design/geocoding";
-import { COOLING_SPECS } from "../calculator/facilityCalculator";
-import type { CoolingConfig } from "../calculator/types";
+import { LAND_COOLING_OPTIONS } from "../calculator/facilityCalculator";
 import type { CableFeature, LandingPoint } from "../types";
 import {
   compareSites,
@@ -85,8 +84,9 @@ export default function SiteComparison({ cables, landingPoints, onClose, onFocus
   // design/PlanningPanel.tsx for the out-of-order reply this prevents.
   const requestIdRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
-
-  const coolingOptions = useMemo(() => Object.keys(COOLING_SPECS) as CoolingConfig[], []);
+  // Only the newest comparison run is applied: a run that finishes after the
+  // site list has changed describes sites that are no longer on it.
+  const runIdRef = useRef(0);
 
   const handleQuery = useCallback((q: string) => {
     setQuery(q);
@@ -130,17 +130,23 @@ export default function SiteComparison({ cables, landingPoints, onClose, onFocus
     setSearching(false);
     setQuery("");
     setResults([]);
-    // A newly added site invalidates the previous ranking.
+    // A newly added site invalidates the previous ranking, and any run still
+    // in flight.
+    runIdRef.current++;
+    setRunning(false);
     setResult(null);
   }
 
   function removeSite(id: string) {
     setSites((prev) => prev.filter((s) => s.id !== id));
+    runIdRef.current++;
+    setRunning(false);
     setResult(null);
   }
 
   async function run() {
     if (sites.length < 2) return;
+    const runId = ++runIdRef.current;
     setRunning(true);
     try {
       const inputs: EvaluateSiteInput[] = sites.map((s) => ({
@@ -149,14 +155,16 @@ export default function SiteComparison({ cables, landingPoints, onClose, onFocus
         lat: s.lat,
         lng: s.lng,
         countryCode: s.countryCode,
-        coolingOptions,
+        // Land cooling only. Seawater exchange is a subsea option, and scoring
+        // it for an inland city is not a question anyone is asking.
+        coolingOptions: LAND_COOLING_OPTIONS,
         cables,
         landingPoints,
       }));
       const evaluations = await evaluateSites(inputs);
-      setResult(compareSites(evaluations, weights));
+      if (runId === runIdRef.current) setResult(compareSites(evaluations, weights));
     } finally {
-      setRunning(false);
+      if (runId === runIdRef.current) setRunning(false);
     }
   }
 

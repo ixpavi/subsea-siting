@@ -75,7 +75,7 @@ function LandingPointDetail({ lp }: { lp: ConnectivityLandingPointDatum }) {
         <span>{lp.role === "destination" ? "Near destination" : "Near proposed site"}</span>
       </div>
       <div className="detail-row">
-        <span className="detail-key">Distance from query</span>
+        <span className="detail-key">{lp.role === "destination" ? "Distance from destination" : "Distance from site"}</span>
         <span className="dc-mono">{lp.distanceFromQueryKm.toFixed(1)} km</span>
       </div>
       <div className="detail-row">

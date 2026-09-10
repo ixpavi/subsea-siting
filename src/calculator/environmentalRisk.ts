@@ -12,8 +12,8 @@
 // standing in for a dataset the app ships is not a limitation, it is a
 // duplicate answer to a question already answered better.
 //
-// Bathymetric hazard remains a heuristic in both cases: the app's depth data
-// is a 0.5-degree band index, not a sounding, and no shipped dataset scores
+// Bathymetric hazard remains a heuristic in both cases: it applies depth
+// thresholds to the site's published depth, and no shipped dataset scores
 // lay-difficulty.
 import type { EnvironmentalAssessment } from "../routing/routingTypes";
 
@@ -110,18 +110,17 @@ export function estimateRouteRisk(params: {
     rationale.push("Continental-shelf depth range -- comparatively benign seabed terrain.");
   }
 
-  // Longer routes statistically cross more seafloor and more risk zones.
-  let lengthBump = 0;
+  // Longer routes cross more seafloor and more risk zones. Stated rather than
+  // scored: this used to add a "length bump" whose arithmetic always came to
+  // zero, while the line below claimed the length had raised the rating.
   if (routeDistanceKm > 50) {
-    lengthBump = 1;
-    rationale.push(`Route length (${Math.round(routeDistanceKm)} km) adds cumulative exposure.`);
+    rationale.push(
+      `Route length (${Math.round(routeDistanceKm)} km) adds cumulative exposure that this rating does not quantify.`
+    );
   }
 
-  const overallIndex = Math.min(
-    2,
-    Math.max(RISK_ORDER.indexOf(ecologicalSensitivity), RISK_ORDER.indexOf(bathymetricHazard)) +
-      (lengthBump && RISK_ORDER.indexOf(ecologicalSensitivity) === RISK_ORDER.indexOf(bathymetricHazard) ? lengthBump - 1 : 0)
-  );
+  // Overall is the worse of the two components.
+  const overallIndex = Math.max(RISK_ORDER.indexOf(ecologicalSensitivity), RISK_ORDER.indexOf(bathymetricHazard));
 
   return {
     ecologicalSensitivity,

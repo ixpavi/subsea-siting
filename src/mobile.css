@@ -292,16 +292,12 @@
     font-size: 14px;
   }
 
-  /* Landing-point links inside the inspector: 14px of text with no padding,
-     and they sit directly above one another in the route list. */
-  .ni-link,
-  .ni-route-item {
-    line-height: 1.5;
-  }
-  .ni-link {
+  /* Landing-point and cable chips inside the inspector: 11px text in a 20px
+     box on desktop, well under a fingertip. */
+  .ni-chip {
     min-height: 36px;
-    padding: 8px 0;
-    font-size: 13.5px;
+    padding: 8px 10px;
+    font-size: 13px;
   }
 
   .close-btn {

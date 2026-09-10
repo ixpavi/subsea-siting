@@ -138,7 +138,11 @@ export default function CoolingAdvisor({ lat, lng, countryCode, selectedCooling,
       {advice.countryFactors && (
         <p className="design-field-note ca-national">
           National context <span className="prov-chip prov-derived">DERIVED</span>: water stress{" "}
-          <span className="dc-mono">{advice.countryFactors.waterStressScore?.toFixed(2) ?? "n/a"}/5</span>
+          <span className="dc-mono">
+            {advice.countryFactors.waterStressScore != null
+              ? `${advice.countryFactors.waterStressScore.toFixed(2)}/5`
+              : "n/a"}
+          </span>
           {advice.countryFactors.waterStressCategory ? ` (${advice.countryFactors.waterStressCategory})` : ""}, grid
           carbon{" "}
           <span className="dc-mono">

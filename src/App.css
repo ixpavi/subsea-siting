@@ -49,11 +49,14 @@ html, body, #root {
    independently absolute-positioned buttons at hand-tuned right:Npx
    offsets. Buttons are ordinary flex children; the row grows/shrinks from
    one place instead of every button needing its neighbor's width. */
+/* Above the explore panels (25-26), because the Layers popover lives in this
+   toolbar and opens upward over the left column: at 20 it opened BEHIND an open
+   directory or inspector. Nothing else overlaps the toolbar row itself. */
 .top-toolbar {
   position: absolute;
   top: 14px;
   right: 18px;
-  z-index: 20;
+  z-index: 27;
   display: flex;
   align-items: center;
   gap: 6px;

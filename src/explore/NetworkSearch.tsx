@@ -1,7 +1,7 @@
-// Global search over the real cable/landing-point dataset. Plain substring
-// matching only (see cableNetwork.ts's searchNetwork) -- no fuzzy matching,
-// so a result is only ever shown because the user's text actually appears
-// in it.
+// Global search over the real cable/landing-point dataset. Literal matching
+// only, ranked by where the match falls (see cableNetwork.ts's searchNetwork)
+// -- no fuzzy matching, so a result is only ever shown because the user's text
+// actually appears in it.
 import { useMemo, useRef, useState } from "react";
 import { searchNetwork } from "../cableNetwork";
 import type { CableNetworkIndex } from "../cableNetwork";

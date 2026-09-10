@@ -10,7 +10,6 @@
   font-family: ui-monospace, "JetBrains Mono", "SFMono-Regular", Menlo, monospace;
 }
 
-.ex-real-badge,
 .ni-real-badge {
   display: inline-block;
   font-size: 10px;
@@ -27,13 +26,28 @@
 
 /* --- Global search --- */
 
+/* Above the left-column panels (25-26): its results drop down over them, and
+   the list being typed into belongs on top. */
 .network-search {
   position: absolute;
   top: 14px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 22;
+  z-index: 28;
   width: min(300px, 36vw);
+}
+
+/* Between phone and wide desktop, a centred search box collides with both
+   neighbours: below about 1,210px it runs into the title's strapline, and
+   below about 1,070px into the toolbar -- a 1024x768 projector put the pause
+   button over the end of the search field. Here it moves under the title
+   instead, which the left-column panels (from 112px down) leave clear. */
+@media (min-width: 761px) and (max-width: 1210px) and (min-height: 521px) {
+  .network-search {
+    top: 54px;
+    left: 18px;
+    transform: none;
+  }
 }
 
 .network-search-icon {
@@ -130,11 +144,15 @@
 
 /* --- Cable directory panel --- */
 
+/* Every panel in the left column stops 180px short of the viewport height:
+   112px of top offset, plus room for the Layers button at bottom-left. At
+   140px the directory ran down over that button, and a click aimed at Layers
+   selected whichever cable row happened to be underneath. */
 .cable-directory {
   top: 112px;
   left: 20px;
   width: 300px;
-  max-height: calc(100dvh - 140px);
+  max-height: calc(100dvh - 180px);
   z-index: 25;
 }
 
@@ -217,7 +235,7 @@
   top: 112px;
   left: 20px;
   width: 280px;
-  max-height: calc(100dvh - 140px);
+  max-height: calc(100dvh - 180px);
   z-index: 26;
 }
 
@@ -232,7 +250,7 @@
   top: 112px;
   left: 20px;
   width: 300px;
-  max-height: calc(100dvh - 140px);
+  max-height: calc(100dvh - 180px);
   z-index: 25;
 }
 
@@ -289,39 +307,6 @@
   letter-spacing: 0.03em;
   color: rgba(231, 237, 245, 0.6);
   margin-bottom: 4px;
-}
-
-.ni-route {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px;
-  font-size: 12px;
-  line-height: 1.6;
-}
-
-.ni-route-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.ni-route-arrow {
-  opacity: 0.4;
-}
-
-.ni-link {
-  background: none;
-  border: none;
-  color: #7dd3fc;
-  font-size: 12px;
-  padding: 0;
-  cursor: pointer;
-  text-decoration: underline;
-  text-decoration-color: rgba(125, 211, 252, 0.35);
-}
-.ni-link:hover {
-  text-decoration-color: #7dd3fc;
 }
 
 .ni-chip-list {

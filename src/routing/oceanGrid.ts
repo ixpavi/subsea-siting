@@ -103,6 +103,12 @@ export function loadOceanGrid(): Promise<OceanGrid> {
         }
         return { ...meta, depthM: new Int16Array(bytes) };
       });
+    // A failed download must not be cached: the worker lives for the whole
+    // session, so one dropped request would otherwise break routing until the
+    // page was reloaded.
+    gridPromise.catch(() => {
+      gridPromise = null;
+    });
   }
   return gridPromise;
 }
@@ -179,45 +185,153 @@ function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): nu
   return 2 * R * Math.asin(Math.sqrt(a));
 }
 
+export interface OceanCell {
+  lat: number;
+  lng: number;
+  band: number;
+  distanceKm: number;
+}
+
 /**
- * Nearest ocean cell to (lat,lng), searched as expanding square rings in
- * grid-cell space (cheap, deterministic) up to maxRingSteps out, then
- * refined by real haversine distance among the ring's ocean hits. Returns
- * null if no ocean cell is found within that radius -- callers must treat
- * that as "unavailable", never invent a fallback point.
+ * Marks the cells of the world ocean: the largest body of water, found by
+ * flooding it with exactly the moves the A* search makes (8 neighbours,
+ * columns wrapping at the antimeridian, rows not). Everything else -- the
+ * Caspian, lakes the coastline data keeps as water, a gulf sealed off at this
+ * resolution -- is water a route can start in but never leave.
+ *
+ * Computed once per grid. About 260,000 cells, a few milliseconds.
+ */
+const worldOceanCache = new WeakMap<OceanGrid, Uint8Array>();
+
+function worldOceanMask(grid: OceanGrid): Uint8Array {
+  const cached = worldOceanCache.get(grid);
+  if (cached) return cached;
+
+  const n = grid.rows * grid.cols;
+  const component = new Int32Array(n).fill(-1);
+  const queue = new Int32Array(n);
+  let largest = -1;
+  let largestSize = 0;
+  let next = 0;
+
+  for (let start = 0; start < n; start++) {
+    if (grid.depthM[start] === 0 || component[start] !== -1) continue;
+    const id = next++;
+    let head = 0;
+    let tail = 0;
+    queue[tail++] = start;
+    component[start] = id;
+    while (head < tail) {
+      const cell = queue[head++];
+      const row = Math.floor(cell / grid.cols);
+      const col = cell % grid.cols;
+      for (let dr = -1; dr <= 1; dr++) {
+        const r = row + dr;
+        if (r < 0 || r >= grid.rows) continue;
+        for (let dc = -1; dc <= 1; dc++) {
+          if (dr === 0 && dc === 0) continue;
+          const c = (col + dc + grid.cols) % grid.cols;
+          const i = r * grid.cols + c;
+          if (grid.depthM[i] === 0 || component[i] !== -1) continue;
+          component[i] = id;
+          queue[tail++] = i;
+        }
+      }
+    }
+    if (tail > largestSize) {
+      largestSize = tail;
+      largest = id;
+    }
+  }
+
+  const mask = new Uint8Array(n);
+  for (let i = 0; i < n; i++) if (component[i] === largest) mask[i] = 1;
+  worldOceanCache.set(grid, mask);
+  return mask;
+}
+
+/**
+ * Nearest ocean cell to (lat,lng), by real great-circle distance. Returns null
+ * if none lies within `maxRingSteps` grid cells -- callers must treat that as
+ * "unavailable", never invent a fallback point.
+ *
+ * @param opts.routableOnly accept only cells of the world ocean (see
+ *   worldOceanMask). A MODELLED access point needs this: a point in the
+ *   Caspian is the nearest water to Almaty, and no route can leave it. Snapping
+ *   an existing coordinate onto the grid does not -- a landing point on the
+ *   Caspian should snap into the Caspian and fail honestly, not be moved
+ *   hundreds of kilometres to a sea it is not on.
+ *
+ * TWO PASSES, BECAUSE A GRID RING IS NOT A CIRCLE. The first pass walks
+ * expanding square rings of cells until one holds any acceptable cell. That
+ * alone used to be the answer, and it was measurably wrong: a column of cells
+ * is 55 km wide at the equator but 24 km at Moscow's latitude, so a ring
+ * reaches much further north-south than east-west, and a cell in a LATER ring
+ * can be far closer. Moscow resolved to the White Sea at 945 km while the Gulf
+ * of Finland is 711 km away; Madrid, Nairobi, Johannesburg, Chengdu and
+ * Frankfurt were each off by 16-208 km. The first hit is now only an upper
+ * bound, and the second pass searches every cell that could beat it.
  */
 export function findNearestOceanCell(
   grid: OceanGrid,
   lat: number,
   lng: number,
-  maxRingSteps = 40 // 40 * 0.5deg = 20deg ~ 2200km search radius
-): { lat: number; lng: number; band: number; distanceKm: number } | null {
+  opts: { routableOnly?: boolean; maxRingSteps?: number } = {}
+): OceanCell | null {
+  // 40 * 0.5deg = 20deg, about 2,200 km north-south.
+  const maxRingSteps = opts.maxRingSteps ?? 40;
+  const worldOcean = opts.routableOnly ? worldOceanMask(grid) : null;
+  const acceptable = (i: number) => (worldOcean ? worldOcean[i] === 1 : grid.depthM[i] !== 0);
+
   const centerRow = rowForLat(grid, lat);
   const centerCol = colForLng(grid, lng);
-
-  if (bandAt(grid, lat, lng) > 0) {
+  if (acceptable(centerRow * grid.cols + centerCol)) {
     return { lat, lng, band: bandAt(grid, lat, lng), distanceKm: 0 };
   }
 
-  for (let ring = 1; ring <= maxRingSteps; ring++) {
-    let best: { lat: number; lng: number; band: number; distanceKm: number } | null = null;
+  /** `current`, or the cell at (row, col) if that is acceptable and closer. */
+  const closer = (row: number, col: number, current: OceanCell | null): OceanCell | null => {
+    const i = row * grid.cols + col;
+    if (!acceptable(i)) return current;
+    const cellLat = latForRow(grid, row);
+    const cellLng = lngForCol(grid, col);
+    const d = haversineKm(lat, lng, cellLat, cellLng);
+    if (current && current.distanceKm <= d) return current;
+    return { lat: cellLat, lng: cellLng, band: bandForDepth(grid, grid.depthM[i]), distanceKm: d };
+  };
+  const wrapCol = (col: number) => ((col % grid.cols) + grid.cols) % grid.cols;
+
+  // Pass 1: the first ring holding any acceptable cell gives an upper bound.
+  let best: OceanCell | null = null;
+  for (let ring = 1; ring <= maxRingSteps && !best; ring++) {
     for (let dr = -ring; dr <= ring; dr++) {
       const row = centerRow + dr;
       if (row < 0 || row >= grid.rows) continue;
-      const onEdgeRow = Math.abs(dr) === ring;
-      const colStep = onEdgeRow ? 1 : ring * 2;
-      for (let dc = -ring; dc <= ring; dc += colStep) {
-        const col = ((centerCol + dc) % grid.cols + grid.cols) % grid.cols;
-        const depth = grid.depthM[row * grid.cols + col];
-        if (depth === 0) continue;
-        const cellLat = latForRow(grid, row);
-        const cellLng = lngForCol(grid, col);
-        const d = haversineKm(lat, lng, cellLat, cellLng);
-        if (!best || d < best.distanceKm)
-          best = { lat: cellLat, lng: cellLng, band: bandForDepth(grid, depth), distanceKm: d };
-      }
+      const colStep = Math.abs(dr) === ring ? 1 : ring * 2;
+      for (let dc = -ring; dc <= ring; dc += colStep) best = closer(row, wrapCol(centerCol + dc), best);
     }
-    if (best) return best;
   }
-  return null;
+  if (!best) return null;
+
+  // Pass 2: every cell that could be closer than that bound. A cell more than
+  // the bound away in latitude alone is farther than it, which fixes the rows.
+  // For columns, two points no further than maxAbsLat from the equator and
+  // dLng apart are at least (2/pi) * R * cos(maxAbsLat) * dLng apart, so the
+  // pi/2 factor keeps the window conservative -- it may search a few cells too
+  // many, never one too few.
+  const dLatDeg = best.distanceKm / 111.32;
+  const rowMin = rowForLat(grid, lat - dLatDeg);
+  const rowMax = rowForLat(grid, lat + dLatDeg);
+  const cosMaxLat = Math.cos((Math.min(90, Math.abs(lat) + dLatDeg) * Math.PI) / 180);
+  const dLngDeg = cosMaxLat > 1e-9 ? ((Math.PI / 2) * best.distanceKm) / (111.32 * cosMaxLat) : 360;
+  const colSpan = Math.ceil(dLngDeg / grid.resolutionDeg) + 1;
+  const wholeRow = colSpan * 2 + 1 >= grid.cols;
+  for (let row = rowMin; row <= rowMax; row++) {
+    if (wholeRow) {
+      for (let col = 0; col < grid.cols; col++) best = closer(row, col, best);
+    } else {
+      for (let dc = -colSpan; dc <= colSpan; dc++) best = closer(row, wrapCol(centerCol + dc), best);
+    }
+  }
+  return best;
 }

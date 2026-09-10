@@ -41,6 +41,15 @@ function densifyGreatCircle(a: [number, number], b: [number, number]): [number, 
   return out;
 }
 
+/** A source's site name for the link text. One malformed URL in the dataset must not take the whole panel down. */
+function hostnameOf(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return url;
+  }
+}
+
 export default function DetailPanel({ selection, onClose }: { selection: Selection; onClose: () => void }) {
   const [configuring, setConfiguring] = useState(false);
 
@@ -183,7 +192,7 @@ export default function DetailPanel({ selection, onClose }: { selection: Selecti
             {dc.sources.map((s) => (
               <li key={s}>
                 <a href={s} target="_blank" rel="noreferrer">
-                  {new URL(s).hostname}
+                  {hostnameOf(s)}
                 </a>
               </li>
             ))}

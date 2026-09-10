@@ -121,7 +121,11 @@ export default function RouteInspector({
     );
   }
 
-  const selected = result?.candidates.find((c) => c.candidate.id === selectedCandidateId) ?? null;
+  // Falls back to the top-ranked route, as the globe and the route switcher
+  // do, so the list, the detail card and the map never disagree about which
+  // route is showing.
+  const selected =
+    result?.candidates.find((c) => c.candidate.id === selectedCandidateId) ?? result?.candidates[0] ?? null;
 
   return (
     <section>
@@ -146,7 +150,14 @@ export default function RouteInspector({
       </div>
 
       {status === "loading" && <p className="design-field-note">Computing candidate marine routes…</p>}
-      {status === "error" && <p className="pp-conn-unavailable">Routing engine error: {error}</p>}
+      {status === "error" && (
+        <p className="pp-conn-unavailable">
+          Routing engine error: {error}{" "}
+          <button type="button" className="design-edit-link" onClick={() => window.location.reload()}>
+            Reload
+          </button>
+        </p>
+      )}
 
       {result && (
         <>
@@ -195,7 +206,7 @@ export default function RouteInspector({
                   <RiCandidateRow
                     key={rc.candidate.id}
                     ranked={rc}
-                    active={rc.candidate.id === selectedCandidateId}
+                    active={rc.candidate.id === selected?.candidate.id}
                     onClick={() => onSelectCandidate(rc.candidate.id)}
                   />
                 ))}
@@ -334,17 +345,14 @@ function RiEndpointCard({ label, endpoint }: { label: string; endpoint: RouteEng
           </>
         )}
 
-        {endpoint.nearestLandingPoint && endpoint.selection.rule !== "shorter-total-connection" && (
+        {/* Only when it was passed over. Inside the radius the chosen point IS
+            the nearest landing point, and repeating it read as a second one. */}
+        {endpoint.nearestLandingPoint && !isReal && endpoint.selection.rule !== "shorter-total-connection" && (
           <>
             <dt>Nearest landing point</dt>
             <dd>
-              {endpoint.nearestLandingPoint.name} ({fmtKm(endpoint.nearestLandingPoint.distanceKm)})
-              {!isReal && (
-                <>
-                  {" "}
-                  &mdash; beyond the {fmtKm(endpoint.searchRadiusKm)} radius, so not used
-                </>
-              )}
+              {endpoint.nearestLandingPoint.name} ({fmtKm(endpoint.nearestLandingPoint.distanceKm)}) &mdash; beyond the{" "}
+              {fmtKm(endpoint.searchRadiusKm)} radius, so not used
             </dd>
           </>
         )}

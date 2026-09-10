@@ -1,10 +1,11 @@
 // React hook driving the routing Web Worker. Debounces/dedupes by input key
-// so unrelated re-renders (or the same source/destination/weights firing
-// again) don't restart the A* search, and discards any response that
-// arrives for a request that's no longer the latest one in flight.
-import { useEffect, useRef, useState } from "react";
+// so unrelated re-renders (or the same source/destination firing again) don't
+// restart the A* search, and discards any response that arrives for a request
+// that's no longer the latest one in flight.
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { RoutingRequest, RoutingResponse } from "./routing.worker";
 import type { RouteEngineResult, RoutingWeights } from "./routingTypes";
+import { rerankRouteResult } from "./hypotheticalRouting";
 
 export interface UseHypotheticalRouteInput {
   sourceLat: number | null;
@@ -18,16 +19,41 @@ export interface UseHypotheticalRouteInput {
 
 export type RoutingStatus = "idle" | "loading" | "ready" | "error";
 
+/**
+ * Shown when the worker script itself cannot be loaded. The usual cause is a
+ * deploy: the worker's file name carries a content hash, so a page opened
+ * before the site was updated asks for a file the new deployment no longer
+ * has. Nothing the page can do fixes that, but a reload does -- and without
+ * this the panel said "Computing candidate marine routes…" forever.
+ */
+const WORKER_LOAD_ERROR =
+  "The routing engine could not be loaded. This usually means the site was updated after this page was " +
+  "opened -- reload the page to continue.";
+
 let worker: Worker | null = null;
 function getWorker(): Worker {
   if (!worker) {
-    worker = new Worker(new URL("./routing.worker.ts", import.meta.url), { type: "module" });
+    const w = new Worker(new URL("./routing.worker.ts", import.meta.url), { type: "module" });
+    // The request handler catches everything, so an error event means the
+    // worker never loaded. Drop it, so the next request starts a fresh one
+    // instead of posting into a dead worker and waiting forever.
+    w.addEventListener("error", () => {
+      if (worker === w) worker = null;
+      w.terminate();
+    });
+    worker = w;
   }
   return worker;
 }
 
 let nextRequestId = 1;
 
+/**
+ * What the search depends on. Weights are deliberately NOT part of it: they
+ * only rank the candidates, which is redone here on the main thread (see
+ * rerankRouteResult). Keying on them restarted the whole search for every
+ * weight click, and the routes disappeared from the globe while it ran.
+ */
 function inputKey(input: UseHypotheticalRouteInput): string | null {
   if (input.sourceLat == null || input.sourceLng == null || input.destLat == null || input.destLng == null) return null;
   return [
@@ -35,10 +61,6 @@ function inputKey(input: UseHypotheticalRouteInput): string | null {
     input.sourceLng.toFixed(3),
     input.destLat.toFixed(3),
     input.destLng.toFixed(3),
-    input.weights.length,
-    input.weights.seabedDifficulty,
-    input.weights.resilience,
-    input.weights.environmental,
   ].join("|");
 }
 
@@ -82,7 +104,16 @@ export function useHypotheticalRoute(input: UseHypotheticalRouteInput): { status
         setStatus("error");
       }
     }
+    // Fired when the worker script fails to load or throws outside the
+    // request handler -- neither produces a message, so without this the
+    // request would simply never finish.
+    function handleError(e: Event) {
+      e.preventDefault();
+      setError(WORKER_LOAD_ERROR);
+      setStatus("error");
+    }
     w.addEventListener("message", handleMessage);
+    w.addEventListener("error", handleError);
 
     if (key !== lastKey.current) {
       lastKey.current = key;
@@ -91,8 +122,8 @@ export function useHypotheticalRoute(input: UseHypotheticalRouteInput): { status
       setStatus("loading");
       setError(null);
       // Drop the previous route BEFORE the new search starts. Without this the
-      // last result stays in state for the whole 15-25 s the worker runs, so
-      // the globe keeps drawing the route between the PREVIOUS pair of cities
+      // last result stays in state for the whole time the worker runs, so the
+      // globe keeps drawing the route between the PREVIOUS pair of cities
       // while the panel says it is routing the new one -- geometry presented as
       // current that belongs to somewhere else entirely. Showing nothing is
       // correct here; showing stale geometry is a false claim about where a
@@ -107,16 +138,20 @@ export function useHypotheticalRoute(input: UseHypotheticalRouteInput): { status
         destLat: input.destLat!,
         destLng: input.destLng!,
         destLabel: input.destLabel,
-        weights: input.weights,
       };
       w.postMessage(req);
     }
 
     return () => {
       w.removeEventListener("message", handleMessage);
+      w.removeEventListener("error", handleError);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 
-  return { status, result, error };
+  // Ranked under the CURRENT weights. Cheap, so it simply runs whenever the
+  // weights or the result change, and the routes stay on the globe throughout.
+  const ranked = useMemo(() => (result ? rerankRouteResult(result, input.weights) : null), [result, input.weights]);
+
+  return { status, result: ranked, error };
 }

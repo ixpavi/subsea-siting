@@ -86,7 +86,9 @@ export const ROUTE_METRIC_PROVENANCE: Record<RouteMetricId, ProvenanceDescriptor
   marineEndpointModeled: {
     provenance: "MODELED",
     basis:
-      "Nearest routable ocean cell in the 0.5-degree grid. A proposed access point, not a surveyed or verified landing site.",
+      "An ocean cell in the 0.5-degree grid: the nearest one connected to the open ocean, unless routing both options " +
+      "showed a real landing point gives a shorter total connection. A proposed access point, not a surveyed or " +
+      "verified landing site.",
   },
   depthBand: {
     provenance: "DERIVED",
@@ -147,7 +149,9 @@ export const ROUTE_METRIC_PROVENANCE: Record<RouteMetricId, ProvenanceDescriptor
   },
   candidateSeparation: {
     provenance: "DERIVED",
-    basis: "Mean point-to-path separation between two candidate corridors, sampled along their derived geometry.",
+    basis:
+      "Largest point-to-path separation between two candidate corridors, measured from each one to the other and " +
+      "sampled every ~10 km along their derived geometry. The mean is shown too, but the maximum decides.",
   },
 };
 

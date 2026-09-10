@@ -215,6 +215,9 @@ interface ProjectionCache {
   camX: number;
   camY: number;
   camZ: number;
+  /** Where one fixed point lands on screen -- changes with the viewport. */
+  refX: number;
+  refY: number;
   /** Per cable, per path: flat [x, y, ...] with NaN for back-facing points.
    *  undefined means "not projected yet at this camera position". */
   screen: (Float64Array | undefined)[][];
@@ -248,6 +251,23 @@ function cameraUnchanged(cache: ProjectionCache, p: { x: number; y: number; z: n
 }
 
 /**
+ * The screen position of one fixed point on the globe.
+ *
+ * The camera position alone is not a complete key: resizing the window --
+ * going full screen to present, rotating a phone -- moves every point on
+ * screen without moving the camera at all. Keyed on the camera only, the
+ * cache kept the old screen positions and clicks were matched against where
+ * the cables used to be. This one projection changes whenever the viewport
+ * does, at the cost of a single matrix operation per hit-test.
+ */
+function referenceProjection(globe: GlobeProjection): { x: number; y: number } {
+  return globe.getScreenCoords(0, 0, PATH_POINT_ALTITUDE);
+}
+
+/** Half a pixel: anything smaller cannot move a point across the hit tolerance. */
+const VIEWPORT_CACHE_TOLERANCE_PX = 0.5;
+
+/**
  * Projects ONE path, lazily.
  *
  * Projecting everything up front wasted almost all of it: the prefilter then
@@ -279,13 +299,22 @@ function projectPath(densified: [number, number][], globe: GlobeProjection): Flo
 /** The lazily-filled projection table for the current camera position. */
 function screenCacheFor(cables: CableFeature[], globe: GlobeProjection): (Float64Array | undefined)[][] {
   const p = globe.camera().position;
-  if (projectionCache && projectionCacheCables === cables && cameraUnchanged(projectionCache, p)) {
+  const ref = referenceProjection(globe);
+  if (
+    projectionCache &&
+    projectionCacheCables === cables &&
+    cameraUnchanged(projectionCache, p) &&
+    Math.abs(projectionCache.refX - ref.x) < VIEWPORT_CACHE_TOLERANCE_PX &&
+    Math.abs(projectionCache.refY - ref.y) < VIEWPORT_CACHE_TOLERANCE_PX
+  ) {
     return projectionCache.screen;
   }
   projectionCache = {
     camX: p.x,
     camY: p.y,
     camZ: p.z,
+    refX: ref.x,
+    refY: ref.y,
     screen: cables.map((c) => new Array<Float64Array | undefined>(c.paths.length)),
   };
   projectionCacheCables = cables;
@@ -369,7 +398,7 @@ function nearCursor(b: PathBounds, lat: number, lng: number): boolean {
 }
 
 /**
- * Finds real cables whose stored path geometry passes within `toleranceOx`
+ * Finds real cables whose stored path geometry passes within `tolerancePx`
  * screen pixels of (clickX, clickY), sorted closest-first. Multiple raw
  * cables.json entries sharing a cable id (see cableNetwork.ts's merge) are
  * naturally combined here too, since we key candidates by cableId.
@@ -379,7 +408,7 @@ export function findCablesNearScreenPoint(
   globe: GlobeProjection,
   clickX: number,
   clickY: number,
-  toleranceOx: number = CABLE_HIT_TOLERANCE_PX
+  tolerancePx: number = CABLE_HIT_TOLERANCE_PX
 ): CableHitCandidate[] {
   // Force fresh camera orientation and matrices -- see module doc, point 2.
   globe.controls().update();
@@ -423,7 +452,7 @@ export function findCablesNearScreenPoint(
         }
         if (!Number.isNaN(prevX)) {
           const d = pointToSegmentDistance(clickX, clickY, prevX, prevY, x, y);
-          if (d <= toleranceOx) {
+          if (d <= tolerancePx) {
             const existing = best.get(cable.id);
             if (!existing || d < existing.distancePx) {
               best.set(cable.id, { cableId: cable.id, cableName: cable.name, color: cable.color, distancePx: d });

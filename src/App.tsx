@@ -13,7 +13,7 @@ import NetworkInspector from "./explore/NetworkInspector";
 import CableChooser from "./explore/CableChooser";
 import { COOLING_SPECS, TIER_SPECS } from "./calculator/facilityCalculator";
 import type { DesignResult, LocationRequirement } from "./design/designTypes";
-import { analyzeConnectivity } from "./design/connectivityAnalysis";
+import { analyzeConnectivity, type ConnectivityAnalysis } from "./design/connectivityAnalysis";
 import type { RouteEngineResult, RoutingProfileId } from "./routing/routingTypes";
 import { buildCableNetworkIndex, getCableDetail } from "./cableNetwork";
 import { frameForPoints, sphericalCentroid, angularDistanceDeg } from "./cameraFraming";
@@ -27,6 +27,32 @@ async function fetchJSON<T>(path: string): Promise<T> {
   const res = await fetch(path);
   if (!res.ok) throw new Error(`Failed to load ${path}: ${res.status}`);
   return res.json();
+}
+
+/**
+ * Real-data connectivity analysis: recomputed whenever the proposed site or
+ * connectivity destination resolves to coordinates. Needs only the source
+ * (destination is optional) -- see design/connectivityAnalysis.ts.
+ *
+ * A hook of its own, taking plain numbers, so the memo's inputs are exactly
+ * the four coordinates. Written inline in App, the React Compiler could not
+ * prove them and gave up on this memo -- and it is the one memo in the app that
+ * must not be lost: analyzeConnectivity merges every cable system and joins
+ * them geometrically against 1,920 landing points.
+ */
+function useConnectivityAnalysis(
+  srcLat: number | null,
+  srcLng: number | null,
+  dstLat: number | null,
+  dstLng: number | null,
+  cables: CableFeature[],
+  landingPoints: LandingPoint[]
+): ConnectivityAnalysis | null {
+  return useMemo(() => {
+    if (srcLat == null || srcLng == null) return null;
+    const destination = dstLat != null && dstLng != null ? { lat: dstLat, lng: dstLng } : null;
+    return analyzeConnectivity({ lat: srcLat, lng: srcLng }, destination, cables, landingPoints);
+  }, [srcLat, srcLng, dstLat, dstLng, cables, landingPoints]);
 }
 
 export default function App() {
@@ -227,25 +253,14 @@ export default function App() {
     return null;
   }, [planningLocation, planningDestination]);
 
-  // Real-data connectivity analysis: recomputed whenever the proposed site or
-  // connectivity destination resolves to coordinates. Needs only the source
-  // (destination is optional) -- see design/connectivityAnalysis.ts.
-  // Coordinates are narrowed to plain numbers BEFORE the memo rather than
-  // inside it. Semantically identical, but it removes the non-null assertions
-  // the React Compiler could not see through -- it was bailing out of this
-  // memo ("existing memoization could not be preserved"), and this is the one
-  // memo in the app that must not be lost: analyzeConnectivity merges 724
-  // cable systems and geometrically joins them against 1,920 landing points.
-  const srcLat = planningMode ? planningLocation?.lat ?? null : null;
-  const srcLng = planningMode ? planningLocation?.lng ?? null : null;
-  const dstLat = planningMode ? planningDestination?.lat ?? null : null;
-  const dstLng = planningMode ? planningDestination?.lng ?? null : null;
-
-  const connectivityAnalysis = useMemo(() => {
-    if (srcLat == null || srcLng == null) return null;
-    const destination = dstLat != null && dstLng != null ? { lat: dstLat, lng: dstLng } : null;
-    return analyzeConnectivity({ lat: srcLat, lng: srcLng }, destination, cables, landingPoints);
-  }, [srcLat, srcLng, dstLat, dstLng, cables, landingPoints]);
+  const connectivityAnalysis = useConnectivityAnalysis(
+    planningMode ? planningLocation?.lat ?? null : null,
+    planningMode ? planningLocation?.lng ?? null : null,
+    planningMode ? planningDestination?.lat ?? null : null,
+    planningMode ? planningDestination?.lng ?? null : null,
+    cables,
+    landingPoints
+  );
 
   return (
     <div className="app-root">
@@ -367,7 +382,15 @@ export default function App() {
             />
           )}
 
-          {!planningMode && selected && <DetailPanel selection={selected} onClose={() => setSelected(null)} />}
+          {/* Keyed by facility, so the configurator and its settings start
+              fresh for each one instead of carrying over from the last. */}
+          {!planningMode && selected && (
+            <DetailPanel
+              key={`${selected.kind}:${selected.data.id}`}
+              selection={selected}
+              onClose={() => setSelected(null)}
+            />
+          )}
 
           {cableChoices && (
             <CableChooser candidates={cableChoices} onChoose={handleChooseCable} onClose={() => setCableChoices(null)} />
@@ -425,17 +448,20 @@ export default function App() {
                 setRouteEngineResult(null);
                 setSelectedRouteCandidateId(null);
               }}
+              // The search fields report every keystroke, resolved or not. Only
+              // a resolved place moves the camera -- otherwise typing a new
+              // site flew the globe back to the destination on every key.
               onLocationResolved={(loc) => {
                 setPlanningLocation(loc);
-                focusCamera(loc, planningDestination);
+                if (loc.lat != null && loc.lng != null) focusCamera(loc, planningDestination);
               }}
               onDestinationResolved={(dest) => {
                 setPlanningDestination(dest);
-                focusCamera(planningLocation, dest);
+                if (dest.lat != null && dest.lng != null) focusCamera(planningLocation, dest);
               }}
               onResult={(result) => {
                 setPlanningResult(result);
-                focusCamera(planningLocation, planningDestination);
+                if (result) focusCamera(planningLocation, planningDestination);
               }}
             />
           )}
