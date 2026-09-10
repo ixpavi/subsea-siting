@@ -1226,6 +1226,11 @@ function LocationSearchField({
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const debounceRef = useRef<number | null>(null);
+  // Every keystroke gets a new id, and only the response for the newest id is
+  // applied. Without this, a slow reply for "Bang" could land after the reply
+  // for "Bangalore" and replace the right suggestions with the wrong ones.
+  const requestIdRef = useRef(0);
+  const abortRef = useRef<AbortController | null>(null);
 
   const resolved = value.lat != null && value.lng != null;
 
@@ -1235,25 +1240,36 @@ function LocationSearchField({
     setOpen(true);
     setError(null);
     if (debounceRef.current) window.clearTimeout(debounceRef.current);
+    abortRef.current?.abort();
+    const id = ++requestIdRef.current;
     if (q.trim().length < 2) {
       setResults([]);
+      setLoading(false);
       return;
     }
     debounceRef.current = window.setTimeout(async () => {
+      const controller = new AbortController();
+      abortRef.current = controller;
       setLoading(true);
       try {
-        const r = await geocodeLocation(q);
-        setResults(r);
+        const r = await geocodeLocation(q, { signal: controller.signal });
+        if (id === requestIdRef.current) setResults(r);
       } catch {
-        setError("Couldn't reach the geocoding service.");
+        // A superseded or cancelled search is not an error to show.
+        if (id !== requestIdRef.current || controller.signal.aborted) return;
+        setError("Couldn't reach the place search service.");
         setResults([]);
       } finally {
-        setLoading(false);
+        if (id === requestIdRef.current) setLoading(false);
       }
-    }, 400);
+    }, 250);
   }
 
   function select(r: GeocodeResult) {
+    // Anything still in flight belongs to a query the user has now finished.
+    abortRef.current?.abort();
+    requestIdRef.current++;
+    setLoading(false);
     setQuery(r.displayName);
     setOpen(false);
     setResults([]);

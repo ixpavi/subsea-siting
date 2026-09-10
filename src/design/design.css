@@ -1631,3 +1631,100 @@
   opacity: 0.65;
   font-size: 10.5px;
 }
+
+/* ============================================================
+   Route switcher -- floats over the globe whenever proposed
+   routes are drawn, on every planning step.
+   ============================================================ */
+
+.route-switcher {
+  position: absolute;
+  /* Below .pp-shell (25), so the docked panel always wins any overlap. */
+  z-index: 24;
+  /* So the widths set here and in mobile.css include the padding: without it
+     the phone layout came out 18 px wider than its gutters allowed. */
+  box-sizing: border-box;
+  bottom: 18px;
+  /* Centred in the globe area to the LEFT of the docked planning panel,
+     whose width is max(320px, min(420px, 38vw)) -- see .pp-shell. */
+  left: calc((100vw - max(320px, min(420px, 38vw))) / 2);
+  transform: translateX(-50%);
+  max-width: calc(100vw - max(320px, min(420px, 38vw)) - 32px);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px 10px;
+  background: rgba(10, 14, 24, 0.92);
+  border: 1px solid var(--dc-border-strong);
+  border-radius: var(--dc-radius-md);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: var(--dc-text);
+}
+
+.route-switcher-title {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--dc-text-dim);
+}
+
+.route-switcher-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.route-switcher-option {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 38px;
+  padding: 6px 11px;
+  text-align: left;
+  background: var(--dc-bg-inset);
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-sm);
+  color: var(--dc-text);
+  font: inherit;
+  cursor: pointer;
+}
+.route-switcher-option:hover {
+  border-color: var(--dc-border-strong);
+}
+.route-switcher-option.active {
+  border-color: var(--dc-accent);
+  background: rgba(79, 209, 255, 0.1);
+}
+.route-switcher-option:focus-visible {
+  outline: 2px solid var(--dc-accent);
+  outline-offset: 2px;
+}
+
+/* A short line segment rather than a dot, because it stands for a line. */
+.route-switcher-swatch {
+  flex: none;
+  width: 18px;
+  height: 4px;
+  border-radius: 2px;
+}
+
+.route-switcher-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.3;
+}
+.route-switcher-name {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.route-switcher-meta {
+  font-family: var(--dc-font-mono);
+  font-size: 10px;
+  color: var(--dc-text-dim);
+  white-space: nowrap;
+}

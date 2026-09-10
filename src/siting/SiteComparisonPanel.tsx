@@ -81,6 +81,10 @@ export default function SiteComparison({ cables, landingPoints, onClose, onFocus
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<SiteComparisonResult | null>(null);
   const debounceRef = useRef<number | null>(null);
+  // Only the newest search's response is applied -- see LocationSearchField in
+  // design/PlanningPanel.tsx for the out-of-order reply this prevents.
+  const requestIdRef = useRef(0);
+  const abortRef = useRef<AbortController | null>(null);
 
   const coolingOptions = useMemo(() => Object.keys(COOLING_SPECS) as CoolingConfig[], []);
 
@@ -88,21 +92,28 @@ export default function SiteComparison({ cables, landingPoints, onClose, onFocus
     setQuery(q);
     setSearchError(null);
     if (debounceRef.current) window.clearTimeout(debounceRef.current);
+    abortRef.current?.abort();
+    const id = ++requestIdRef.current;
     if (q.trim().length < 2) {
       setResults([]);
+      setSearching(false);
       return;
     }
     debounceRef.current = window.setTimeout(async () => {
+      const controller = new AbortController();
+      abortRef.current = controller;
       setSearching(true);
       try {
-        setResults(await geocodeLocation(q));
+        const found = await geocodeLocation(q, { signal: controller.signal });
+        if (id === requestIdRef.current) setResults(found);
       } catch {
-        setSearchError("Couldn't reach the geocoding service.");
+        if (id !== requestIdRef.current || controller.signal.aborted) return;
+        setSearchError("Couldn't reach the place search service.");
         setResults([]);
       } finally {
-        setSearching(false);
+        if (id === requestIdRef.current) setSearching(false);
       }
-    }, 400);
+    }, 250);
   }, []);
 
   function addSite(r: GeocodeResult) {
@@ -114,6 +125,9 @@ export default function SiteComparison({ cables, landingPoints, onClose, onFocus
       if (prev.some((s) => s.id === id)) return prev;
       return [...prev, { id, label: r.displayName, lat: r.lat, lng: r.lng, countryCode: r.countryCode }];
     });
+    abortRef.current?.abort();
+    requestIdRef.current++;
+    setSearching(false);
     setQuery("");
     setResults([]);
     // A newly added site invalidates the previous ranking.

@@ -5,6 +5,7 @@ import Legend from "./Legend";
 import SiteComparisonPanel from "./siting/SiteComparisonPanel";
 import DetailPanel from "./DetailPanel";
 import PlanningPanel from "./design/PlanningPanel";
+import RouteSwitcher from "./design/RouteSwitcher";
 import ConnectivityInspector from "./design/ConnectivityInspector";
 import NetworkSearch from "./explore/NetworkSearch";
 import CableDirectory from "./explore/CableDirectory";
@@ -389,6 +390,17 @@ export default function App() {
                 setNetworkSelection(null);
                 setExplorerScope(null);
               }}
+            />
+          )}
+
+          {/* On every planning step, not just Routes: the globe keeps drawing the
+              proposed routes on later steps, so the way to choose between them
+              has to stay next to them. */}
+          {planningMode && routeEngineResult && routeEngineResult.candidates.length > 0 && (
+            <RouteSwitcher
+              result={routeEngineResult}
+              selectedId={selectedRouteCandidateId}
+              onSelect={setSelectedRouteCandidateId}
             />
           )}
 

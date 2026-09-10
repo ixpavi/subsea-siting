@@ -374,3 +374,80 @@
     display: none;
   }
 }
+
+/* Route switcher on a phone held upright: the planning panel is a bottom
+   sheet here, so the switcher moves to the top of the globe instead.
+
+   One row, equal columns, no distance line. Left to wrap, the three options
+   stacked into a block 182 px tall inside a globe area barely 200 px tall --
+   covering the very routes it switches between. The distances are still on
+   the Routes step; here the job is only to choose. */
+@media (max-width: 760px) {
+  .route-switcher {
+    top: var(--m-title-h);
+    bottom: auto;
+    left: 50%;
+    width: calc(100vw - 2 * var(--m-gutter));
+    max-width: none;
+    padding: 6px 8px 8px;
+    gap: 4px;
+  }
+  .route-switcher-options {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+    gap: 5px;
+  }
+  .route-switcher-option {
+    min-height: var(--touch, 44px);
+    min-width: 0;
+    padding: 5px 7px;
+    gap: 6px;
+  }
+  .route-switcher-name {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    font-size: 10px;
+    line-height: 1.25;
+  }
+  .route-switcher-meta {
+    display: none;
+  }
+}
+
+/* Phone on its side: the panel is a right-hand column, so centre the
+   switcher in the globe area to its left, as on desktop -- and use the same
+   compact single row as portrait. Left to wrap, it took two rows and 127 px
+   of a 390 px screen. */
+@media (max-width: 900px) and (max-height: 520px) and (orientation: landscape) {
+  .route-switcher {
+    top: auto;
+    bottom: var(--m-gutter);
+    left: calc((100vw - var(--m-landscape-col)) / 2);
+    width: calc(100vw - var(--m-landscape-col) - 2 * var(--m-gutter));
+    max-width: none;
+    padding: 6px 8px 8px;
+    gap: 4px;
+  }
+  .route-switcher-options {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+    gap: 5px;
+  }
+  .route-switcher-option {
+    min-height: var(--touch, 44px);
+    min-width: 0;
+    padding: 5px 7px;
+    gap: 6px;
+  }
+  .route-switcher-name {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    font-size: 10px;
+    line-height: 1.25;
+  }
+  .route-switcher-meta {
+    display: none;
+  }
+}

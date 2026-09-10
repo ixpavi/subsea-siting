@@ -13,6 +13,7 @@ import {
 import type { CableHitCandidate } from "./cableHitTest";
 import { findRoutesNearScreenPoint } from "./routing/routeHitTest";
 import type { RouteEngineResult, RoutingProfileId } from "./routing/routingTypes";
+import { ROUTE_COLORS, SELECTED_ROUTE_COLOR } from "./routing/routeColors";
 import { assetUrl } from "./assetUrl";
 
 const LAND_DC_COLOR = "#5eead4";
@@ -51,14 +52,6 @@ interface RouteHaloPath {
 
 type FlatPath = CableFlatPath | RouteFlatPath | RouteHaloPath;
 
-const ROUTE_COLORS: Record<RoutingProfileId, string> = {
-  shortest: "#facc15",
-  "shallow-favoring": "#a78bfa",
-  "diverse-corridor": "#34d399",
-};
-
-/** Bright, high-contrast override for whichever candidate is currently selected -- distinct from every ROUTE_COLORS entry and from every real-cable color in the dataset, so "the proposed route" reads as a completely different kind of object, not just another colored line among hundreds. */
-const SELECTED_ROUTE_COLOR = "#ffffff";
 
 // Self-hosted rather than pulled from a CDN, so the globe is not one unpkg
 // outage away from a black sphere. Built by scripts/build-earth-texture.py
