@@ -3,13 +3,17 @@
 // Web Worker via useHypotheticalRoute) and presents it. No routing logic
 // lives here; this only renders what the engine already computed.
 //
+// The routing hook and the weights are owned by PlanningPanel, not by this
+// component. This one is mounted only while the Routes step is on screen, and
+// when it owned the search, leaving the step mid-search discarded the result
+// and returning to it wiped the route already on the globe. See PlanningPanel.
+//
 // Every displayed routing value is rendered through <Metric>, which requires
 // a RouteMetricId from routing/provenance.ts. That is a compile-time
 // constraint, not a convention: a metric with no provenance classification
 // cannot be rendered here at all.
-import { useEffect, useState } from "react";
-import { useHypotheticalRoute } from "../routing/useHypotheticalRoute";
-import { DEFAULT_ROUTING_WEIGHTS } from "../routing/hypotheticalRouting";
+import { useState } from "react";
+import type { RoutingStatus } from "../routing/useHypotheticalRoute";
 import { PROVENANCE_LABEL, ROUTE_METRIC_PROVENANCE } from "../routing/provenance";
 import { analyzeWeightSensitivity, SELECTABLE_WEIGHT_LEVELS } from "../routing/weightSensitivity";
 import type { RouteMetricId } from "../routing/provenance";
@@ -70,49 +74,32 @@ function Metric({ label, value, metric, tone }: { label: string; value: string; 
 interface Props {
   sourceLat: number | null;
   sourceLng: number | null;
-  sourceLabel: string;
   destLat: number | null;
   destLng: number | null;
-  destLabel: string;
+  /** Routing state, owned by PlanningPanel so it outlives this step. */
+  status: RoutingStatus;
+  result: RouteEngineResult | null;
+  error: string | null;
+  weights: RoutingWeights;
+  onWeightsChange: (weights: RoutingWeights) => void;
   selectedCandidateId: RoutingProfileId | null;
   onSelectCandidate: (id: RoutingProfileId | null) => void;
-  onResult: (result: RouteEngineResult | null) => void;
 }
 
 export default function RouteInspector({
   sourceLat,
   sourceLng,
-  sourceLabel,
   destLat,
   destLng,
-  destLabel,
+  status,
+  result,
+  error,
+  weights,
+  onWeightsChange,
   selectedCandidateId,
   onSelectCandidate,
-  onResult,
 }: Props) {
-  const [weights, setWeights] = useState<RoutingWeights>(DEFAULT_ROUTING_WEIGHTS);
   const [showAssumptions, setShowAssumptions] = useState(false);
-
-  const { status, result, error } = useHypotheticalRoute({
-    sourceLat,
-    sourceLng,
-    sourceLabel,
-    destLat,
-    destLng,
-    destLabel,
-    weights,
-  });
-
-  useEffect(() => {
-    onResult(result);
-  }, [result, onResult]);
-
-  useEffect(() => {
-    if (!result || result.candidates.length === 0) return;
-    const stillValid = result.candidates.some((c) => c.candidate.id === selectedCandidateId);
-    if (!stillValid) onSelectCandidate(result.candidates[0].candidate.id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [result]);
 
   if (sourceLat == null || sourceLng == null) {
     return (
@@ -175,22 +162,22 @@ export default function RouteInspector({
                 <RiWeightControl
                   label="Directness (length)"
                   value={weights.length}
-                  onChange={(v) => setWeights((w) => ({ ...w, length: v }))}
+                  onChange={(v) => onWeightsChange({ ...weights, length: v })}
                 />
                 <RiWeightControl
                   label="Seabed difficulty"
                   value={weights.seabedDifficulty}
-                  onChange={(v) => setWeights((w) => ({ ...w, seabedDifficulty: v }))}
+                  onChange={(v) => onWeightsChange({ ...weights, seabedDifficulty: v })}
                 />
                 <RiWeightControl
                   label="Resilience / diversity"
                   value={weights.resilience}
-                  onChange={(v) => setWeights((w) => ({ ...w, resilience: v }))}
+                  onChange={(v) => onWeightsChange({ ...weights, resilience: v })}
                 />
                 <RiEnvironmentalWeight
                   criteria={result.criteria}
                   value={weights.environmental}
-                  onChange={(v) => setWeights((w) => ({ ...w, environmental: v }))}
+                  onChange={(v) => onWeightsChange({ ...weights, environmental: v })}
                 />
                 <p className="design-field-note">
                   Cost is deliberately <strong>not</strong> a weighting axis: the cost model is a deterministic

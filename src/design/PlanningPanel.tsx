@@ -34,7 +34,9 @@ import RouteInspector from "./RouteInspector";
 import ClimateAdjustedPue from "./ClimateAdjustedPue";
 import CoolingAdvisor from "./CoolingAdvisor";
 import { getCountryFactors } from "../siting/countryFactors";
-import type { RouteEngineResult, RoutingProfileId } from "../routing/routingTypes";
+import type { RouteEngineResult, RoutingProfileId, RoutingWeights } from "../routing/routingTypes";
+import { useHypotheticalRoute } from "../routing/useHypotheticalRoute";
+import { DEFAULT_ROUTING_WEIGHTS } from "../routing/hypotheticalRouting";
 import CloseButton from "../CloseButton";
 import "./design.css";
 
@@ -248,6 +250,60 @@ export default function PlanningPanel({
   const destinationTyped = destination.query.trim().length > 0;
   const destinationResolved = destination.lat != null && destination.lng != null;
   const canLeaveSiteConnectivity = locationResolved && (!destinationTyped || destinationResolved);
+
+  // --- Hypothetical routing ---------------------------------------------------
+  //
+  // The search lives HERE, not inside RouteInspector, and that is the fix for
+  // routes that never appeared. RouteInspector is only mounted while the
+  // Routes step is on screen, and it used to own the routing hook. So:
+  //
+  //  - leaving the Routes step before the search finished unmounted the hook,
+  //    its listener was removed, and the worker's answer was thrown away --
+  //    the globe then showed no route for the rest of the wizard;
+  //  - returning to the Routes step mounted a fresh hook whose initial
+  //    result was null, which immediately cleared the route already on the
+  //    globe and started the whole search again.
+  //
+  // An intercontinental pair takes about 14 s cold in the browser, so both
+  // were easy to hit by simply clicking Next while it ran. This component stays
+  // mounted for the whole planning session, so the search now survives moving
+  // between steps and its result is never discarded.
+  //
+  // It still only STARTS once the Routes step is reached, so choosing
+  // endpoints on the Site & Connectivity step does not queue searches the user
+  // has not asked for, and a proposed route never appears over -- and fades
+  // out -- the real cables that step is showing. Going back before the Routes
+  // step clears it, which is right: that is where the endpoints are edited.
+  const [routeWeights, setRouteWeights] = useState<RoutingWeights>(DEFAULT_ROUTING_WEIGHTS);
+  const routesStepIndex = activeSteps.indexOf("routes");
+  const routesReached = routesStepIndex >= 0 && stepIndex >= routesStepIndex;
+
+  const routing = useHypotheticalRoute({
+    sourceLat: location.lat ?? null,
+    sourceLng: location.lng ?? null,
+    sourceLabel: location.name ?? location.query,
+    destLat: routesReached ? (destination.lat ?? null) : null,
+    destLng: routesReached ? (destination.lng ?? null) : null,
+    destLabel: destination.name ?? destination.query,
+    weights: routeWeights,
+  });
+
+  useEffect(() => {
+    onRouteResult(routing.result);
+  }, [routing.result, onRouteResult]);
+
+  // Default the selection to the top-ranked candidate whenever a new result
+  // arrives, unless the current selection is still one of its candidates.
+  // Here rather than in RouteInspector for the same reason as the search: a
+  // result that lands while the user is on a later step still needs a
+  // selected route for the globe to highlight.
+  useEffect(() => {
+    const r = routing.result;
+    if (!r || r.candidates.length === 0) return;
+    const stillValid = r.candidates.some((c) => c.candidate.id === selectedRouteCandidateId);
+    if (!stillValid) onSelectRouteCandidate(r.candidates[0].candidate.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routing.result]);
 
   function next() {
     const idx = activeSteps.indexOf(step);
@@ -521,7 +577,12 @@ export default function PlanningPanel({
                 />
 
                 {connectivityAnalysis && (
-                  <ConnectivityAnalysisPanel analysis={connectivityAnalysis} onExploreCables={onExploreCables} />
+                  <ConnectivityAnalysisPanel
+                    analysis={connectivityAnalysis}
+                    onExploreCables={onExploreCables}
+                    siteLabel={location.name ?? location.query}
+                    destinationLabel={destination.name ?? destination.query}
+                  />
                 )}
               </>
             )}
@@ -542,13 +603,15 @@ export default function PlanningPanel({
             <RouteInspector
               sourceLat={location.lat ?? null}
               sourceLng={location.lng ?? null}
-              sourceLabel={location.name ?? location.query}
               destLat={destination.lat ?? null}
               destLng={destination.lng ?? null}
-              destLabel={destination.name ?? destination.query}
+              status={routing.status}
+              result={routing.result}
+              error={routing.error}
+              weights={routeWeights}
+              onWeightsChange={setRouteWeights}
               selectedCandidateId={selectedRouteCandidateId}
               onSelectCandidate={onSelectRouteCandidate}
-              onResult={onRouteResult}
             />
             <div className="design-nav">
               <button className="design-btn-secondary" onClick={back}>
@@ -909,11 +972,25 @@ function RoadmapNote() {
   );
 }
 
-const RELEVANCE_LABEL: Record<RelevantCable["relevance"], string> = {
-  direct: "Direct",
-  "source-side": "Source side",
-  "destination-side": "Destination side",
-};
+/** "Bengaluru, Karnataka, India" -> "Bengaluru": short enough for a tag. */
+function shortPlace(label: string | undefined, fallback: string): string {
+  const first = label?.split(",")[0]?.trim();
+  return first ? first : fallback;
+}
+
+/**
+ * What a cable's relevance actually means, in words that cannot be misread.
+ *
+ * "Source side" / "Destination side" read as "on the way from one to the
+ * other". They mean nothing of the kind: a destination-side cable lands near
+ * the destination and may run anywhere else entirely. Bangalore -> New York
+ * listed Gemini Bermuda, Seabras-1 and Havfrue as its cables, all of which land
+ * in New York or New Jersey and none of which goes anywhere near India.
+ */
+function relevanceLabel(relevance: RelevantCable["relevance"], site: string, destination: string): string {
+  if (relevance === "direct") return "Lands near both";
+  return relevance === "source-side" ? `Near ${site} only` : `Near ${destination} only`;
+}
 
 /**
  * Nothing within the search radius. That has two causes and they are not the
@@ -971,13 +1048,23 @@ function NoLandingPointsNearby({
 function ConnectivityAnalysisPanel({
   analysis,
   onExploreCables,
+  siteLabel,
+  destinationLabel,
 }: {
   analysis: ConnectivityAnalysis;
   onExploreCables: (cableIds: string[]) => void;
+  siteLabel?: string;
+  destinationLabel?: string;
 }) {
   const hasDestination = analysis.destination != null;
   const sourceUnavailable = analysis.sourceLandingPointDiversity === 0;
   const destinationUnavailable = hasDestination && analysis.destinationLandingPointDiversity === 0;
+
+  const site = shortPlace(siteLabel, "the site");
+  const dest = shortPlace(destinationLabel, "the destination");
+  const siteOnly = analysis.relevantCables.filter((c) => c.relevance === "source-side").length;
+  const destinationOnly = analysis.relevantCables.filter((c) => c.relevance === "destination-side").length;
+  const direct = analysis.directCableSystemDiversity;
 
   return (
     <div>
@@ -993,11 +1080,33 @@ function ConnectivityAnalysisPanel({
         )}
       </div>
 
+      {/* With a destination, one combined "relevant" count was the misleading
+          headline: it added up cables at either end, so Bangalore -> New York
+          reported 6 relevant systems when none of them reaches Bangalore and
+          none connects the two. Split it so the count that answers the
+          question -- does anything already link these? -- comes first. */}
       <div className="pp-conn-summary">
-        <div className="pp-conn-stat">
-          <span className="pp-conn-stat-value dc-mono">{analysis.cableSystemDiversity}</span>
-          <span className="pp-conn-stat-label">Relevant cable systems</span>
-        </div>
+        {hasDestination ? (
+          <>
+            <div className="pp-conn-stat">
+              <span className="pp-conn-stat-value dc-mono">{direct}</span>
+              <span className="pp-conn-stat-label">Connect both ends</span>
+            </div>
+            <div className="pp-conn-stat">
+              <span className="pp-conn-stat-value dc-mono">{siteOnly}</span>
+              <span className="pp-conn-stat-label">Near {site} only</span>
+            </div>
+            <div className="pp-conn-stat">
+              <span className="pp-conn-stat-value dc-mono">{destinationOnly}</span>
+              <span className="pp-conn-stat-label">Near {dest} only</span>
+            </div>
+          </>
+        ) : (
+          <div className="pp-conn-stat">
+            <span className="pp-conn-stat-value dc-mono">{analysis.cableSystemDiversity}</span>
+            <span className="pp-conn-stat-label">Cable systems near {site}</span>
+          </div>
+        )}
         <div className="pp-conn-stat">
           <span className="pp-conn-stat-value dc-mono">
             {analysis.sourceLandingPointDiversity}
@@ -1007,12 +1116,6 @@ function ConnectivityAnalysisPanel({
             Landing points{hasDestination ? " (source / destination)" : " (source)"}
           </span>
         </div>
-        {hasDestination && (
-          <div className="pp-conn-stat">
-            <span className="pp-conn-stat-value dc-mono">{analysis.directCableSystemDiversity}</span>
-            <span className="pp-conn-stat-label">Direct systems (both ends)</span>
-          </div>
-        )}
         <div className="pp-conn-stat">
           <span className="pp-conn-stat-value dc-mono">{analysis.searchRadiusKm} km</span>
           <span className="pp-conn-stat-label">Search radius</span>
@@ -1033,6 +1136,15 @@ function ConnectivityAnalysisPanel({
           searchRadiusKm={analysis.searchRadiusKm}
         />
       )}
+      {hasDestination && direct === 0 && analysis.relevantCables.length > 0 && (
+        <p className="design-field-note">
+          <strong>
+            No existing cable system lands near both {site} and {dest}.
+          </strong>{" "}
+          Each system listed below lands near one end only. It shows what is already at that end, not a link
+          between the two &mdash; the hypothetical route on the next step is what would connect them.
+        </p>
+      )}
       {!hasDestination && !sourceUnavailable && (
         <p className="design-field-note">
           Add a connectivity destination to see which of these systems also land near it.
@@ -1048,15 +1160,19 @@ function ConnectivityAnalysisPanel({
                   {cable.name}
                 </span>
                 <span className={`pp-cable-relevance pp-cable-relevance-${cable.relevance}`}>
-                  {RELEVANCE_LABEL[cable.relevance]}
+                  {relevanceLabel(cable.relevance, site, dest)}
                 </span>
               </div>
               <div className="pp-cable-landings">
                 {cable.sourceLandingPoints.length > 0 && (
-                  <div>Source: {cable.sourceLandingPoints.map((lp) => lp.name).join(", ")}</div>
+                  <div>
+                    Lands near {site}: {cable.sourceLandingPoints.map((lp) => lp.name).join(", ")}
+                  </div>
                 )}
                 {cable.destinationLandingPoints.length > 0 && (
-                  <div>Destination: {cable.destinationLandingPoints.map((lp) => lp.name).join(", ")}</div>
+                  <div>
+                    Lands near {dest}: {cable.destinationLandingPoints.map((lp) => lp.name).join(", ")}
+                  </div>
                 )}
               </div>
             </div>

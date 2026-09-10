@@ -930,7 +930,13 @@ const Globe = forwardRef<GlobeApi, Props>(function Globe(
     if (rel) {
       return `<div class="globe-tooltip" style="border-color:${p.color}">
         <div style="font-weight:600">${p.cableName}</div>
-        <div class="detail-section-label" style="margin:4px 0">REAL CABLE -- ${rel.relevance.replace("-", " ").toUpperCase()}</div>
+        <div class="detail-section-label" style="margin:4px 0">REAL CABLE -- ${
+          rel.relevance === "direct"
+            ? "LANDS NEAR BOTH ENDS"
+            : rel.relevance === "source-side"
+              ? "LANDS NEAR THE SITE ONLY"
+              : "LANDS NEAR THE DESTINATION ONLY"
+        }</div>
         <div class="globe-tooltip-hint">click for connectivity details</div>
       </div>`;
     }
