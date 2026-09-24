@@ -19,6 +19,12 @@
 // must never rank higher because less is known about it. That is the single
 // most dangerous failure mode in a comparison tool, because the result still
 // looks complete.
+//
+// THE CABLE COUNTS TOO. Given a destination, every site is routed to it by the
+// same engine the planner uses, and the length of that route is a criterion
+// like any other. This is where siting and connectivity stop being two
+// separate analyses: a site with a cooler climate that needs thousands of
+// kilometres more cable to reach its users can lose to one that does not.
 import type { ClimateProfile } from "./climateProfile";
 import type { CountryFactors } from "./countryFactors";
 import type { CoolingAdvice } from "./coolingAdvisor";
@@ -28,7 +34,8 @@ export type SiteCriterionId =
   | "adjustedPue"
   | "waterStress"
   | "gridCarbon"
-  | "connectivity";
+  | "connectivity"
+  | "route";
 
 export interface SiteCriterionMeta {
   id: SiteCriterionId;
@@ -92,7 +99,31 @@ export const SITE_CRITERIA: Record<SiteCriterionId, SiteCriterionMeta> = {
     provenance: "REAL",
     source: "Distinct real submarine cable systems landing within the connectivity search radius (TeleGeography).",
   },
+  route: {
+    id: "route",
+    sentenceLabel: "cable route to the destination",
+    label: "Cable route to destination",
+    higherIsBetter: false,
+    unit: "km",
+    provenance: "DERIVED",
+    source:
+      "Total connection distance of the top-ranked hypothetical route from the site to the destination -- marine " +
+      "route, any overland crossing, and the overland access at both ends -- from this app's routing engine. Round-" +
+      "trip time is shown beside it but not scored separately: it is the same distance in milliseconds.",
+  },
 };
+
+/** A site's hypothetical cable route to the comparison's destination. */
+export interface SiteRoute {
+  totalKm: number;
+  marineKm: number;
+  overlandCrossingKm: number;
+  /** Minimum round-trip time over that length of fibre, ms. */
+  roundTripMs: number;
+  costUsd: number;
+  /** Names of any overland crossings, e.g. Egypt. */
+  crossings: string[];
+}
 
 /** Everything gathered for one candidate site before ranking. */
 export interface SiteEvaluation {
@@ -106,6 +137,12 @@ export interface SiteEvaluation {
   cooling: CoolingAdvice | null;
   /** Distinct real cable systems within the connectivity search radius. */
   cableSystemsNearby: number | null;
+  /**
+   * Route to the comparison's destination. undefined: no destination was set,
+   * so the criterion does not exist. null: a destination was set but no route
+   * could be computed -- unknown, and treated as unknown.
+   */
+  route?: SiteRoute | null;
   /** Populated when the site could not be evaluated at all. */
   error: string | null;
 }
@@ -155,6 +192,7 @@ export const DEFAULT_SITE_WEIGHTS: SiteWeights = {
   waterStress: 1,
   gridCarbon: 1,
   connectivity: 1,
+  route: 1,
 };
 
 /** Raw value for one criterion at one site, or null when not known. */
@@ -172,6 +210,8 @@ export function rawValue(ev: SiteEvaluation, id: SiteCriterionId): number | null
       return ev.countryFactors?.carbonIntensityGco2PerKwh ?? null;
     case "connectivity":
       return ev.cableSystemsNearby;
+    case "route":
+      return ev.route?.totalKm ?? null;
   }
 }
 
@@ -278,7 +318,9 @@ export function compareSites(
     return { ranked: [], criteria: [], failed, indeterminate: true, notes };
   }
 
-  const ids = Object.keys(SITE_CRITERIA) as SiteCriterionId[];
+  // The route criterion exists only when a destination was given.
+  const routed = usable.some((s) => s.route !== undefined);
+  const ids = (Object.keys(SITE_CRITERIA) as SiteCriterionId[]).filter((id) => id !== "route" || routed);
   const criteria = ids.map((id) => buildSiteCriterion(id, usable, weights[id] ?? 0));
   const active = criteria.filter((c) => c.discriminates);
   const totalWeight = active.reduce((a, c) => a + c.weight, 0);

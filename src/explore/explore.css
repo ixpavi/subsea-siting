@@ -309,6 +309,11 @@
   margin-bottom: 4px;
 }
 
+.ni-owner-list {
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .ni-chip-list {
   display: flex;
   flex-wrap: wrap;

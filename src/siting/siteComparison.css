@@ -62,6 +62,30 @@
 .site-compare-add input:disabled { opacity: 0.45; }
 
 .site-compare-hint { margin: 7px 0 0; font-size: 0.75rem; color: #64748b; }
+.site-compare-add + .site-compare-add,
+.site-compare-chips + .site-compare-add { margin-top: 16px; }
+.site-compare-optional { text-transform: none; letter-spacing: 0; opacity: 0.8; }
+
+/* The chosen destination, shown in place of its search field. */
+.site-compare-destination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 4px 7px 12px;
+  border-radius: 8px;
+  background: rgba(251, 191, 36, 0.08);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  color: #fcd34d;
+  font-size: 0.82rem;
+}
+
+/* Small second line inside a table cell, e.g. "via Egypt". */
+.site-compare-note {
+  display: block;
+  font-size: 0.68rem;
+  color: #64748b;
+}
 .site-compare-error { margin: 7px 0 0; font-size: 0.75rem; color: #fca5a5; }
 
 .site-compare-results {

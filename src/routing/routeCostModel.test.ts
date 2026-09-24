@@ -7,6 +7,7 @@ const UNAVAILABLE_ENV: EnvironmentalAssessment = { available: false, reason: "no
 function analysisWith(marineDistanceKm: number, difficultyIndex: number): RouteAnalysis {
   return {
     marineDistanceKm,
+    overlandCrossingKm: 0,
     totalDistanceKm: marineDistanceKm,
     depthProfile: [],
     shallowestBand: null,

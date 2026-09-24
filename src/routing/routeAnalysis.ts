@@ -6,6 +6,7 @@ import type { OceanGrid } from "./oceanGrid";
 import { bandForDepth, depthAt } from "./oceanGrid";
 import { bandRange, computeDifficultyIndex, depthDifficultyMultiplier } from "./marineCostSurface";
 import { interpolateLatLng } from "./geo";
+import { marineParts, type RouteCrossing } from "./landCrossings";
 import type { DepthBandRange, DepthProfileSample, RouteAnalysis } from "./routingTypes";
 
 function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
@@ -74,16 +75,29 @@ const BAND_DESCRIPTIONS: Record<number, string> = {
 
 export function computeRouteAnalysis(
   grid: OceanGrid,
-  marinePath: [number, number][],
+  path: [number, number][],
   terrestrialAccessKmSource: number | null,
-  terrestrialAccessKmDest: number | null
+  terrestrialAccessKmDest: number | null,
+  crossings: RouteCrossing[] = []
 ): RouteAnalysis {
+  // Only the marine stretches are measured as sea. An overland crossing is
+  // land: counted in the total, but never in the marine length and never
+  // sampled for depth. Distance along the route still runs through it, so the
+  // depth profile shows the crossing as a gap rather than closing it up.
+  const overlandCrossingKm = crossings.reduce((sum, c) => sum + c.km, 0);
   let marineDistanceKm = 0;
-  for (let i = 0; i < marinePath.length - 1; i++) {
-    marineDistanceKm += haversineKm(marinePath[i][0], marinePath[i][1], marinePath[i + 1][0], marinePath[i + 1][1]);
-  }
-
-  const samples = resamplePath(marinePath, SAMPLE_STEP_KM);
+  const samples: { lat: number; lng: number; distanceKm: number }[] = [];
+  let offsetKm = 0;
+  const parts = marineParts(path, crossings);
+  parts.forEach((part, i) => {
+    let partKm = 0;
+    for (let j = 0; j < part.length - 1; j++) {
+      partKm += haversineKm(part[j][0], part[j][1], part[j + 1][0], part[j + 1][1]);
+    }
+    for (const s of resamplePath(part, SAMPLE_STEP_KM)) samples.push({ ...s, distanceKm: s.distanceKm + offsetKm });
+    marineDistanceKm += partKm;
+    offsetKm += partKm + (crossings[i]?.km ?? 0);
+  });
 
   // A route's endpoints are snapped onto real landing points, which sit on
   // the coast and therefore routinely fall inside a "land" cell at this
@@ -112,7 +126,8 @@ export function computeRouteAnalysis(
     });
   }
 
-  const totalDistanceKm = marineDistanceKm + (terrestrialAccessKmSource ?? 0) + (terrestrialAccessKmDest ?? 0);
+  const totalDistanceKm =
+    marineDistanceKm + overlandCrossingKm + (terrestrialAccessKmSource ?? 0) + (terrestrialAccessKmDest ?? 0);
   const classifiedSampleCount = depthProfile.length;
 
   if (classifiedSampleCount === 0) {
@@ -120,6 +135,7 @@ export function computeRouteAnalysis(
     // rather than manufacturing depth statistics from nothing.
     return {
       marineDistanceKm,
+      overlandCrossingKm,
       totalDistanceKm,
       depthProfile,
       shallowestBand: null,
@@ -169,6 +185,7 @@ export function computeRouteAnalysis(
 
   return {
     marineDistanceKm,
+    overlandCrossingKm,
     totalDistanceKm,
     depthProfile,
     shallowestBand,

@@ -1,0 +1,49 @@
+{
+ "generatedAt": "2026-09-24T06:42:49.287Z",
+ "binary": "maritime-activity.bin",
+ "resolutionDeg": 0.25,
+ "rows": 256,
+ "cols": 744,
+ "extent": {
+  "minLat": 15,
+  "maxLat": 79,
+  "minLng": -88,
+  "maxLng": 98
+ },
+ "layers": [
+  "fishing",
+  "shipping"
+ ],
+ "classes": {
+  "0": "no data",
+  "1": "low",
+  "2": "busy",
+  "3": "very busy"
+ },
+ "thresholdsHoursPerKm2PerMonth": {
+  "fishing": {
+   "busy": 0.007,
+   "veryBusy": 0.1
+  },
+  "shipping": {
+   "busy": 0.017,
+   "veryBusy": 0.185
+  }
+ },
+ "source": {
+  "name": "EMODnet Human Activities, vessel density annual averages (Cogea, AIS)",
+  "url": "https://emodnet.ec.europa.eu/en/human-activities",
+  "year": 2024,
+  "coverages": {
+   "fishing": [
+    "emodnet__vesseldensity_01avg"
+   ],
+   "shipping": [
+    "emodnet__vesseldensity_09avg",
+    "emodnet__vesseldensity_10avg"
+   ]
+  },
+  "licence": "CC BY 4.0"
+ },
+ "provenance": "Fishing-vessel density, and cargo plus tanker density as a proxy for anchoring, from EMODnet Human Activities (AIS, 2024 annual average), averaged into 0.25 degree cells. \"Busy\" and \"very busy\" are the 75th and 90th percentiles of covered sea cells. European waters only: a cell with no data is stored as no data, never as quiet water."
+}

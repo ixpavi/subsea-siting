@@ -133,7 +133,7 @@ describe("assessEnvironmental fallback", () => {
   it("returns unavailable when the grid is absent", () => {
     // A failed dataset load must degrade this one criterion, never fabricate
     // a clear result or fail the whole route.
-    const r = assessEnvironmental(pathAt(54.0, 3.0), null);
+    const r = assessEnvironmental([pathAt(54.0, 3.0)], null);
     expect(r.available).toBe(false);
     expect(r.reason).toMatch(/could not be loaded/i);
     // The message may mention the phrase, but only to disclaim it -- what must
@@ -142,12 +142,12 @@ describe("assessEnvironmental fallback", () => {
   });
 
   it("delegates to the grid when one is present", () => {
-    const r = assessEnvironmental(pathAt(54.0, 3.0), grid);
+    const r = assessEnvironmental([pathAt(54.0, 3.0)], grid);
     expect(r.available).toBe(true);
   });
 
   it("handles a degenerate path without throwing", () => {
     expect(assessEnvironmental([], grid).available).toBe(false);
-    expect(assessEnvironmental([[54, 3]], grid).available).toBe(false);
+    expect(assessEnvironmental([[[54, 3]]], grid).available).toBe(false);
   });
 });

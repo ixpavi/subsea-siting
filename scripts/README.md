@@ -26,6 +26,26 @@ endpoints are the same underlying data, much cheaper to fetch/parse). The
 PeeringDB endpoint is public but rate-limited for unauthenticated requests
 (~1/hour for large pulls) — get an API key at peeringdb.com for regular runs.
 
+Cable owners, builders and service years are published per cable, not in
+`cable-geo.json`. `fetch-cable-details.mjs` downloads one record per cable id
+into `scripts/raw/cable-details.json` (about 700 requests, a minute or two):
+
+```bash
+node scripts/fetch-cable-details.mjs
+```
+
+TeleGeography's Submarine Cable Map data is licensed CC BY-NC-SA 3.0.
+
+Fishing and shipping density for the fault-exposure criterion comes from
+EMODnet's vessel-density coverages (CC BY 4.0), downloaded in 10 degree blocks
+and averaged into 0.25 degree cells. It writes
+`public/data/maritime-activity.{json,bin}` directly, and caches each block in
+`scripts/.cache/maritime/` so an interrupted run resumes:
+
+```bash
+node scripts/build-maritime-activity.mjs
+```
+
 ## Subsea data centre dataset
 
 `scripts/subsea-dcs.json` is a hand-curated, source-cited list — there is no

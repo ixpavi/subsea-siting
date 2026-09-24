@@ -8,6 +8,7 @@
 // actual failure rate.
 import { nearestCableDistanceKm, type CableProximityIndex } from "./cableProximityIndex";
 import { interpolateLatLng } from "./geo";
+import { marineParts, type RouteCrossing } from "./landCrossings";
 import type { ResilienceAssessment } from "./routingTypes";
 
 function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
@@ -22,8 +23,16 @@ function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): nu
 const CORRIDOR_THRESHOLD_KM = 100;
 const SAMPLE_STEP_KM = 50;
 
-export function computeRouteResilience(cableIndex: CableProximityIndex, marinePath: [number, number][]): ResilienceAssessment {
-  if (marinePath.length < 2) {
+export function computeRouteResilience(
+  cableIndex: CableProximityIndex,
+  path: [number, number][],
+  crossings: RouteCrossing[] = []
+): ResilienceAssessment {
+  // Marine stretches only. Every Red Sea - Mediterranean system crosses Egypt
+  // by land, so measuring corridor overlap along the crossing would score the
+  // land link against cables that are, there, not at sea at all.
+  const parts = marineParts(path, crossings).filter((p) => p.length >= 2);
+  if (parts.length === 0) {
     return {
       corridorOverlapFraction: 0,
       meanDistanceToNearestCableKm: 0,
@@ -34,35 +43,37 @@ export function computeRouteResilience(cableIndex: CableProximityIndex, marinePa
     };
   }
 
-  const segLengths: number[] = [];
-  let total = 0;
-  for (let i = 0; i < marinePath.length - 1; i++) {
-    const d = haversineKm(marinePath[i][0], marinePath[i][1], marinePath[i + 1][0], marinePath[i + 1][1]);
-    segLengths.push(d);
-    total += d;
-  }
-  const numSamples = Math.max(2, Math.ceil(total / SAMPLE_STEP_KM));
-
   const distances: number[] = [];
-  for (let s = 0; s <= numSamples; s++) {
-    const targetDist = (s / numSamples) * total;
-    let cum = 0;
-    let segIndex = 0;
-    while (segIndex < segLengths.length - 1 && cum + segLengths[segIndex] < targetDist) {
-      cum += segLengths[segIndex];
-      segIndex++;
+  for (const marinePath of parts) {
+    const segLengths: number[] = [];
+    let total = 0;
+    for (let i = 0; i < marinePath.length - 1; i++) {
+      const d = haversineKm(marinePath[i][0], marinePath[i][1], marinePath[i + 1][0], marinePath[i + 1][1]);
+      segLengths.push(d);
+      total += d;
     }
-    const segLen = segLengths[segIndex] || 1e-9;
-    const t = Math.max(0, Math.min(1, (targetDist - cum) / segLen));
-    const [lat1, lng1] = marinePath[segIndex];
-    const [lat2, lng2] = marinePath[segIndex + 1];
-    // Short way round in longitude -- see geo.ts. A dateline-crossing route
-    // otherwise measured its corridor overlap from a point mid-Atlantic.
-    const [lat, lng] = interpolateLatLng(lat1, lng1, lat2, lng2, t);
-    // 6 rings at the index's 2-degree buckets covers ~1,330km. diversityScore
-    // saturates its distance term at 1,000km, so this bounds the search
-    // without truncating any distance the score can actually distinguish.
-    distances.push(nearestCableDistanceKm(cableIndex, lat, lng, 6));
+    const numSamples = Math.max(2, Math.ceil(total / SAMPLE_STEP_KM));
+
+    for (let s = 0; s <= numSamples; s++) {
+      const targetDist = (s / numSamples) * total;
+      let cum = 0;
+      let segIndex = 0;
+      while (segIndex < segLengths.length - 1 && cum + segLengths[segIndex] < targetDist) {
+        cum += segLengths[segIndex];
+        segIndex++;
+      }
+      const segLen = segLengths[segIndex] || 1e-9;
+      const t = Math.max(0, Math.min(1, (targetDist - cum) / segLen));
+      const [lat1, lng1] = marinePath[segIndex];
+      const [lat2, lng2] = marinePath[segIndex + 1];
+      // Short way round in longitude -- see geo.ts. A dateline-crossing route
+      // otherwise measured its corridor overlap from a point mid-Atlantic.
+      const [lat, lng] = interpolateLatLng(lat1, lng1, lat2, lng2, t);
+      // 6 rings at the index's 2-degree buckets covers ~1,330km. diversityScore
+      // saturates its distance term at 1,000km, so this bounds the search
+      // without truncating any distance the score can actually distinguish.
+      distances.push(nearestCableDistanceKm(cableIndex, lat, lng, 6));
+    }
   }
 
   const meanDistanceToNearestCableKm = distances.reduce((a, b) => a + b, 0) / distances.length;

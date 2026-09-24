@@ -57,6 +57,11 @@ export type RouteMetricId =
   // was built to prevent, occurring inside the module itself.
   | "environmentalAssessed"
   | "environmentalUnavailable"
+  // Same two-provenance shape as environmental, for the same reason: the
+  // fishing and shipping data is European, so availability is per route.
+  | "faultExposureAssessed"
+  | "faultExposureUnavailable"
+  | "overlandCrossingKm"
   | "overallScore"
   | "candidateSeparation";
 
@@ -73,7 +78,9 @@ export const ROUTE_METRIC_PROVENANCE: Record<RouteMetricId, ProvenanceDescriptor
   },
   totalDistanceKm: {
     provenance: "DERIVED",
-    basis: "Marine distance plus straight-line terrestrial access at each end. Not a routed terrestrial path.",
+    basis:
+      "Marine distance, plus any overland crossing (Egypt, Panama), plus straight-line terrestrial access at each " +
+      "end. The land parts are not routed terrestrial paths.",
   },
   terrestrialAccessKm: {
     provenance: "DERIVED",
@@ -141,6 +148,25 @@ export const ROUTE_METRIC_PROVENANCE: Record<RouteMetricId, ProvenanceDescriptor
       "No protected-area data covers this route -- it lies outside the European extract's extent, or the grid " +
       "could not be loaded. Reported as unavailable, NOT as an absence of constraints: the uncovered part could " +
       "contain protected water, and scoring it as clear would misrepresent missing data as environmental safety.",
+  },
+  faultExposureAssessed: {
+    provenance: "DERIVED",
+    basis:
+      "Share of the route's marine length through busy fishing grounds shallower than 1,000 m, or busy cargo and " +
+      "tanker traffic shallower than 200 m, from EMODnet vessel density (AIS, 2024) in 0.25 degree cells. " +
+      "Shipping stands in for anchoring, which no dataset publishes.",
+  },
+  faultExposureUnavailable: {
+    provenance: "UNAVAILABLE",
+    basis:
+      "No fishing or shipping data covers this route -- the EMODnet data is European -- or it could not be " +
+      "loaded. Reported as unavailable, NOT as quiet water.",
+  },
+  overlandCrossingKm: {
+    provenance: "MODELED",
+    basis:
+      "Straight-line length of a modelled land link between two ocean cells, one on each coast, where real systems " +
+      "cross by land (Egypt, Panama). Not a surveyed terrestrial route.",
   },
   overallScore: {
     provenance: "MODELED",

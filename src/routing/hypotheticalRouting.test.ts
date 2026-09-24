@@ -103,6 +103,7 @@ describe("environmental criterion with partial coverage", () => {
       analysis: { totalDistanceKm: lengthKm, difficultyIndex: 1.1 },
       resilience: { diversityScore: 0.5 },
       environmental,
+      faultExposure: { available: false, reason: "outside coverage" },
     }) as unknown as RouteCandidate;
 
   const assessed = (penaltyScore: number): EnvironmentalAssessment => ({
@@ -113,7 +114,7 @@ describe("environmental criterion with partial coverage", () => {
     penaltyScore,
   });
   const unassessed: EnvironmentalAssessment = { available: false, reason: "outside the extent" };
-  const weights: RoutingWeights = { length: 1, seabedDifficulty: 1, resilience: 1, environmental: 1 };
+  const weights: RoutingWeights = { length: 1, seabedDifficulty: 1, resilience: 1, environmental: 1, faultExposure: 1 };
 
   it("is excluded when any candidate could not be assessed", () => {
     const { ranked, criteria } = rankCandidates(
@@ -144,7 +145,7 @@ describe("runHypotheticalRouting (real data)", () => {
   it("re-ranks under new weights exactly as a full run with those weights would", () => {
     // Weights only rank the candidates, so the page re-ranks locally instead of
     // re-running the search -- and must get the same answer the search would.
-    const weights: RoutingWeights = { length: 0.5, seabedDifficulty: 2, resilience: 1.5, environmental: 1 };
+    const weights: RoutingWeights = { length: 0.5, seabedDifficulty: 2, resilience: 1.5, environmental: 1, faultExposure: 1 };
     const full = runHypotheticalRouting({
       sourceLat: 13.0837, sourceLng: 80.2702, sourceLabel: "Chennai",
       destLat: 1.3571, destLng: 103.8195, destLabel: "Singapore",
@@ -342,20 +343,34 @@ describe("runHypotheticalRouting (real data)", () => {
   }, 120_000);
 
   it("lets a real landing point win when it routes better", () => {
-    // Bangalore -> Moscow: Chennai beats Bangalore's Arabian Sea cell, and
-    // Kingisepp, on the Baltic, beats Moscow's nearest open-sea cell.
+    // Denver: the nearest open water is the Gulf of California, but Los Angeles
+    // -- a real landing point about a hundred km farther overland -- gives a
+    // total connection to Tokyo thousands of km shorter, and wins.
+    const r = runHypotheticalRouting({
+      sourceLat: 39.7392, sourceLng: -104.9903, sourceLabel: "Denver",
+      destLat: 35.6895, destLng: 139.6917, destLabel: "Tokyo",
+      cables, landingPoints, grid,
+    });
+    const src = r.sourceEndpoint;
+    expect(src.kind).toBe("real-landing-point");
+    expect(src.landingPointName).toMatch(/Los Angeles/i);
+    expect(src.selection.rule).toBe("shorter-total-connection");
+    expect(src.selection.totalConnectionKm!).toBeLessThan(src.selection.rejected!.totalConnectionKm);
+  }, 120_000);
+
+  it("starts Bangalore on the west coast when the route runs west, through Egypt", () => {
+    // With the Egypt crossing, Europe is reached through the Red Sea, so the
+    // Arabian Sea coast beats Chennai -- the opposite of what it did when every
+    // route to Europe had to go round Africa.
     const r = runHypotheticalRouting({
       sourceLat: 12.9716, sourceLng: 77.5946, sourceLabel: "Bangalore",
       destLat: 55.7558, destLng: 37.6173, destLabel: "Moscow",
       cables, landingPoints, grid,
     });
-    expect(r.sourceEndpoint.kind).toBe("real-landing-point");
-    expect(r.sourceEndpoint.landingPointName).toMatch(/Chennai/i);
-    expect(r.destinationEndpoint.kind).toBe("real-landing-point");
-    for (const e of [r.sourceEndpoint, r.destinationEndpoint]) {
-      expect(e.selection.rule).toBe("shorter-total-connection");
-      expect(e.selection.totalConnectionKm!).toBeLessThanOrEqual(e.selection.rejected!.totalConnectionKm);
-    }
+    expect(r.sourceEndpoint.kind).toBe("modeled-access-point");
+    expect(r.sourceEndpoint.lng!).toBeLessThan(77); // west of Bangalore: the Arabian Sea
+    expect(r.sourceEndpoint.selection.rejected!.label).toMatch(/Chennai/i);
+    expect(r.candidates[0].candidate.crossings.map((c) => c.id)).toContain("egypt");
   }, 120_000);
 });
 

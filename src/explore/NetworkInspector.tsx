@@ -1,21 +1,31 @@
 // Compact detail panel for a selected real cable or real landing point in
-// the explore-mode cable explorer. Every field comes straight from
-// cableNetwork.ts's index over the existing TeleGeography-backed dataset --
-// nothing here is fetched, scraped, or invented.
+// the explore-mode cable explorer. Every field comes straight from the
+// shipped TeleGeography-backed data -- cableNetwork.ts's index, plus each
+// cable's owner record (design/providers.ts). Nothing here is invented.
 import { getCableDetail, getLandingPointDetail } from "../cableNetwork";
 import type { CableNetworkIndex, NetworkSelection } from "../cableNetwork";
+import type { CableDetailsFile } from "../design/providers";
 import CloseButton from "../CloseButton";
 import "./explore.css";
 
 interface Props {
   selection: NetworkSelection;
   index: CableNetworkIndex;
+  /** Owners, builders and year per cable; null when it could not be loaded. */
+  cableDetails: CableDetailsFile | null;
   onSelectCable: (cableId: string) => void;
   onSelectLandingPoint: (landingPointId: string) => void;
   onClose: () => void;
 }
 
-export default function NetworkInspector({ selection, index, onSelectCable, onSelectLandingPoint, onClose }: Props) {
+export default function NetworkInspector({
+  selection,
+  index,
+  cableDetails,
+  onSelectCable,
+  onSelectLandingPoint,
+  onClose,
+}: Props) {
   return (
     <div className="panel ni-panel">
       <div className="panel-header">
@@ -24,7 +34,12 @@ export default function NetworkInspector({ selection, index, onSelectCable, onSe
       </div>
       <div className="panel-body">
         {selection.kind === "cable" ? (
-          <CableView cableId={selection.cableId} index={index} onSelectLandingPoint={onSelectLandingPoint} />
+          <CableView
+            cableId={selection.cableId}
+            index={index}
+            cableDetails={cableDetails}
+            onSelectLandingPoint={onSelectLandingPoint}
+          />
         ) : (
           <LandingPointView landingPointId={selection.landingPointId} index={index} onSelectCable={onSelectCable} />
         )}
@@ -36,13 +51,16 @@ export default function NetworkInspector({ selection, index, onSelectCable, onSe
 function CableView({
   cableId,
   index,
+  cableDetails,
   onSelectLandingPoint,
 }: {
   cableId: string;
   index: CableNetworkIndex;
+  cableDetails: CableDetailsFile | null;
   onSelectLandingPoint: (id: string) => void;
 }) {
   const cable = getCableDetail(cableId, index);
+  const record = cableDetails?.cables[cableId] ?? null;
   if (!cable) return <p className="ni-unavailable">Cable not found in the current dataset.</p>;
 
   // Alphabetical, and never joined with arrows. The dataset gives a cable's
@@ -89,19 +107,50 @@ function CableView({
         </div>
       </div>
 
+      {record ? (
+        <>
+          <div className="ni-section">
+            <span className="ni-label">Owners ({record.owners.length})</span>
+            {record.owners.length > 0 ? (
+              <div className="ni-owner-list">{record.owners.join(", ")}</div>
+            ) : (
+              <p className="ni-unavailable">Not published for this system.</p>
+            )}
+          </div>
+          <div className="ni-factgrid">
+            <div className="ni-fact">
+              <span className="ni-label">Built by</span>
+              <div>{record.suppliers.length > 0 ? record.suppliers.join(", ") : "Not published"}</div>
+            </div>
+            <div className="ni-fact">
+              <span className="ni-label">{record.planned ? "Planned for service" : "In service since"}</span>
+              <div className="ex-mono">{record.rfsYear ?? "Not published"}</div>
+            </div>
+            <div className="ni-fact">
+              <span className="ni-label">Stated length</span>
+              <div className="ex-mono">{record.lengthKm != null ? `${record.lengthKm.toLocaleString()} km` : "Not published"}</div>
+            </div>
+          </div>
+        </>
+      ) : (
+        <p className="ni-unavailable">
+          {cableDetails ? "No owner record is published for this system." : "Owner data could not be loaded."}
+        </p>
+      )}
+
       {/* Stating what the source does NOT contain, so a blank space is never
-          mistaken for "this cable has no owner" or for a loading failure. The
-          public submarinecablemap.com export carries only id, name, colour and
-          geometry -- verified against scripts/raw/cable-geo.json. */}
+          mistaken for "this cable has no capacity" or for a loading failure. */}
       <div className="ni-section">
         <span className="ni-label">Not published in this dataset</span>
         <div className="ni-unavailable-fields">
-          Capacity, owners, RFS date, suppliers, status and cost are not part of the public TeleGeography export, which
-          provides cable naming and route geometry only. These are missing from the source, not from this app.
+          Capacity and cost are not part of the public TeleGeography data. These are missing from the source, not
+          from this app.
         </div>
       </div>
 
-      <p className="ni-source">Source: TeleGeography-derived dataset (submarinecablemap.com).</p>
+      <p className="ni-source">
+        Source: TeleGeography Submarine Cable Map (submarinecablemap.com); owners and builders CC BY-NC-SA 3.0.
+      </p>
     </>
   );
 }

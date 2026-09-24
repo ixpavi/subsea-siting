@@ -3,6 +3,7 @@
 // real infrastructure. See hypotheticalRouting.ts for the orchestration that
 // produces these, provenance.ts for how each displayed value is classified,
 // and design/RouteInspector.tsx for how they're presented.
+import type { RouteCrossing } from "./landCrossings";
 
 export type EndpointKind = "real-landing-point" | "modeled-access-point" | "unavailable";
 
@@ -102,6 +103,9 @@ export interface DepthProfileSample {
 
 export interface RouteAnalysis {
   marineDistanceKm: number;
+  /** Overland crossings (Egypt, Panama) the route uses -- land, so never part of marineDistanceKm. */
+  overlandCrossingKm: number;
+  /** Marine + overland crossings + terrestrial access at both ends. */
   totalDistanceKm: number;
   depthProfile: DepthProfileSample[];
   /** null when no sample fell in a classified ocean cell (see unclassifiedSampleCount). */
@@ -133,6 +137,20 @@ export interface EnvironmentalAssessment {
   constrainedDistanceKm?: number;
   affectedZoneCount?: number;
   penaltyScore?: number;
+}
+
+/** Exposure to the two things that break most cables: fishing gear and anchors. See maritimeActivity.ts. */
+export interface FaultExposureAssessment {
+  available: boolean;
+  reason: string;
+  /** Route length through busy fishing grounds shallow enough for bottom gear. */
+  fishingKm?: number;
+  /** Route length through busy cargo and tanker traffic shallow enough for anchors. */
+  anchoringKm?: number;
+  /** Route length exposed to either (not the sum -- water can be both). */
+  exposedKm?: number;
+  /** exposedKm as a share of the route's marine length, 0..1. */
+  share?: number;
 }
 
 export interface ResilienceAssessment {
@@ -175,8 +193,11 @@ export interface RouteCandidate {
   description: string;
   /** Full route geometry, source marine endpoint -> destination marine endpoint, as [lat,lng] pairs. */
   path: [number, number][];
+  /** Overland crossings the path uses, each the segment path[fromIndex] -> path[fromIndex + 1]. */
+  crossings: RouteCrossing[];
   analysis: RouteAnalysis;
   environmental: EnvironmentalAssessment;
+  faultExposure: FaultExposureAssessment;
   resilience: ResilienceAssessment;
   cost: CostBreakdown;
 }
@@ -190,13 +211,14 @@ export interface RouteCandidate {
  * rows. Cost remains a displayed, derived estimate -- just not an
  * independent axis.
  */
-export type RoutingCriterionId = "length" | "seabedDifficulty" | "resilience" | "environmental";
+export type RoutingCriterionId = "length" | "seabedDifficulty" | "resilience" | "environmental" | "faultExposure";
 
 export interface RoutingWeights {
   length: number;
   seabedDifficulty: number;
   resilience: number;
   environmental: number;
+  faultExposure: number;
 }
 
 export interface CriterionOutcome {

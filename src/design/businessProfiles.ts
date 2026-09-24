@@ -2,7 +2,6 @@
 // workflow. No calculation logic lives here -- this only translates business
 // language into the inputs the existing calculator/recommend.ts already
 // accepts (PriorityWeights, a Tier floor, a downtime-cost baseline).
-import { ALL_TIERS } from "../calculator/facilityCalculator";
 import type { PriorityWeights, TierLevel } from "../calculator/types";
 import type { AvailabilityRequirement, Industry, PriorityAxis } from "./designTypes";
 
@@ -95,7 +94,3 @@ export function buildPriorityWeights(primary: PriorityAxis, secondary: PriorityA
  * explicitly does not do (see the capacity disclosure on the result step).
  */
 export const DEFAULT_DOWNTIME_COST_PER_HOUR_USD = 9000;
-
-export function tierAtLeast(tier: TierLevel, minTier: TierLevel): boolean {
-  return ALL_TIERS.indexOf(tier) >= ALL_TIERS.indexOf(minTier);
-}

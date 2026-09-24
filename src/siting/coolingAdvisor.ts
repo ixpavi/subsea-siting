@@ -77,16 +77,34 @@ export interface CoolingAdvice {
   nationalDataUnavailable: boolean;
 }
 
+/**
+ * Below this share of the year, an economiser cannot carry the load: mechanical
+ * cooling would do nearly all the work, and free-air's baseline PUE assumes
+ * economiser operation the site cannot sustain. The same threshold raises the
+ * warning in the cooling assessment and removes free-air from the design
+ * recommendation, so the two never disagree on one page.
+ */
+export const ECONOMISER_MIN_VIABLE_SHARE = 0.2;
+
+/**
+ * Share of the year an air-side economiser with evaporative assist can carry
+ * the load: outside air below supply temperature, plus evaporative assist when
+ * the wet bulb allows. Capped at 1: the two windows overlap heavily and must
+ * not sum past a full year.
+ */
+export function economiserCoverage(climate: ClimateProfile): number {
+  const freeHours = climate.freeCoolingFractionAt24C;
+  const evapHours = climate.evaporativeFractionAt20C;
+  return Math.min(1, freeHours + evapHours * (1 - freeHours));
+}
+
 /** How much of the year outside air alone can carry the load, measured. */
 function climateCriterion(cooling: CoolingConfig, climate: ClimateProfile): CoolingCriterion {
   const freeHours = climate.freeCoolingFractionAt24C;
   const evapHours = climate.evaporativeFractionAt20C;
 
   if (cooling === "free-air") {
-    // Outside air below supply temperature, plus evaporative assist extending
-    // the range when the wet bulb allows it. Capped at 1: the two windows
-    // overlap heavily and must not sum past a full year.
-    const combined = Math.min(1, freeHours + evapHours * (1 - freeHours));
+    const combined = economiserCoverage(climate);
     return {
       score: combined,
       basis:
@@ -166,7 +184,7 @@ export function assessCooling(
 
     if (p.cooling === "free-air") {
       const pct = p.climate.score * 100;
-      if (pct < 20) {
+      if (p.climate.score < ECONOMISER_MIN_VIABLE_SHARE) {
         warnings.push(
           `This climate supports free/evaporative cooling for only about ${pct.toFixed(0)}% of the year, so mechanical ` +
             `cooling would carry nearly the whole load. The ${p.spec.pue} baseline PUE assumes economiser operation ` +

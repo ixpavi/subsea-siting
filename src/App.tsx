@@ -14,6 +14,7 @@ import CableChooser from "./explore/CableChooser";
 import { COOLING_SPECS, TIER_SPECS } from "./calculator/facilityCalculator";
 import type { DesignResult, LocationRequirement } from "./design/designTypes";
 import { analyzeConnectivity, type ConnectivityAnalysis } from "./design/connectivityAnalysis";
+import { loadCableDetails, providersForPlan, type CableDetailsFile, type ProviderSummary } from "./design/providers";
 import type { RouteEngineResult, RoutingProfileId } from "./routing/routingTypes";
 import { buildCableNetworkIndex, getCableDetail } from "./cableNetwork";
 import { frameForPoints, sphericalCentroid, angularDistanceDeg } from "./cameraFraming";
@@ -55,11 +56,28 @@ function useConnectivityAnalysis(
   }, [srcLat, srcLng, dstLat, dstLng, cables, landingPoints]);
 }
 
+/** Companies active near each end of the plan -- see design/providers.ts. */
+function useProviderSummary(
+  connectivity: ConnectivityAnalysis | null,
+  cables: CableFeature[],
+  landingPoints: LandingPoint[],
+  details: CableDetailsFile | null,
+  landDCs: LandDC[]
+): ProviderSummary | null {
+  return useMemo(
+    () => (connectivity ? providersForPlan(connectivity, cables, landingPoints, details, landDCs) : null),
+    [connectivity, cables, landingPoints, details, landDCs]
+  );
+}
+
 export default function App() {
   const [cables, setCables] = useState<CableFeature[]>([]);
   const [landDCs, setLandDCs] = useState<LandDC[]>([]);
   const [subseaDCs, setSubseaDCs] = useState<SubseaDC[]>([]);
   const [landingPoints, setLandingPoints] = useState<LandingPoint[]>([]);
+  // Owners and builders per cable. Optional: without it the app still works
+  // and says the owner data is unavailable.
+  const [cableDetails, setCableDetails] = useState<CableDetailsFile | null>(null);
   const [loading, setLoading] = useState(true);
 
   const [error, setError] = useState<string | null>(null);
@@ -104,6 +122,9 @@ export default function App() {
       })
       .catch((e) => setError(String(e)))
       .finally(() => setLoading(false));
+    loadCableDetails()
+      .then(setCableDetails)
+      .catch(() => setCableDetails(null));
   }, []);
 
   function focusCamera(loc: LocationRequirement | null, dest: LocationRequirement | null) {
@@ -261,6 +282,7 @@ export default function App() {
     cables,
     landingPoints
   );
+  const providerSummary = useProviderSummary(connectivityAnalysis, cables, landingPoints, cableDetails, landDCs);
 
   return (
     <div className="app-root">
@@ -407,6 +429,7 @@ export default function App() {
             <NetworkInspector
               selection={networkSelection}
               index={cableNetworkIndex}
+              cableDetails={cableDetails}
               onSelectCable={(id) => handleSelectNetworkItem({ kind: "cable", cableId: id })}
               onSelectLandingPoint={(id) => handleSelectNetworkItem({ kind: "landingPoint", landingPointId: id })}
               onClose={() => {
@@ -428,7 +451,11 @@ export default function App() {
           )}
 
           {planningMode && !cableChoices && connectivitySelection && (
-            <ConnectivityInspector selection={connectivitySelection} onClose={() => setConnectivitySelection(null)} />
+            <ConnectivityInspector
+              selection={connectivitySelection}
+              cableDetails={cableDetails}
+              onClose={() => setConnectivitySelection(null)}
+            />
           )}
 
           {planningMode && (
@@ -439,6 +466,7 @@ export default function App() {
               selectedRouteCandidateId={selectedRouteCandidateId}
               onSelectRouteCandidate={setSelectedRouteCandidateId}
               onRouteResult={setRouteEngineResult}
+              providers={providerSummary}
               onClose={() => {
                 setPlanningMode(false);
                 setPlanningLocation(null);

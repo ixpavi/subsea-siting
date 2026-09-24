@@ -23,6 +23,12 @@
 // unreachable or finds nothing, so a full name still resolves either way.
 //
 // Both return OpenStreetMap data, (c) OpenStreetMap contributors, ODbL.
+//
+// When neither can be reached at all, a built-in list of major cities
+// (majorCities.ts) answers instead, so a demonstration on a network that
+// blocks both can still start. Those results are marked offline, and never
+// cached, so the real search takes over as soon as it is reachable again.
+import { searchMajorCities } from "./majorCities";
 export interface GeocodeResult {
   /** Human-readable "City, Region, Country" style name -- not a provider's raw label. */
   displayName: string;
@@ -31,6 +37,8 @@ export interface GeocodeResult {
   countryCode?: string;
   lat: number;
   lng: number;
+  /** True when the online search was unreachable and this came from the built-in city list. */
+  offline?: boolean;
 }
 
 const PHOTON_URL = "https://photon.komoot.io/api/";
@@ -252,7 +260,18 @@ export async function geocodeLocation(query: string, opts?: { signal?: AbortSign
   // enough to be a real name. Short prefixes are not sent to Nominatim: that
   // is exactly the autocomplete use its public policy asks clients not to make.
   if (photonFailed || (results.length === 0 && trimmed.length >= 4)) {
-    results = await searchNominatim(trimmed, opts?.signal);
+    try {
+      results = await searchNominatim(trimmed, opts?.signal);
+    } catch (err) {
+      if (isAbort(err, opts?.signal)) throw err;
+      // Only when BOTH services are unreachable: the built-in cities. If none
+      // matches, the failure is reported as it was, rather than as "no results".
+      if (photonFailed) {
+        const offline = searchMajorCities(trimmed, MAX_RESULTS);
+        if (offline.length > 0) return offline;
+      }
+      throw err;
+    }
   }
 
   cache.set(trimmed, results);

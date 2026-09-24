@@ -18,16 +18,12 @@
 // to seal Bab-el-Mandeb and strand 138 of 1,920 landing points; the mask that
 // governs connectivity, and the strait corrections below, are unchanged.
 //
-// KNOWN LIMITATION -- NO CANALS: the underlying land/ocean polygons don't
-// represent artificial waterways (Suez, Panama) as navigable water, since
-// they aren't natural coastline. A route whose shortest real-world path
-// goes through one of those canals will instead be routed the long way
-// around the connecting continent by this engine (e.g. Mumbai -> London
-// comes out routed around Africa, not through Suez) -- this can
-// substantially overstate marine distance and cost for such city pairs.
-// This is a disclosed modeling limitation, not a bug; a real canal-aware
-// routing engine would need explicit canal waypoints injected into the
-// graph, which is out of scope here.
+// NO CANALS, BY DESIGN: the land/ocean polygons don't represent artificial
+// waterways (Suez, Panama) as navigable water, and a cable is not laid along
+// a working shipping canal anyway. Real systems cross those isthmuses over
+// land instead, and so does this engine: routing/landCrossings.ts links the
+// two coasts at Egypt and at Panama with a modelled overland crossing, so
+// Mumbai -> London goes through the Red Sea rather than round Africa.
 //
 // NARROW NATURAL STRAITS ARE CORRECTED AT BUILD TIME. A 0.5 deg cell is
 // 56 km across, so a strait narrower than that can rasterize to solid land.
@@ -39,8 +35,7 @@
 // that to 4 -- the two Suez-side points and the two Caspian points, both
 // correctly isolated. The corrections are listed in the shipped grid's
 // `straitCorrections` field and are natural straits ONLY; artificial canals
-// stay closed, which is what makes the "around Africa" behaviour above
-// genuinely true rather than a route that simply fails.
+// stay closed, and the overland crossings above are what connect those seas.
 
 import { assetUrl } from "../assetUrl";
 

@@ -6,7 +6,7 @@ import {
 } from "./weightSensitivity";
 import type { RoutingCriterionId, RoutingProfileId, RoutingWeights } from "./routingTypes";
 
-const EVEN: RoutingWeights = { length: 1, seabedDifficulty: 1, resilience: 1, environmental: 1 };
+const EVEN: RoutingWeights = { length: 1, seabedDifficulty: 1, resilience: 1, environmental: 1, faultExposure: 1 };
 
 function cand(
   id: RoutingProfileId,
@@ -20,6 +20,7 @@ function cand(
       seabedDifficulty: n.seabedDifficulty ?? 0,
       resilience: n.resilience ?? 0,
       environmental: n.environmental ?? 0,
+      faultExposure: n.faultExposure ?? 0,
     },
   };
 }
@@ -43,7 +44,7 @@ describe("analyzeWeightSensitivity", () => {
     const a = cand("shortest", { length: 1, seabedDifficulty: 0 });
     const b = cand("shallow-favoring", { length: 0, seabedDifficulty: 1 });
     // Length at its minimum selectable weight, so raising seabed can overtake it.
-    const current: RoutingWeights = { length: 0.5, seabedDifficulty: 0.5, resilience: 0, environmental: 0 };
+    const current: RoutingWeights = { length: 0.5, seabedDifficulty: 0.5, resilience: 0, environmental: 0, faultExposure: 0 };
     const r = analyzeWeightSensitivity([a, b], current, ["length", "seabedDifficulty"]);
     expect(r.currentWinner).toBe("shortest");
     const seabed = r.perCriterion.find((c) => c.id === "seabedDifficulty")!;
@@ -137,7 +138,7 @@ describe("analyzeWeightSensitivity", () => {
   it("only reports flip points a user could actually select", () => {
     const a = cand("shortest", { length: 1, seabedDifficulty: 0 });
     const b = cand("shallow-favoring", { length: 0, seabedDifficulty: 1 });
-    const current: RoutingWeights = { length: 0.5, seabedDifficulty: 0.5, resilience: 0, environmental: 0 };
+    const current: RoutingWeights = { length: 0.5, seabedDifficulty: 0.5, resilience: 0, environmental: 0, faultExposure: 0 };
     const r = analyzeWeightSensitivity([a, b], current, ["length", "seabedDifficulty"]);
     for (const c of r.perCriterion.filter((x) => x.applicable)) {
       for (const step of c.sweep) {

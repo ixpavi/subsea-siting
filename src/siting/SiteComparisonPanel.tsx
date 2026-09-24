@@ -4,6 +4,10 @@
 // "which of these should I choose", which is the question a siting decision
 // actually starts from.
 //
+// With a destination ("connect to"), every site is also routed to it, and the
+// cable it would need is ranked alongside climate, water, carbon and existing
+// connectivity -- siting and routing answering one question together.
+//
 // Two presentation rules the engine's honesty depends on:
 //   - Excluded criteria are shown WITH their reason, not hidden. A user who
 //     cannot see that water stress was dropped has no way to know the ranking
@@ -15,6 +19,8 @@ import { useCallback, useRef, useState } from "react";
 import { geocodeLocation } from "../design/geocoding";
 import type { GeocodeResult } from "../design/geocoding";
 import { LAND_COOLING_OPTIONS } from "../calculator/facilityCalculator";
+import { routeOnce } from "../routing/useHypotheticalRoute";
+import { roundTripMs } from "../routing/latency";
 import type { CableFeature, LandingPoint } from "../types";
 import {
   compareSites,
@@ -23,6 +29,8 @@ import {
   SITE_CRITERIA,
   DEFAULT_SITE_WEIGHTS,
   type SiteCriterionId,
+  type SiteEvaluation,
+  type SiteRoute,
   type SiteWeights,
   type SiteComparisonResult,
   type EvaluateSiteInput,
@@ -38,6 +46,12 @@ interface CandidateSite {
   countryCode?: string;
 }
 
+interface Destination {
+  label: string;
+  lat: number;
+  lng: number;
+}
+
 interface Props {
   cables: CableFeature[];
   landingPoints: LandingPoint[];
@@ -46,13 +60,7 @@ interface Props {
 }
 
 const MAX_SITES = 6;
-const CRITERION_ORDER: SiteCriterionId[] = [
-  "freeCooling",
-  "adjustedPue",
-  "waterStress",
-  "gridCarbon",
-  "connectivity",
-];
+const BASE_CRITERIA: SiteCriterionId[] = ["freeCooling", "adjustedPue", "waterStress", "gridCarbon", "connectivity"];
 
 function formatValue(id: SiteCriterionId, v: number | null): string {
   if (v === null) return "—";
@@ -67,30 +75,33 @@ function formatValue(id: SiteCriterionId, v: number | null): string {
       return v.toFixed(0);
     case "connectivity":
       return String(v);
+    case "route":
+      return `${Math.round(v).toLocaleString("en-US")}`;
   }
 }
 
-export default function SiteComparison({ cables, landingPoints, onClose, onFocusSite }: Props) {
-  const [sites, setSites] = useState<CandidateSite[]>([]);
+/** "Bengaluru, Karnataka, India" -> "Bengaluru". */
+function shortPlace(label: string): string {
+  return label.split(",")[0].trim() || label;
+}
+
+/**
+ * Debounced place search. Only the newest search's response is applied -- see
+ * LocationSearchField in design/PlanningPanel.tsx for the out-of-order reply
+ * this prevents.
+ */
+function usePlaceSearch() {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<GeocodeResult[]>([]);
   const [searching, setSearching] = useState(false);
-  const [searchError, setSearchError] = useState<string | null>(null);
-  const [weights, setWeights] = useState<SiteWeights>(DEFAULT_SITE_WEIGHTS);
-  const [running, setRunning] = useState(false);
-  const [result, setResult] = useState<SiteComparisonResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const debounceRef = useRef<number | null>(null);
-  // Only the newest search's response is applied -- see LocationSearchField in
-  // design/PlanningPanel.tsx for the out-of-order reply this prevents.
   const requestIdRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
-  // Only the newest comparison run is applied: a run that finishes after the
-  // site list has changed describes sites that are no longer on it.
-  const runIdRef = useRef(0);
 
-  const handleQuery = useCallback((q: string) => {
+  const search = useCallback((q: string) => {
     setQuery(q);
-    setSearchError(null);
+    setError(null);
     if (debounceRef.current) window.clearTimeout(debounceRef.current);
     abortRef.current?.abort();
     const id = ++requestIdRef.current;
@@ -108,13 +119,69 @@ export default function SiteComparison({ cables, landingPoints, onClose, onFocus
         if (id === requestIdRef.current) setResults(found);
       } catch {
         if (id !== requestIdRef.current || controller.signal.aborted) return;
-        setSearchError("Couldn't reach the place search service.");
+        setError("Couldn't reach the place search service.");
         setResults([]);
       } finally {
         if (id === requestIdRef.current) setSearching(false);
       }
     }, 250);
   }, []);
+
+  const reset = useCallback(() => {
+    abortRef.current?.abort();
+    requestIdRef.current++;
+    setSearching(false);
+    setQuery("");
+    setResults([]);
+  }, []);
+
+  return { query, results, searching, error, search, reset };
+}
+
+/** The top-ranked route from a site to the destination, or null if none could be found. */
+async function routeSite(site: CandidateSite, destination: Destination): Promise<SiteRoute | null> {
+  try {
+    const r = await routeOnce({
+      sourceLat: site.lat,
+      sourceLng: site.lng,
+      sourceLabel: site.label,
+      destLat: destination.lat,
+      destLng: destination.lng,
+      destLabel: destination.label,
+    });
+    const top = r.candidates[0]?.candidate;
+    if (!top) return null;
+    return {
+      totalKm: top.analysis.totalDistanceKm,
+      marineKm: top.analysis.marineDistanceKm,
+      overlandCrossingKm: top.analysis.overlandCrossingKm,
+      roundTripMs: roundTripMs(top.analysis.totalDistanceKm),
+      costUsd: top.cost.totalUsd,
+      crossings: top.crossings.map((c) => c.name),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export default function SiteComparison({ cables, landingPoints, onClose, onFocusSite }: Props) {
+  const [sites, setSites] = useState<CandidateSite[]>([]);
+  const [destination, setDestination] = useState<Destination | null>(null);
+  const siteSearch = usePlaceSearch();
+  const destSearch = usePlaceSearch();
+  const [weights, setWeights] = useState<SiteWeights>(DEFAULT_SITE_WEIGHTS);
+  const [running, setRunning] = useState<string | null>(null);
+  const [result, setResult] = useState<SiteComparisonResult | null>(null);
+  // Only the newest comparison run is applied: a run that finishes after the
+  // site list has changed describes sites that are no longer on it.
+  const runIdRef = useRef(0);
+
+  /** Any change to what is being compared retires the ranking and any run in flight. */
+  function invalidate() {
+    runIdRef.current++;
+    setRunning(null);
+    setResult(null);
+  }
 
   function addSite(r: GeocodeResult) {
     setSites((prev) => {
@@ -125,29 +192,25 @@ export default function SiteComparison({ cables, landingPoints, onClose, onFocus
       if (prev.some((s) => s.id === id)) return prev;
       return [...prev, { id, label: r.displayName, lat: r.lat, lng: r.lng, countryCode: r.countryCode }];
     });
-    abortRef.current?.abort();
-    requestIdRef.current++;
-    setSearching(false);
-    setQuery("");
-    setResults([]);
-    // A newly added site invalidates the previous ranking, and any run still
-    // in flight.
-    runIdRef.current++;
-    setRunning(false);
-    setResult(null);
+    siteSearch.reset();
+    invalidate();
   }
 
   function removeSite(id: string) {
     setSites((prev) => prev.filter((s) => s.id !== id));
-    runIdRef.current++;
-    setRunning(false);
-    setResult(null);
+    invalidate();
+  }
+
+  function chooseDestination(r: GeocodeResult | null) {
+    setDestination(r ? { label: r.displayName, lat: r.lat, lng: r.lng } : null);
+    destSearch.reset();
+    invalidate();
   }
 
   async function run() {
     if (sites.length < 2) return;
     const runId = ++runIdRef.current;
-    setRunning(true);
+    setRunning("Gathering climate, water and carbon data…");
     try {
       const inputs: EvaluateSiteInput[] = sites.map((s) => ({
         id: s.id,
@@ -161,10 +224,18 @@ export default function SiteComparison({ cables, landingPoints, onClose, onFocus
         cables,
         landingPoints,
       }));
-      const evaluations = await evaluateSites(inputs);
+      const evaluations: SiteEvaluation[] = await evaluateSites(inputs);
+      if (destination) {
+        // One after another: they share one routing worker anyway.
+        for (let i = 0; i < sites.length; i++) {
+          if (runId !== runIdRef.current) return;
+          setRunning(`Routing ${shortPlace(sites[i].label)} to ${shortPlace(destination.label)} (${i + 1} of ${sites.length})…`);
+          evaluations[i].route = await routeSite(sites[i], destination);
+        }
+      }
       if (runId === runIdRef.current) setResult(compareSites(evaluations, weights));
     } finally {
-      if (runId === runIdRef.current) setRunning(false);
+      if (runId === runIdRef.current) setRunning(null);
     }
   }
 
@@ -181,7 +252,10 @@ export default function SiteComparison({ cables, landingPoints, onClose, onFocus
     });
   }
 
+  const routed = result?.ranked.some((r) => r.evaluation.route !== undefined) ?? false;
+  const criterionOrder: SiteCriterionId[] = routed ? [...BASE_CRITERIA, "route"] : BASE_CRITERIA;
   const excluded = result?.criteria.filter((c) => !c.discriminates) ?? [];
+  const destName = destination ? shortPlace(destination.label) : "";
 
   return (
     <aside className="site-compare" aria-label="Compare candidate sites">
@@ -189,29 +263,35 @@ export default function SiteComparison({ cables, landingPoints, onClose, onFocus
         <div>
           <h2>Compare candidate sites</h2>
           <p>
-            Rank several locations against each other on measured climate, national
-            water stress and grid carbon, real cable connectivity, and modelled PUE.
+            Rank several locations against each other on measured climate, national water stress and grid carbon,
+            real cable connectivity, modelled PUE -- and, if you set a destination, the cable each site would need to
+            reach it.
           </p>
         </div>
         <CloseButton onClick={onClose} label="Close site comparison" />
       </header>
 
       <section className="site-compare-add">
-        <label htmlFor="site-compare-search">Add a site ({sites.length}/{MAX_SITES})</label>
+        <label htmlFor="site-compare-search">
+          Add a site ({sites.length}/{MAX_SITES})
+        </label>
         <input
           id="site-compare-search"
           type="text"
-          value={query}
+          value={siteSearch.query}
           placeholder="City or place name…"
           disabled={sites.length >= MAX_SITES}
-          onChange={(e) => handleQuery(e.target.value)}
+          onChange={(e) => siteSearch.search(e.target.value)}
           autoComplete="off"
         />
-        {searching && <p className="site-compare-hint">Searching…</p>}
-        {searchError && <p className="site-compare-error">{searchError}</p>}
-        {results.length > 0 && (
+        {siteSearch.searching && <p className="site-compare-hint">Searching…</p>}
+        {siteSearch.error && <p className="site-compare-error">{siteSearch.error}</p>}
+        {siteSearch.results[0]?.offline && (
+          <p className="site-compare-hint">Place search is unreachable, so these are from a built-in list of major cities.</p>
+        )}
+        {siteSearch.results.length > 0 && (
           <ul className="site-compare-results">
-            {results.map((r) => (
+            {siteSearch.results.map((r) => (
               <li key={`${r.lat},${r.lng}`}>
                 <button type="button" onClick={() => addSite(r)}>
                   {r.displayName}
@@ -247,13 +327,52 @@ export default function SiteComparison({ cables, landingPoints, onClose, onFocus
         </ul>
       )}
 
-      <button
-        type="button"
-        className="site-compare-run"
-        onClick={run}
-        disabled={sites.length < 2 || running}
-      >
-        {running ? "Evaluating…" : sites.length < 2 ? "Add at least two sites" : `Compare ${sites.length} sites`}
+      <section className="site-compare-add">
+        <label htmlFor="site-compare-destination">
+          Connect to <span className="site-compare-optional">(optional)</span>
+        </label>
+        {destination ? (
+          <div className="site-compare-destination">
+            <span>{destination.label}</span>
+            <button type="button" className="site-compare-chip-remove" onClick={() => chooseDestination(null)} aria-label="Remove destination">
+              ×
+            </button>
+          </div>
+        ) : (
+          <>
+            <input
+              id="site-compare-destination"
+              type="text"
+              value={destSearch.query}
+              placeholder="Where the data centre must connect to, e.g. New York"
+              onChange={(e) => destSearch.search(e.target.value)}
+              autoComplete="off"
+            />
+            {destSearch.searching && <p className="site-compare-hint">Searching…</p>}
+            {destSearch.error && <p className="site-compare-error">{destSearch.error}</p>}
+            {destSearch.results[0]?.offline && (
+              <p className="site-compare-hint">Place search is unreachable, so these are from a built-in list of major cities.</p>
+            )}
+            {destSearch.results.length > 0 && (
+              <ul className="site-compare-results">
+                {destSearch.results.map((r) => (
+                  <li key={`${r.lat},${r.lng}`}>
+                    <button type="button" onClick={() => chooseDestination(r)}>
+                      {r.displayName}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
+        )}
+        <p className="site-compare-hint">
+          Each site is routed to the destination and the cable it needs is ranked with everything else.
+        </p>
+      </section>
+
+      <button type="button" className="site-compare-run" onClick={run} disabled={sites.length < 2 || running !== null}>
+        {running ?? (sites.length < 2 ? "Add at least two sites" : `Compare ${sites.length} sites`)}
       </button>
 
       {result && (
@@ -261,10 +380,9 @@ export default function SiteComparison({ cables, landingPoints, onClose, onFocus
           <section className="site-compare-weights">
             <h3>Weights</h3>
             <p className="site-compare-hint">
-              Re-ranks immediately — the site data is already gathered, only the
-              weighting changes.
+              Re-ranks immediately — the site data is already gathered, only the weighting changes.
             </p>
-            {CRITERION_ORDER.map((id) => (
+            {criterionOrder.map((id) => (
               <div key={id} className="site-compare-weight-row">
                 <label htmlFor={`w-${id}`}>{SITE_CRITERIA[id].label}</label>
                 <input
@@ -283,8 +401,8 @@ export default function SiteComparison({ cables, landingPoints, onClose, onFocus
 
           {result.indeterminate && result.ranked.length > 0 && (
             <p className="site-compare-warning">
-              No criterion separates these sites on the available data. The order below
-              is arbitrary and should not be read as a preference.
+              No criterion separates these sites on the available data. The order below is arbitrary and should not be
+              read as a preference.
             </p>
           )}
 
@@ -296,11 +414,11 @@ export default function SiteComparison({ cables, landingPoints, onClose, onFocus
                     <th scope="col">#</th>
                     <th scope="col">Site</th>
                     <th scope="col">Score</th>
-                    {CRITERION_ORDER.map((id) => {
+                    {criterionOrder.map((id) => {
                       const c = result.criteria.find((x) => x.id === id);
                       return (
                         <th key={id} scope="col" className={c?.discriminates ? "" : "is-excluded"}>
-                          {SITE_CRITERIA[id].label}
+                          {id === "route" ? `Route to ${destName}` : SITE_CRITERIA[id].label}
                           <span className="site-compare-unit">{SITE_CRITERIA[id].unit}</span>
                           <span className={`site-compare-prov prov-${SITE_CRITERIA[id].provenance}`}>
                             {SITE_CRITERIA[id].provenance}
@@ -308,6 +426,13 @@ export default function SiteComparison({ cables, landingPoints, onClose, onFocus
                         </th>
                       );
                     })}
+                    {routed && (
+                      <th scope="col">
+                        Round trip
+                        <span className="site-compare-unit">ms, minimum</span>
+                        <span className="site-compare-prov prov-DERIVED">DERIVED</span>
+                      </th>
+                    )}
                   </tr>
                 </thead>
                 <tbody>
@@ -319,22 +444,30 @@ export default function SiteComparison({ cables, landingPoints, onClose, onFocus
                           {r.evaluation.label}
                         </button>
                       </th>
-                      <td className="site-compare-score">
-                        {result.indeterminate ? "—" : r.score.toFixed(3)}
-                      </td>
-                      {CRITERION_ORDER.map((id) => {
+                      <td className="site-compare-score">{result.indeterminate ? "—" : r.score.toFixed(3)}</td>
+                      {criterionOrder.map((id) => {
                         const c = result.criteria.find((x) => x.id === id);
                         const cls = [
                           c?.discriminates ? "" : "is-excluded",
                           r.winsOn.includes(id) ? "is-best" : "",
                           r.losesOn.includes(id) ? "is-worst" : "",
-                        ].filter(Boolean).join(" ");
+                        ]
+                          .filter(Boolean)
+                          .join(" ");
                         return (
                           <td key={id} className={cls}>
                             {formatValue(id, rawValue(r.evaluation, id))}
+                            {id === "route" && (r.evaluation.route?.crossings.length ?? 0) > 0 && (
+                              <span className="site-compare-note">
+                                via {r.evaluation.route!.crossings.map((x) => x.split(" ")[0]).join(", ")}
+                              </span>
+                            )}
                           </td>
                         );
                       })}
+                      {routed && (
+                        <td>{r.evaluation.route ? `~${Math.round(r.evaluation.route.roundTripMs)}` : "—"}</td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -380,7 +513,7 @@ export default function SiteComparison({ cables, landingPoints, onClose, onFocus
           <section className="site-compare-sources">
             <h3>Where each column comes from</h3>
             <dl>
-              {CRITERION_ORDER.map((id) => (
+              {criterionOrder.map((id) => (
                 <div key={id}>
                   <dt>
                     {SITE_CRITERIA[id].label}
@@ -391,6 +524,18 @@ export default function SiteComparison({ cables, landingPoints, onClose, onFocus
                   <dd>{SITE_CRITERIA[id].source}</dd>
                 </div>
               ))}
+              {routed && (
+                <div>
+                  <dt>
+                    Round trip
+                    <span className="site-compare-prov prov-DERIVED">DERIVED</span>
+                  </dt>
+                  <dd>
+                    Minimum round-trip time over the route&apos;s length of optical fibre, at about 4.9 microseconds per
+                    kilometre each way. Real latency is higher: switching and routing only add to it.
+                  </dd>
+                </div>
+              )}
             </dl>
           </section>
         </>

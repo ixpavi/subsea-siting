@@ -134,9 +134,9 @@ export default function RouteInspector({
       <p className="design-step-intro">
         A candidate new-cable route is computed with a deterministic A* search over a{" "}
         <strong>global seabed-depth grid</strong> (<span title={BATHYMETRY_PROVENANCE_TEXT}>provenance</span>
-        ), not a straight line between the two cities. This grid does not model artificial waterways (Suez, Panama)
-        as navigable -- a route whose realistic path uses one of those canals is instead routed around the
-        connecting continent, which can significantly overstate marine distance and cost for those pairs.
+        ), not a straight line between the two cities. Canals are not laid through; instead, as real systems do, a
+        route may cross Egypt (Red Sea to Mediterranean) or Panama (Caribbean to Pacific) over land. That crossing is
+        modelled, counted in the total distance, and shown separately from the marine route.
       </p>
 
       <div className="ri-prototype-notice">
@@ -185,10 +185,21 @@ export default function RouteInspector({
                   value={weights.resilience}
                   onChange={(v) => onWeightsChange({ ...weights, resilience: v })}
                 />
-                <RiEnvironmentalWeight
+                <RiDataWeight
                   criteria={result.criteria}
+                  id="environmental"
+                  label="Environmental"
+                  unavailableText="no protected-area data covers this route -- no weight applied"
                   value={weights.environmental}
                   onChange={(v) => onWeightsChange({ ...weights, environmental: v })}
+                />
+                <RiDataWeight
+                  criteria={result.criteria}
+                  id="faultExposure"
+                  label="Fishing and anchoring"
+                  unavailableText="no fishing or shipping data covers this route (European waters only) -- no weight applied"
+                  value={weights.faultExposure}
+                  onChange={(v) => onWeightsChange({ ...weights, faultExposure: v })}
                 />
                 <p className="design-field-note">
                   Cost is deliberately <strong>not</strong> a weighting axis: the cost model is a deterministic
@@ -460,39 +471,38 @@ function RiWeightControl({ label, value, onChange }: { label: string; value: num
 }
 
 /**
- * The environmental weight, which is a slider only when the criterion is
- * actually available.
+ * A weight for a criterion that depends on a dataset with limited coverage
+ * (protected areas, fishing and shipping -- both European). It is a control
+ * only when the criterion is actually available for this route.
  *
- * This row was hardcoded to "unavailable -- no weight applied" from before any
- * environmental dataset existed. Once the protected-area layer was added it
- * became a lie the UI told about itself: on a route lying wholly inside the
- * dataset's extent the criterion IS available and DOES vote, and the criteria
- * table six lines below reported it contributing a quarter of the score while
- * this row said it carried none -- with no control offered over a weight that
- * was influencing the recommendation.
- *
- * Availability comes from the engine's own CriterionOutcome rather than being
- * asserted here, so this cannot drift out of step with the scoring again.
+ * The environmental row was once hardcoded to "unavailable -- no weight
+ * applied" from before any environmental dataset existed, and went on saying so
+ * after the protected-area layer arrived -- while the criteria table below
+ * reported it contributing a quarter of the score. Availability comes from the
+ * engine's own CriterionOutcome, so this cannot drift out of step again.
  */
-function RiEnvironmentalWeight({
+function RiDataWeight({
   criteria,
+  id,
+  label,
+  unavailableText,
   value,
   onChange,
 }: {
   criteria: CriterionOutcome[];
+  id: CriterionOutcome["id"];
+  label: string;
+  unavailableText: string;
   value: number;
   onChange: (v: number) => void;
 }) {
-  const env = criteria.find((c) => c.id === "environmental");
-  if (env?.available) {
-    return <RiWeightControl label="Environmental" value={value} onChange={onChange} />;
+  if (criteria.find((c) => c.id === id)?.available) {
+    return <RiWeightControl label={label} value={value} onChange={onChange} />;
   }
   return (
     <div className="ri-weight-row ri-weight-row-disabled">
-      <span className="ri-weight-label">Environmental</span>
-      <span className="design-field-note ri-weight-unavailable">
-        no protected-area data covers this route -- no weight applied
-      </span>
+      <span className="ri-weight-label">{label}</span>
+      <span className="design-field-note ri-weight-unavailable">{unavailableText}</span>
     </div>
   );
 }
@@ -509,6 +519,9 @@ function RiCandidateRow({ ranked, active, onClick }: { ranked: RankedRouteCandid
       </div>
       <div className="ri-candidate-row-metrics">
         <span className="dc-mono">{fmtKm(candidate.analysis.marineDistanceKm)} marine</span>
+        {candidate.analysis.overlandCrossingKm > 0 && (
+          <span className="dc-mono">+{fmtKm(candidate.analysis.overlandCrossingKm)} overland</span>
+        )}
         <span className="dc-mono">difficulty {candidate.analysis.difficultyIndex.toFixed(3)}</span>
         <span className="dc-mono">{fmtUsd(candidate.cost.totalUsd)}</span>
         <span className="dc-mono">{(candidate.resilience.diversityScore * 100).toFixed(0)}% diverse</span>
@@ -523,7 +536,7 @@ function RiCandidateRow({ ranked, active, onClick }: { ranked: RankedRouteCandid
 
 function RiCandidateDetail({ ranked }: { ranked: RankedRouteCandidate }) {
   const { candidate } = ranked;
-  const { analysis, cost, resilience, environmental } = candidate;
+  const { analysis, cost, resilience, environmental, faultExposure, crossings } = candidate;
   return (
     <div className="pp-detail-card ri-detail-card">
       <div className="ri-detail-heading">
@@ -537,6 +550,9 @@ function RiCandidateDetail({ ranked }: { ranked: RankedRouteCandidate }) {
 
       <div className="design-metrics-grid ri-metrics-grid">
         <Metric label="Marine distance" value={fmtKm(analysis.marineDistanceKm)} metric="marineDistanceKm" />
+        {analysis.overlandCrossingKm > 0 && (
+          <Metric label="Overland crossing" value={fmtKm(analysis.overlandCrossingKm)} metric="overlandCrossingKm" />
+        )}
         <Metric label="Total connection distance" value={fmtKm(analysis.totalDistanceKm)} metric="totalDistanceKm" />
         <Metric
           label="Shallowest band crossed"
@@ -564,6 +580,11 @@ function RiCandidateDetail({ ranked }: { ranked: RankedRouteCandidate }) {
           metric="corridorOverlap"
         />
         <Metric label="Route diversity score" value={resilience.diversityScore.toFixed(2)} metric="diversityScore" />
+        <Metric
+          label="Fishing and anchoring exposure"
+          value={faultExposure.available ? `${((faultExposure.share ?? 0) * 100).toFixed(0)}% of route` : "unavailable"}
+          metric={faultExposure.available ? "faultExposureAssessed" : "faultExposureUnavailable"}
+        />
         <Metric label="Estimated cost" value={fmtUsd(cost.totalUsd)} metric="costEstimate" />
         <Metric label="Overall score" value={ranked.score.toFixed(3)} metric="overallScore" />
       </div>
@@ -589,10 +610,25 @@ function RiCandidateDetail({ ranked }: { ranked: RankedRouteCandidate }) {
       </span>
       <DepthProfileChart profile={analysis.depthProfile} />
 
+      {crossings.map((c) => (
+        <p key={c.id} className="design-field-note">
+          <strong>Overland crossing</strong> <ProvenanceChip metric="overlandCrossingKm" />: {c.name},{" "}
+          {fmtKm(c.km)}. Real systems come ashore here rather than sail round the continent. It counts in the total
+          distance, but it is not marine cable, so it is left out of the marine length, the depth profile and the
+          marine cost.
+        </p>
+      ))}
+
       <p className="design-field-note">
         Environmental analysis{" "}
         <ProvenanceChip metric={environmental.available ? "environmentalAssessed" : "environmentalUnavailable"} />:{" "}
         {environmental.reason}
+      </p>
+
+      <p className="design-field-note">
+        Fishing and anchoring{" "}
+        <ProvenanceChip metric={faultExposure.available ? "faultExposureAssessed" : "faultExposureUnavailable"} />:{" "}
+        {faultExposure.reason}
       </p>
     </div>
   );
@@ -684,8 +720,9 @@ function RiCostAssumptions({ ranked }: { ranked: RankedRouteCandidate }) {
       <p className="design-field-note">
         Every coefficient above is an unsourced modeling assumption held fixed for reproducibility -- not a
         contractor quotation or market price. The model also omits several real cost drivers entirely: repeater
-        count, depth-dependent cable armouring, burial, survey, and EEZ/permitting. Terrestrial backhaul is not
-        included. Treat the total as a comparison device between candidates, not as a budget figure.
+        count, depth-dependent cable armouring, burial, survey, and EEZ/permitting. Terrestrial backhaul and
+        overland crossings (Egypt, Panama) are not included. Treat the total as a comparison device between
+        candidates, not as a budget figure.
       </p>
     </div>
   );

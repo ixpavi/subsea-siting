@@ -90,9 +90,9 @@ describe("ocean grid: seas that must connect", () => {
 });
 
 describe("ocean grid: what must stay closed", () => {
-  // The corrections are for natural straits only. Opening artificial canals
-  // would silently change the engine's routing claims -- and the app
-  // explicitly documents that Europe-Asia routes come out around Africa.
+  // The corrections are for natural straits only. A cable is not laid along a
+  // working canal: Europe-Asia routes cross Egypt over land instead, as a
+  // separate, labelled link (routing/landCrossings.ts), never as open water.
   it("does not open the Suez Canal", () => {
     expect(isWater(30.0, 32.55)).toBe(false);
   });

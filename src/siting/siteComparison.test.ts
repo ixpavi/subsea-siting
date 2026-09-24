@@ -239,3 +239,43 @@ describe("explanation text", () => {
     expect(r.ranked[0].whyText.length).toBeGreaterThan(20);
   });
 });
+
+// With a destination, every site is routed to it and the cable counts in the
+// ranking -- the point where siting and connectivity become one decision.
+describe("route to a destination", () => {
+  const withRoute = (s: SiteEvaluation, totalKm: number | null): SiteEvaluation => ({
+    ...s,
+    route:
+      totalKm === null
+        ? null
+        : { totalKm, marineKm: totalKm, overlandCrossingKm: 0, roundTripMs: totalKm / 100, costUsd: 1, crossings: [] },
+  });
+
+  it("does not exist as a criterion when no destination was set", () => {
+    const r = compareSites([site("A"), site("B")]);
+    expect(r.criteria.some((c) => c.id === "route")).toBe(false);
+  });
+
+  it("ranks the site with the shorter cable higher when all else is equal", () => {
+    const r = compareSites([withRoute(site("Far"), 20_000), withRoute(site("Near"), 12_000)]);
+    const route = r.criteria.find((c) => c.id === "route")!;
+    expect(route.discriminates).toBe(true);
+    expect(r.ranked[0].evaluation.label).toBe("Near");
+    expect(r.ranked[0].winsOn).toContain("route");
+  });
+
+  it("can outweigh a better climate", () => {
+    // A cooler site that needs far more cable loses once the route counts twice as much.
+    const cool = withRoute(site("Cool", { freeCoolingPct: 90 }), 20_000);
+    const warm = withRoute(site("Warm", { freeCoolingPct: 10 }), 10_000);
+    const r = compareSites([cool, warm], { ...DEFAULT_SITE_WEIGHTS, route: 2 });
+    expect(r.ranked[0].evaluation.label).toBe("Warm");
+  });
+
+  it("drops the criterion for every site when any site could not be routed", () => {
+    const r = compareSites([withRoute(site("A"), 10_000), withRoute(site("B"), null)]);
+    const route = r.criteria.find((c) => c.id === "route")!;
+    expect(route.discriminates).toBe(false);
+    expect(route.excludedReason).toMatch(/Not available for 1 of 2 sites/);
+  });
+});

@@ -2,7 +2,7 @@
 // Deliberately decoupled from Globe/App state -- this models a hypothetical
 // planning scenario, not real infrastructure. See calculator/types.ts for
 // the existing, unmodified facility-sizing types this workflow feeds into.
-import type { PriorityWeights, RecommendedCandidate, TierLevel } from "../calculator/types";
+import type { CoolingConfig, PriorityWeights, RecommendedCandidate, TierLevel } from "../calculator/types";
 
 export type Industry =
   | "Financial Services"
@@ -70,10 +70,14 @@ export interface DesignResult {
   /** The grid carbon intensity the CUE was computed with, kept so the figure is always shown beside its own basis. */
   gridCarbonGco2PerKwh: number | null;
   minTier: TierLevel;
-  /** Top-ranked candidate after filtering the engine's output to the Tier floor. */
+  /** Top-ranked candidate among the configurations that meet the Tier floor. */
   top: RecommendedCandidate;
   /** Ranked shortlist (including top) for the "alternatives considered" table. */
   alternatives: RecommendedCandidate[];
+  /** Cooling types the site's climate ruled out before ranking, with the reason. */
+  excludedCooling: { cooling: CoolingConfig; label: string; reason: string }[];
+  /** False when the site's climate could not be fetched, so cooling was not screened. */
+  climateScreened: boolean;
 }
 
 export const PLANNING_STEPS = [

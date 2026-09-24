@@ -1,12 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import {
-  ALL_REDUNDANCIES,
-  ALL_TIERS,
-  COOLING_SPECS,
-  LAND_COOLING_OPTIONS,
-  TIER_SPECS,
-} from "../calculator/facilityCalculator";
-import { recommendConfigurations } from "../calculator/recommend";
+import { COOLING_SPECS, TIER_SPECS } from "../calculator/facilityCalculator";
 import { geocodeLocation, type GeocodeResult } from "./geocoding";
 import {
   AVAILABILITY_OPTIONS,
@@ -17,9 +10,9 @@ import {
   PRIORITY_WEIGHT_PRIMARY,
   PRIORITY_WEIGHT_REMAINING,
   PRIORITY_WEIGHT_SECONDARY,
-  buildPriorityWeights,
-  tierAtLeast,
 } from "./businessProfiles";
+import { computeDesignResult } from "./designRecommendation";
+import type { ProviderEntry, ProviderSummary, OperatorEntry } from "./providers";
 import type {
   BusinessContext,
   DesignRequirement,
@@ -35,6 +28,8 @@ import RouteInspector from "./RouteInspector";
 import ClimateAdjustedPue from "./ClimateAdjustedPue";
 import CoolingAdvisor from "./CoolingAdvisor";
 import { getCountryFactors } from "../siting/countryFactors";
+import { fetchClimateProfile, type ClimateProfile } from "../siting/climateProfile";
+import { roundTripMs } from "../routing/latency";
 import type { RouteEngineResult, RoutingProfileId, RoutingWeights } from "../routing/routingTypes";
 import { useHypotheticalRoute } from "../routing/useHypotheticalRoute";
 import { DEFAULT_ROUTING_WEIGHTS } from "../routing/hypotheticalRouting";
@@ -66,8 +61,6 @@ function reverseStageToStep(stageId: PipelineStageId): PlanningStep | null {
   return null;
 }
 
-const LAND_POOL_SIZE = ALL_TIERS.length * ALL_REDUNDANCIES.length * LAND_COOLING_OPTIONS.length;
-
 const EMPTY_LOCATION: LocationRequirement = { query: "" };
 
 const EMPTY_REQUIREMENT: DesignRequirement = {
@@ -75,38 +68,6 @@ const EMPTY_REQUIREMENT: DesignRequirement = {
   locationConnectivity: { location: { ...EMPTY_LOCATION }, connectivityDestination: { ...EMPTY_LOCATION } },
   priorities: { primary: null, secondary: null },
 };
-
-function computeResult(
-  requirement: DesignRequirement,
-  gridCarbonGco2PerKwh: number | null
-): DesignResult | null {
-  const { businessContext, priorities } = requirement;
-  if (!businessContext.availabilityRequirement || !priorities.primary) return null;
-
-  const availability = AVAILABILITY_OPTIONS.find((a) => a.value === businessContext.availabilityRequirement);
-  if (!availability) return null;
-
-  const weights = buildPriorityWeights(priorities.primary, priorities.secondary);
-  const pool = recommendConfigurations(
-    false,
-    DEFAULT_DOWNTIME_COST_PER_HOUR_USD,
-    weights,
-    LAND_POOL_SIZE,
-    gridCarbonGco2PerKwh
-  );
-  const filtered = pool.filter((c) => tierAtLeast(c.config.tier, availability.minTier));
-  const shortlist = filtered.slice(0, 5);
-  if (shortlist.length === 0) return null;
-
-  return {
-    requirement,
-    weights,
-    gridCarbonGco2PerKwh,
-    minTier: availability.minTier,
-    top: shortlist[0],
-    alternatives: shortlist,
-  };
-}
 
 /** "$1.10B" / "$85.3M" -- the same form the Hypothetical Routes step uses. */
 function fmtUsd(usd: number): string {
@@ -127,8 +88,41 @@ function buildExplanation(result: DesignResult): string {
     ? `${primaryLabel} was weighted highest (${PRIORITY_WEIGHT_PRIMARY}), with ${secondaryLabel} as secondary (${PRIORITY_WEIGHT_SECONDARY})`
     : `${primaryLabel} was weighted highest (${PRIORITY_WEIGHT_PRIMARY})`;
 
-  return `${priorityPart}. Among configurations meeting your Tier ${result.minTier}+ availability requirement, this option ranked highest for those weights -- it is tagged: ${tagPhrase}.`;
+  const screened = result.excludedCooling.length
+    ? ` ${result.excludedCooling.map((x) => x.label).join(" and ")} was left out: ${result.excludedCooling
+        .map((x) => x.reason)
+        .join("; ")}.`
+    : "";
+  return `${priorityPart}. Among configurations meeting your Tier ${result.minTier}+ availability requirement, this option ranked highest for those weights -- it is tagged: ${tagPhrase}.${screened}`;
 }
+
+/**
+ * The worked example the planner offers: Chennai to New York, the case a
+ * reviewer is most likely to try. Coordinates are the same ones the place
+ * search returns, so the example behaves exactly as if typed.
+ */
+const EXAMPLE_REQUIREMENT: DesignRequirement = {
+  businessContext: { industry: "Cloud / SaaS", availabilityRequirement: "high", capacityMW: 30 },
+  locationConnectivity: {
+    location: {
+      query: "Chennai, Tamil Nadu, India",
+      name: "Chennai, Tamil Nadu, India",
+      country: "India",
+      countryCode: "in",
+      lat: 13.0836939,
+      lng: 80.270186,
+    },
+    connectivityDestination: {
+      query: "New York, United States",
+      name: "New York, United States",
+      country: "United States",
+      countryCode: "us",
+      lat: 40.7127281,
+      lng: -74.0060152,
+    },
+  },
+  priorities: { primary: "availability", secondary: "sustainability" },
+};
 
 interface Props {
   onClose: () => void;
@@ -142,6 +136,8 @@ interface Props {
   onSelectRouteCandidate: (id: RoutingProfileId | null) => void;
   onRouteResult: (result: RouteEngineResult | null) => void;
   routeResult: RouteEngineResult | null;
+  /** Companies active near each end -- see design/providers.ts. Null until a site resolves. */
+  providers: ProviderSummary | null;
 }
 
 export default function PlanningPanel({
@@ -155,6 +151,7 @@ export default function PlanningPanel({
   onSelectRouteCandidate,
   onRouteResult,
   routeResult,
+  providers,
 }: Props) {
   const [step, setStep] = useState<PlanningStep>("business-requirement");
   const [requirement, setRequirement] = useState<DesignRequirement>(EMPTY_REQUIREMENT);
@@ -195,6 +192,31 @@ export default function PlanningPanel({
       cancelled = true;
     };
   }, [siteCountryCode]);
+
+  // The site's measured climate, so the design recommendation can leave out
+  // cooling the climate cannot support. Keyed by the site, like grid carbon,
+  // so a change of site invalidates it during render. The request is shared
+  // with the cooling assessment on the same page (fetchClimateProfile caches).
+  const siteLat = requirement.locationConnectivity.location.lat;
+  const siteLng = requirement.locationConnectivity.location.lng;
+  const siteKey = siteLat != null && siteLng != null ? `${siteLat},${siteLng}` : null;
+  const [siteClimate, setSiteClimate] = useState<{ key: string; value: ClimateProfile | null } | null>(null);
+  const climateForSite = siteKey && siteClimate?.key === siteKey ? siteClimate.value : null;
+
+  useEffect(() => {
+    if (!siteKey || siteLat == null || siteLng == null) return;
+    let cancelled = false;
+    fetchClimateProfile(siteLat, siteLng)
+      .then((c) => {
+        if (!cancelled) setSiteClimate({ key: siteKey, value: c });
+      })
+      .catch(() => {
+        if (!cancelled) setSiteClimate({ key: siteKey, value: null });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [siteKey, siteLat, siteLng]);
 
   // BUILD-ONLY MODE. Not every user is planning a subsea connection -- plenty
   // simply want to site and specify a facility. Everything except the route
@@ -327,6 +349,13 @@ export default function PlanningPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [routing.result]);
 
+  // The route the user has selected, falling back to the top-ranked one as the
+  // globe and the route switcher do.
+  const chosenRoute =
+    connectivityPlanning && routeResult && routeResult.candidates.length > 0
+      ? (routeResult.candidates.find((c) => c.candidate.id === selectedRouteCandidateId) ?? routeResult.candidates[0])
+      : null;
+
   function next() {
     const idx = activeSteps.indexOf(step);
     if (idx >= 0 && idx < activeSteps.length - 1) setStep(activeSteps[idx + 1]);
@@ -337,10 +366,21 @@ export default function PlanningPanel({
   }
 
   function generateRecommendation() {
-    const r = computeResult(requirement, gridCarbonGco2PerKwh);
+    const r = computeDesignResult(requirement, gridCarbonGco2PerKwh, climateForSite);
     setResult(r);
     onResult(r);
     setStep("recommendation");
+  }
+
+  /** Fills in the Chennai -> New York example and moves to the site step, where its analysis appears. */
+  function loadExample() {
+    setRequirement(EXAMPLE_REQUIREMENT);
+    setConnectivityPlanning(true);
+    setResult(null);
+    onResult(null);
+    onLocationResolved(EXAMPLE_REQUIREMENT.locationConnectivity.location);
+    onDestinationResolved(EXAMPLE_REQUIREMENT.locationConnectivity.connectivityDestination);
+    setStep("site-connectivity");
   }
 
   return (
@@ -378,6 +418,12 @@ export default function PlanningPanel({
       <div className="pp-content">
         {step === "business-requirement" && (
           <section>
+            <div className="pp-example">
+              <span>New here? Walk through a worked example.</span>
+              <button type="button" className="design-btn-secondary" onClick={loadExample}>
+                Load example: Chennai → New York
+              </button>
+            </div>
             <h2 className="pp-section-title">Business Requirement</h2>
             <div className="design-field-group">
               <span className="design-label">Industry</span>
@@ -605,6 +651,7 @@ export default function PlanningPanel({
                     onExploreCables={onExploreCables}
                     siteLabel={location.name ?? location.query}
                     destinationLabel={destination.name ?? destination.query}
+                    providers={providers}
                   />
                 )}
               </>
@@ -717,7 +764,21 @@ export default function PlanningPanel({
                   Tier {result.minTier}+ requirement met
                 </div>
                 <p className="pp-why">{buildExplanation(result)}</p>
+                {!result.climateScreened && (
+                  <p className="design-field-note">
+                    The site&apos;s climate could not be fetched, so cooling types were not checked against it.
+                  </p>
+                )}
               </div>
+
+              <DecisionSummary
+                result={result}
+                siteLabel={location.name ?? location.query}
+                destinationLabel={destinationResolved ? (destination.name ?? destination.query) : null}
+                route={chosenRoute}
+                connectivity={connectivityPlanning ? connectivityAnalysis : null}
+                providers={connectivityPlanning ? providers : null}
+              />
 
               {/* Connectivity sections only when the user is actually
                   planning a connection. A build-only recommendation should not
@@ -731,6 +792,7 @@ export default function PlanningPanel({
                   onExploreCables={onExploreCables}
                   siteLabel={location.name ?? location.query}
                   destinationLabel={destination.name ?? destination.query}
+                  providers={providers}
                 />
               )}
               {destinationResolved && (
@@ -749,10 +811,9 @@ export default function PlanningPanel({
               )}
 
               <h2 className="pp-section-title pp-section-title-spaced">Hypothetical Route</h2>
-              {routeResult && routeResult.candidates.length > 0 ? (
+              {chosenRoute ? (
                 (() => {
-                  const chosen =
-                    routeResult.candidates.find((c) => c.candidate.id === selectedRouteCandidateId) ?? routeResult.candidates[0];
+                  const chosen = chosenRoute;
                   return (
                     <div className="pp-detail-card">
                       <span className="dc-modeled-badge">MODELED / HYPOTHETICAL</span>
@@ -872,6 +933,18 @@ export default function PlanningPanel({
                     <span className="design-label">Annual downtime</span>
                     <span className="dc-mono">{result.top.profile.annualDowntimeHours} hrs</span>
                   </div>
+                  {connectivityPlanning && connectivityAnalysis && (
+                    <div className="design-metric">
+                      <span className="design-label">Existing cable systems near site</span>
+                      <span className="dc-mono">{cablesNearSite(connectivityAnalysis)}</span>
+                    </div>
+                  )}
+                  {chosenRoute && (
+                    <div className="design-metric">
+                      <span className="design-label">New route&apos;s diversity from existing cables</span>
+                      <span className="dc-mono">{(chosenRoute.candidate.resilience.diversityScore * 100).toFixed(0)}%</span>
+                    </div>
+                  )}
                 </div>
                 <p className="design-field-note">
                   Tier availability figures are the published Uptime Institute standard values; the redundancy
@@ -886,10 +959,20 @@ export default function PlanningPanel({
                     <span className="design-label">Downtime cost impact</span>
                     <span className="dc-mono">${result.top.profile.annualDowntimeCostUsd.toLocaleString()}/yr</span>
                   </div>
+                  {chosenRoute && (
+                    <div className="design-metric">
+                      <span className="design-label">New cable (modelled estimate)</span>
+                      <span className="dc-mono">{fmtUsd(chosenRoute.candidate.cost.totalUsd)}</span>
+                    </div>
+                  )}
                 </div>
                 <p className="design-field-note">
-                  Based on a ${DEFAULT_DOWNTIME_COST_PER_HOUR_USD.toLocaleString()}/hr illustrative baseline. Capital
-                  and operating cost modeling is not yet implemented.
+                  Downtime cost is based on a ${DEFAULT_DOWNTIME_COST_PER_HOUR_USD.toLocaleString()}/hr illustrative
+                  baseline.
+                  {chosenRoute
+                    ? " The cable estimate is the selected route's modelled cost -- a one-off build cost, set beside the yearly downtime cost, not added to it."
+                    : ""}{" "}
+                  Building and operating cost for the data centre itself is not modelled.
                 </p>
               </div>
 
@@ -1062,11 +1145,13 @@ function ConnectivityAnalysisPanel({
   onExploreCables,
   siteLabel,
   destinationLabel,
+  providers,
 }: {
   analysis: ConnectivityAnalysis;
   onExploreCables: (cableIds: string[]) => void;
   siteLabel?: string;
   destinationLabel?: string;
+  providers: ProviderSummary | null;
 }) {
   const hasDestination = analysis.destination != null;
   const sourceUnavailable = analysis.sourceLandingPointDiversity === 0;
@@ -1162,6 +1247,8 @@ function ConnectivityAnalysisPanel({
           Add a connectivity destination to see which of these systems also land near it.
         </p>
       )}
+
+      {providers && <ProvidersSection providers={providers} site={site} dest={dest} hasDestination={hasDestination} />}
 
       {analysis.relevantCables.length > 0 && (
         <div className="pp-cable-list">
@@ -1321,6 +1408,9 @@ function LocationSearchField({
         <div className="pp-suggest">
           {loading && <div className="pp-suggest-status">Searching…</div>}
           {error && <div className="pp-suggest-status pp-suggest-error">{error}</div>}
+          {results[0]?.offline && (
+            <div className="pp-suggest-status">Place search is unreachable, so these are from a built-in list of major cities.</div>
+          )}
           {results.map((r) => (
             <button
               key={`${r.lat},${r.lng}`}
@@ -1333,6 +1423,280 @@ function LocationSearchField({
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/** Existing cable systems that land within the search radius of the site. */
+function cablesNearSite(analysis: ConnectivityAnalysis): number {
+  return analysis.relevantCables.filter((c) => c.sourceLandingPoints.length > 0).length;
+}
+
+/**
+ * One answer covering the building and the cable together: the design, the
+ * route it needs, the round trip that route allows, what the route would cost,
+ * what is already there, and who is at both ends. This is the part of the tool
+ * where the data-centre plan and the cable plan are one decision.
+ */
+function DecisionSummary({
+  result,
+  siteLabel,
+  destinationLabel,
+  route,
+  connectivity,
+  providers,
+}: {
+  result: DesignResult;
+  siteLabel: string;
+  destinationLabel: string | null;
+  route: RouteEngineResult["candidates"][number] | null;
+  connectivity: ConnectivityAnalysis | null;
+  providers: ProviderSummary | null;
+}) {
+  const c = result.top.config;
+  const site = shortPlace(siteLabel, "the site");
+  const dest = destinationLabel ? shortPlace(destinationLabel, "the destination") : null;
+  const fault = route?.candidate.faultExposure;
+  return (
+    <div className="pp-summary">
+      <div className="pp-summary-head">
+        <span className="design-label">Decision summary{dest ? `: ${site} to ${dest}` : `: ${site}`}</span>
+      </div>
+      <div className="pp-summary-grid">
+        <div className="pp-summary-tile">
+          <span className="pp-summary-label">Data centre</span>
+          <span className="pp-summary-value">
+            {TIER_SPECS[c.tier].label} · {c.redundancy} · {COOLING_SPECS[c.cooling].label}
+          </span>
+        </div>
+        {route && (
+          <>
+            <div className="pp-summary-tile">
+              <span className="pp-summary-label">New cable route</span>
+              <span className="pp-summary-value dc-mono">
+                {Math.round(route.candidate.analysis.totalDistanceKm).toLocaleString()} km
+              </span>
+              {route.candidate.crossings.length > 0 && (
+                <span className="pp-summary-note">
+                  incl. {route.candidate.crossings.map((x) => x.name.split(" (")[0]).join(", ")}
+                </span>
+              )}
+            </div>
+            <div className="pp-summary-tile">
+              <span className="pp-summary-label">Round trip to {dest}</span>
+              <span className="pp-summary-value dc-mono">
+                ~{Math.round(roundTripMs(route.candidate.analysis.totalDistanceKm))} ms
+              </span>
+              <span className="pp-summary-note">minimum, over fibre</span>
+            </div>
+            <div className="pp-summary-tile">
+              <span className="pp-summary-label">Cable estimate</span>
+              <span className="pp-summary-value dc-mono">{fmtUsd(route.candidate.cost.totalUsd)}</span>
+              <span className="pp-summary-note">modelled, not a quote</span>
+            </div>
+            <div className="pp-summary-tile">
+              <span className="pp-summary-label">Fishing and anchoring</span>
+              <span className="pp-summary-value dc-mono">
+                {fault?.available ? `${Math.round((fault.share ?? 0) * 100)}% of route` : "not assessed"}
+              </span>
+              {!fault?.available && <span className="pp-summary-note">data covers European waters only</span>}
+            </div>
+          </>
+        )}
+        {connectivity && (
+          <div className="pp-summary-tile">
+            <span className="pp-summary-label">Existing cables near {site}</span>
+            <span className="pp-summary-value dc-mono">{cablesNearSite(connectivity)} systems</span>
+          </div>
+        )}
+        {providers && dest && providers.ownersAvailable && (
+          <div className="pp-summary-tile pp-summary-wide">
+            <span className="pp-summary-label">Owners with cables at both ends</span>
+            <span className="pp-summary-value">
+              {providers.bothEnds.length > 0
+                ? providers.bothEnds
+                    .slice(0, 4)
+                    .map((e) => e.name)
+                    .join(", ") + (providers.bothEnds.length > 4 ? ` +${providers.bothEnds.length - 4} more` : "")
+                : "None in the data"}
+            </span>
+          </div>
+        )}
+      </div>
+      {!route && dest && (
+        <p className="design-field-note">No hypothetical route is available yet -- see the Hypothetical Routes step.</p>
+      )}
+    </div>
+  );
+}
+
+/** How many names a provider group shows before "Show all". */
+const PROVIDER_PREVIEW = 8;
+
+function ProviderChips({ entries, highlight }: { entries: ProviderEntry[]; highlight?: boolean }) {
+  const [all, setAll] = useState(false);
+  const shown = all ? entries : entries.slice(0, PROVIDER_PREVIEW);
+  return (
+    <div className="pp-provider-chips">
+      {shown.map((e) => {
+        const planned = e.cables.every((x) => x.planned);
+        return (
+          <span
+            key={e.name}
+            className={`pp-provider-chip${highlight ? " pp-provider-chip-both" : ""}`}
+            title={e.cables.map((x) => `${x.name}${x.planned ? " (planned)" : ""}`).join(", ")}
+          >
+            {e.name}
+            {e.cables.length > 1 && <span className="pp-provider-count dc-mono">{e.cables.length}</span>}
+            {planned && <span className="pp-provider-planned">planned</span>}
+          </span>
+        );
+      })}
+      {entries.length > PROVIDER_PREVIEW && (
+        <button type="button" className="design-edit-link" onClick={() => setAll((v) => !v)}>
+          {all ? "Show fewer" : `Show all ${entries.length}`}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function OperatorChips({ entries }: { entries: OperatorEntry[] }) {
+  const [all, setAll] = useState(false);
+  const shown = all ? entries : entries.slice(0, PROVIDER_PREVIEW);
+  return (
+    <div className="pp-provider-chips">
+      {shown.map((e) => (
+        <span key={e.name} className="pp-provider-chip" title={`${e.facilities} facilit${e.facilities === 1 ? "y" : "ies"}`}>
+          {e.name}
+          {e.facilities > 1 && <span className="pp-provider-count dc-mono">{e.facilities}</span>}
+        </span>
+      ))}
+      {entries.length > PROVIDER_PREVIEW && (
+        <button type="button" className="design-edit-link" onClick={() => setAll((v) => !v)}>
+          {all ? "Show fewer" : `Show all ${entries.length}`}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Companies already active at each end: cable owners, the companies that
+ * built those cables, and data-centre operators. See design/providers.ts.
+ */
+function ProvidersSection({
+  providers,
+  site,
+  dest,
+  hasDestination,
+}: {
+  providers: ProviderSummary;
+  site: string;
+  dest: string;
+  hasDestination: boolean;
+}) {
+  const anchorNote = (who: string, anchor: ProviderSummary["siteAnchor"]) =>
+    anchor
+      ? ` No cable lands within the search radius of ${who}, so these are the owners at its nearest landing point, ${anchor.name} (${Math.round(anchor.distanceKm)} km).`
+      : "";
+  return (
+    <div className="pp-providers">
+      <div className="pp-conn-header">
+        <span className="design-label">Providers in this area</span>
+        <span className="pp-real-badge">REAL DATA</span>
+      </div>
+      <p className="design-field-note">
+        Companies already active here, from each nearby cable&apos;s own record. Owning a cable near a city is not an
+        offer to build a new one: these are likely partners, not recommendations.
+      </p>
+
+      {!providers.ownersAvailable ? (
+        <p className="pp-conn-unavailable">Cable owner data could not be loaded, so owners are not shown.</p>
+      ) : (
+        <>
+          {hasDestination && (
+            <div className="pp-provider-group">
+              <span className="pp-provider-title">
+                Own cables at both {site} and {dest}
+              </span>
+              {providers.bothEnds.length > 0 ? (
+                <ProviderChips entries={providers.bothEnds} highlight />
+              ) : (
+                <p className="design-field-note">No company owns cables at both ends in this data.</p>
+              )}
+            </div>
+          )}
+          <div className="pp-provider-group">
+            <span className="pp-provider-title">
+              {hasDestination ? `Own cables near ${site} only` : `Own cables near ${site}`}
+            </span>
+            {providers.nearSite.length > 0 ? (
+              <ProviderChips entries={providers.nearSite} />
+            ) : (
+              <p className="design-field-note">None listed.</p>
+            )}
+            {anchorNote(site, providers.siteAnchor) && (
+              <p className="design-field-note">{anchorNote(site, providers.siteAnchor).trim()}</p>
+            )}
+          </div>
+          {hasDestination && (
+            <div className="pp-provider-group">
+              <span className="pp-provider-title">Own cables near {dest} only</span>
+              {providers.nearDestination.length > 0 ? (
+                <ProviderChips entries={providers.nearDestination} />
+              ) : (
+                <p className="design-field-note">None listed.</p>
+              )}
+              {anchorNote(dest, providers.destinationAnchor) && (
+                <p className="design-field-note">{anchorNote(dest, providers.destinationAnchor).trim()}</p>
+              )}
+            </div>
+          )}
+          <div className="pp-provider-group">
+            <span className="pp-provider-title">Built these cables</span>
+            {providers.builders.length > 0 ? (
+              <ProviderChips entries={providers.builders} />
+            ) : (
+              <p className="design-field-note">None listed.</p>
+            )}
+          </div>
+          {providers.cablesWithoutRecord > 0 && (
+            <p className="design-field-note">
+              {providers.cablesWithoutRecord} nearby cable{providers.cablesWithoutRecord === 1 ? " has" : "s have"} no
+              owner record in the source, so {providers.cablesWithoutRecord === 1 ? "its" : "their"} owners are not
+              listed.
+            </p>
+          )}
+        </>
+      )}
+
+      <div className="pp-provider-group">
+        <span className="pp-provider-title">
+          Data-centre operators within {providers.dcRadiusKm} km of {site}
+        </span>
+        {providers.dcOperatorsNearSite.length > 0 ? (
+          <OperatorChips entries={providers.dcOperatorsNearSite} />
+        ) : (
+          <p className="design-field-note">None listed in PeeringDB.</p>
+        )}
+      </div>
+      {hasDestination && (
+        <div className="pp-provider-group">
+          <span className="pp-provider-title">
+            Data-centre operators within {providers.dcRadiusKm} km of {dest}
+          </span>
+          {providers.dcOperatorsNearDestination.length > 0 ? (
+            <OperatorChips entries={providers.dcOperatorsNearDestination} />
+          ) : (
+            <p className="design-field-note">None listed in PeeringDB.</p>
+          )}
+        </div>
+      )}
+      <p className="design-field-note">
+        Sources: TeleGeography Submarine Cable Map (owners and builders, CC BY-NC-SA 3.0); PeeringDB (data-centre
+        operators). Hover a name to see which cables it relates to.
+      </p>
     </div>
   );
 }

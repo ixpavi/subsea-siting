@@ -15,6 +15,8 @@ import { computeRouteAnalysis } from "./routeAnalysis";
 import { computeRouteResilience } from "./routeResilience";
 import { assessEnvironmental } from "./environmentalConstraints";
 import type { ProtectedAreaGrid } from "./protectedAreas";
+import { assessFaultExposure, type MaritimeActivityGrid } from "./maritimeActivity";
+import { marineParts } from "./landCrossings";
 import { computeCost } from "./routeCostModel";
 import type {
   CriterionOutcome,
@@ -348,6 +350,7 @@ export const DEFAULT_ROUTING_WEIGHTS: RoutingWeights = {
   seabedDifficulty: 1,
   resilience: 1,
   environmental: 1,
+  faultExposure: 1,
 };
 
 function normalize(values: number[], higherIsBetter: boolean): number[] {
@@ -362,6 +365,7 @@ const CRITERION_LABELS: Record<RoutingCriterionId, string> = {
   seabedDifficulty: "modeled seabed difficulty",
   resilience: "route diversity from existing cable corridors",
   environmental: "environmental exposure",
+  faultExposure: "exposure to fishing and anchoring",
 };
 
 export interface CriterionState {
@@ -566,6 +570,14 @@ export function rankCandidates(
       weights.environmental,
       environmentalAvailable
     ),
+    // Same every-candidate rule as environmental, for the same reason.
+    buildCriterion(
+      "faultExposure",
+      candidates.map((c) => c.faultExposure.share ?? 0),
+      false,
+      weights.faultExposure,
+      candidates.every((c) => c.faultExposure.available)
+    ),
   ];
 
   const active = criteria.filter((c) => c.discriminates);
@@ -619,6 +631,9 @@ export interface HypotheticalRoutingInputs {
   /** Marine protected areas. Optional: when absent the environmental criterion
    *  reports unavailable, exactly as it did before any dataset existed. */
   protectedAreas?: ProtectedAreaGrid | null;
+  /** Fishing and shipping density. Optional in the same way: absent, the
+   *  fault-exposure criterion reports unavailable. */
+  maritimeActivity?: MaritimeActivityGrid | null;
   weights?: RoutingWeights;
 }
 
@@ -680,9 +695,19 @@ export function runHypotheticalRouting(inputs: HypotheticalRoutingInputs): Route
   const candidates: RouteCandidate[] = [];
   for (const geo of geometries) {
     if (!geo.found || geo.path.length < 2) continue;
-    const analysis = computeRouteAnalysis(inputs.grid, geo.path, sourceEndpoint.terrestrialAccessKm, destinationEndpoint.terrestrialAccessKm);
-    const environmental = assessEnvironmental(geo.path, inputs.protectedAreas ?? null);
-    const resilience = computeRouteResilience(cableIndex, geo.path);
+    const analysis = computeRouteAnalysis(
+      inputs.grid,
+      geo.path,
+      sourceEndpoint.terrestrialAccessKm,
+      destinationEndpoint.terrestrialAccessKm,
+      geo.crossings
+    );
+    // Everything that measures the sea reads the marine stretches only; an
+    // overland crossing is land. See landCrossings.ts.
+    const parts = marineParts(geo.path, geo.crossings);
+    const environmental = assessEnvironmental(parts, inputs.protectedAreas ?? null);
+    const faultExposure = assessFaultExposure(parts, inputs.maritimeActivity ?? null, inputs.grid);
+    const resilience = computeRouteResilience(cableIndex, geo.path, geo.crossings);
     const cost = computeCost(analysis, environmental);
     candidates.push({
       id: geo.profile.id,
@@ -690,8 +715,10 @@ export function runHypotheticalRouting(inputs: HypotheticalRoutingInputs): Route
       shortName: geo.profile.shortName,
       description: geo.profile.description,
       path: geo.path,
+      crossings: geo.crossings,
       analysis,
       environmental,
+      faultExposure,
       resilience,
       cost,
     });

@@ -7,7 +7,7 @@
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)](https://react.dev)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
 [![Vite](https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white)](https://vite.dev)
-[![Tests](https://img.shields.io/badge/tests-246%20passing-2ea44f)](#-testing)
+[![Tests](https://img.shields.io/badge/tests-292%20passing-2ea44f)](#-testing)
 [![Data](https://img.shields.io/badge/cable%20systems-724-0e7c86)](#-data-provenance)
 [![Paper](https://img.shields.io/badge/paper-IEEE%20final%20draft-b31b1b)](docs/paper/main.pdf)
 [![Licence](https://img.shields.io/badge/licence-Apache%202.0-blue)](LICENSE)
@@ -36,7 +36,7 @@ Its distinguishing feature is not the globe. It is that **every figure is labell
 |:--:|:--:|:--:|:--:|
 | **724** | **1,920** | **5,260** | **216** |
 | cable systems | landing points | facilities | countries scored |
-| **702** | **412** | **246** | **0.5°** |
+| **702** | **412** | **292** | **0.5°** |
 | protected areas | as-laid route corpus | tests passing | ocean grid |
 
 </div>
@@ -46,18 +46,24 @@ Its distinguishing feature is not the globe. It is that **every figure is labell
 ## ✨ Capabilities
 
 ### 🗺️ Explore the real network
-Every cable system, landing point and facility on a 3D globe. Click a cable for its route, endpoints and connected landing points. Custom screen-space hit-testing gives reliable clicking where the renderer's own raycasting cannot.
+Every cable system, landing point and facility on a 3D globe. Click a cable for its landing points, owners, the company that built it and the year it entered service. Custom screen-space hit-testing gives reliable clicking where the renderer's own raycasting cannot.
 
 ### 📍 Evaluate one site
 Enter a location and the tool pulls **a full year of hourly reanalysis temperature**, derives how much of the year outside air alone can carry the cooling load, joins national water stress and grid carbon intensity, and recommends a cooling configuration with a climate-adjusted PUE estimate.
 
 ### ⚖️ Compare several sites
-The question siting actually starts from is *which of these*. Up to six candidates ranked on five weighted criteria, re-ranking instantly because the site data is already gathered.
+The question siting actually starts from is *which of these*. Up to six candidates ranked on weighted criteria, re-ranking instantly because the site data is already gathered. Give a destination and every site is **routed to it**: the cable each would need, and the round-trip time it allows, are ranked alongside climate, water, carbon and connectivity.
 
 > **A criterion missing for _any_ site is dropped for _all_ of them.** Scoring only the sites that have a value would rank a site higher precisely because less is known about it — and the table would still look complete.
 
 ### 🧭 Route a hypothetical cable
-A\* search over a bathymetric depth-band grid produces materially different candidates — shortest, depth-favouring, diversity-seeking — analysed for seabed difficulty, protected-area exposure and separation from existing corridors, then ranked with a written justification.
+A\* search over a bathymetric grid produces materially different candidates — shortest, depth-favouring, diversity-seeking — analysed for seabed difficulty, protected-area exposure, **exposure to fishing and anchoring** (the cause of most cable faults) and separation from existing corridors, then ranked with a written justification. Like real systems, routes cross **Egypt and Panama over land** rather than sailing round Africa or South America.
+
+### 🤝 See who is already there
+For each end of a planned link: the companies that own the cables landing there, who built them, and the data-centre operators nearby — with the owners present at **both** ends picked out as the likeliest partners.
+
+### 🧩 One decision, not two
+The planner ends in a single summary: the facility design, the new cable it needs, the round-trip time, the cable estimate, what already lands nearby and who is at both ends. The site's measured climate also shapes the design — cooling the climate cannot support is left out, with the reason given.
 
 ### 🎚️ See how much the answer depends on your weights
 Every ranking reports the share of possible weightings under which the recommendation still holds, and names the exact setting at which it flips.
@@ -77,6 +83,8 @@ Nothing is presented without its standing. This is enforced in the type system �
 | Grid carbon intensity | [Our World in Data](https://ourworldindata.org) | `REAL` |
 | Water stress | [WRI Aqueduct](https://www.wri.org/aqueduct) | `REAL` |
 | Marine protected areas | WDPA via [EMODnet](https://emodnet.ec.europa.eu) *(European extract)* | `REAL` |
+| Cable owners, builders, service year | TeleGeography Submarine Cable Map, per-cable records *(CC BY-NC-SA 3.0)* | `REAL` |
+| Fishing and cargo/tanker traffic | EMODnet vessel density, AIS 2024 *(European waters, CC BY 4.0)* | `DERIVED` |
 | Free-cooling hours | ERA5 reanalysis via [Open-Meteo](https://open-meteo.com) | `DERIVED` |
 | Seabed depth | [NOAA NCEI](https://www.ncei.noaa.gov) global DEM mosaic, 0.5° | `DERIVED` |
 | Land/water mask | Natural Earth coastline + 14 strait corrections | `DERIVED` |
@@ -200,7 +208,7 @@ Then open the printed local URL. No API keys, no accounts, no backend — the ap
 
 ```bash
 npm run build      # production build
-npm test           # 246 tests
+npm test           # 292 tests
 npm run lint       # oxlint
 ```
 
@@ -218,7 +226,7 @@ Full pipeline, runtimes and the order to run things in: [study §7](docs/seabed-
 
 ## 🧪 Testing
 
-246 tests, and many assert properties of the **data** rather than the code — because that is where the hardest bugs lived.
+292 tests, and many assert properties of the **data** rather than the code — because that is where the hardest bugs lived.
 
 | Suite | What it locks down |
 |---|---|
@@ -231,6 +239,10 @@ Full pipeline, runtimes and the order to run things in: [study §7](docs/seabed-
 | `hypotheticalRouting` | Degenerate route pairs detected symmetrically; re-ranking under new weights matches a full run |
 | `nearestOceanCell` | The "nearest ocean cell" really is the nearest, and never one in a sealed sea |
 | `cableNetwork` | Search ranks the place people type for ahead of chance substring matches |
+| `landCrossings` | Europe–Asia and Caribbean–Pacific routes cross Egypt and Panama over land, never counted as sea |
+| `maritimeActivity` | Busy water only counts where gear and anchors reach the seabed; no data is never "quiet" |
+| `providers` | Owners at both ends are found; an inland site reads its nearest landing point |
+| `designRecommendation` | Ruled-out Tiers never shape the ranking; cooling the climate cannot carry is left out |
 | `connectivityAnalysis` | An inland site reports the distance to the coast, not "unavailable" |
 | `facilityCalculator` | CUE uses the site's real grid carbon, and never steers the ranking |
 | `environmentalRisk` | A measured protected-area result is never presented as a heuristic |
@@ -270,7 +282,8 @@ public/data/                  committed, app-ready datasets
 
 Stated here rather than discovered later:
 
-- **Canals are not navigable.** Suez and Panama are not in the source coastline, so Europe–Asia routes come out around Africa. Natural straits narrower than the grid cell *are* corrected — 14 of them, listed in the shipped grid.
+- **Canals are crossed over land, as a model.** Routes may cross Egypt and Panama by a straight modelled land link between two grid cells — counted in the total distance, never as marine cable. It is not a surveyed terrestrial route. Natural straits narrower than the grid cell are corrected — 14 of them, listed in the shipped grid.
+- **Fishing and anchoring data is European.** Outside EMODnet's coverage that criterion reports **unavailable**. Shipping traffic stands in for anchoring, which no dataset publishes.
 - **Protected areas are European.** EMODnet serves the European extract of WDPA. Outside its extent the criterion reports **unavailable**, never "no constraints found".
 - **Route costs are assumed.** The coefficients are not sourced and are labelled `MODELLED`.
 - **Bathymetry is coarse.** Depths are modelled values on a 0.5° (~56 km) grid, not point soundings — and the land/water mask is a cartographic coastline, not the elevation model.

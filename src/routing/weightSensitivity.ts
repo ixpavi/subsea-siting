@@ -39,6 +39,7 @@ export const SENSITIVITY_CRITERIA: RoutingCriterionId[] = [
   "seabedDifficulty",
   "resilience",
   "environmental",
+  "faultExposure",
 ];
 
 /** One candidate's per-criterion normalized scores, which is all the ranking

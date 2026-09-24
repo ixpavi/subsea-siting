@@ -24,6 +24,7 @@ import { depthDifficultyMultiplier, MIN_DEPTH_DIFFICULTY_MULTIPLIER } from "./ma
 import { buildCableProximityIndex, nearestCableDistanceKm, type CableProximityIndex } from "./cableProximityIndex";
 import type { CableFeature } from "../types";
 import type { RoutingProfileId } from "./routingTypes";
+import { crossingLinks, type CrossingLink, type RouteCrossing } from "./landCrossings";
 
 function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371;
@@ -173,6 +174,9 @@ interface AStarResult {
 
 const MAX_VISITED_NODES = 220000;
 
+/** Search cost of one kilometre of overland crossing -- the same as the cheapest marine kilometre. */
+const OVERLAND_COST_PER_KM = 1;
+
 function runAStar(
   grid: OceanGrid,
   cableIndex: CableProximityIndex,
@@ -209,6 +213,7 @@ function runAStar(
   const heap = new MinHeap<number>();
   heap.push(0, startKey);
   const closed = new Set<number>();
+  const crossings = crossingLinks(grid);
   let visited = 0;
 
   while (heap.size > 0) {
@@ -247,6 +252,23 @@ function runAStar(
         // stays optimal. See this file's header.
         const h = haversineKm(nLat, nLng, goalLat, goalLng) * profile.minCostPerKm;
         heap.push(tentativeG + h, nKey);
+      }
+    }
+
+    // Overland crossings (Egypt, Panama): a link to a cell on another coast,
+    // charged at one unit per km -- a kilometre of connection, whatever it is
+    // made of. That is never below profile.minCostPerKm, so the heuristic stays
+    // admissible across the link too.
+    for (const link of crossings.get(currentKey) ?? []) {
+      if (closed.has(link.toKey)) continue;
+      const tentativeG = currentG + link.km * OVERLAND_COST_PER_KM;
+      const existing = gScore.get(link.toKey);
+      if (existing === undefined || tentativeG < existing) {
+        gScore.set(link.toKey, tentativeG);
+        cameFrom.set(link.toKey, currentKey);
+        const toLat = latForRow(grid, Math.floor(link.toKey / grid.cols));
+        const toLng = lngForCol(grid, link.toKey % grid.cols);
+        heap.push(tentativeG + haversineKm(toLat, toLng, goalLat, goalLng) * profile.minCostPerKm, link.toKey);
       }
     }
   }
@@ -305,6 +327,8 @@ function simplifyPath(points: [number, number][], toleranceDeg: number): [number
 export interface CandidateGeometry {
   profile: RoutingProfile;
   path: [number, number][]; // simplified, includes exact marine start/end
+  /** Overland crossings the path uses, each a segment of `path`. */
+  crossings: RouteCrossing[];
   found: boolean;
 }
 
@@ -341,13 +365,40 @@ export function generateRouteCandidates(
 ): CandidateGeometry[] {
   const cableIndex = getCableProximityIndex(cables);
   const profiles = onlyProfiles ? ROUTING_PROFILES.filter((p) => onlyProfiles.includes(p.id)) : ROUTING_PROFILES;
+  const links = crossingLinks(grid);
   return profiles.map((profile) => {
     const result = runAStar(grid, cableIndex, profile, marineStart, marineEnd);
-    if (!result.found) return { profile, path: [], found: false };
+    if (!result.found) return { profile, path: [], crossings: [], found: false };
     const gridPoints: [number, number][] = result.cells.map((c) => [latForRow(grid, c.row), lngForCol(grid, c.col)]);
     // Snap the endpoints to the exact requested marine coordinates rather than the grid cell center, so the route visibly starts/ends at the resolved endpoint.
     const full: [number, number][] = [[marineStart.lat, marineStart.lng], ...gridPoints.slice(1, -1), [marineEnd.lat, marineEnd.lng]];
-    const simplified = simplifyPath(full, grid.resolutionDeg * 0.4);
-    return { profile, path: simplified, found: true };
+
+    // Split at every overland crossing and simplify each marine stretch on its
+    // own. Simplifying across a crossing could drop one of its two end cells
+    // and fold the land link into a longer diagonal -- the crossing has to
+    // survive as exactly the segment the search chose.
+    const runs: [number, number][][] = [[full[0]]];
+    const used: CrossingLink[] = [];
+    for (let i = 1; i < full.length; i++) {
+      const fromKey = result.cells[i - 1].row * grid.cols + result.cells[i - 1].col;
+      const toKey = result.cells[i].row * grid.cols + result.cells[i].col;
+      const link = links.get(fromKey)?.find((l) => l.toKey === toKey);
+      if (link) {
+        used.push(link);
+        runs.push([full[i]]);
+      } else {
+        runs[runs.length - 1].push(full[i]);
+      }
+    }
+    const path: [number, number][] = [];
+    const crossings: RouteCrossing[] = [];
+    runs.forEach((run, r) => {
+      if (r > 0) {
+        const link = used[r - 1];
+        crossings.push({ id: link.crossing.id, name: link.crossing.name, km: link.km, fromIndex: path.length - 1 });
+      }
+      path.push(...simplifyPath(run, grid.resolutionDeg * 0.4));
+    });
+    return { profile, path, crossings, found: true };
   });
 }

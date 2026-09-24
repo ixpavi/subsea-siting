@@ -43,7 +43,7 @@ import {
   LAND_COOLING_OPTIONS,
   SUBSEA_COOLING_OPTIONS,
 } from "./facilityCalculator";
-import type { FacilityConfig, PriorityWeights, RecommendedCandidate } from "./types";
+import type { CoolingConfig, FacilityConfig, PriorityWeights, RecommendedCandidate, TierLevel } from "./types";
 
 export function generateCandidateConfigs(
   isSubsea: boolean,
@@ -98,20 +98,44 @@ function paretoFrontier(items: ScoredInternal[]): ScoredInternal[] {
   });
 }
 
+export interface EligibilityOptions {
+  /** Lowest acceptable Tier. Configurations below it are not candidates at all. */
+  minTier?: TierLevel;
+  /** Cooling types this site can use. Defaults to every type for the deployment. */
+  coolingOptions?: CoolingConfig[];
+}
+
 /**
  * @param gridCarbonGco2PerKwh The site's national grid carbon intensity, so
  *   the reported CUE is the real one. Null when no location is known; CUE is
  *   then unavailable. It is a reported figure only -- sustainability ranks on
  *   PUE + WUE -- so this never changes which configuration wins.
+ *
+ * @param eligibility Hard requirements, applied BEFORE anything is scored.
+ *   This used to be the caller's job, done afterwards: every configuration was
+ *   normalised and ranked, and those below the Tier floor were then dropped.
+ *   But min-max normalisation takes its range from whatever it is given, so the
+ *   Tier I options that could never be chosen still set the scale -- Tier I's
+ *   40 hours of downtime stretched the availability axis so far that 2N's 18
+ *   extra minutes of uptime over N scored as almost nothing. With Availability
+ *   as the top priority the planner recommended Tier IV with N redundancy.
+ *   Options the user has ruled out must not shape the comparison between the
+ *   ones they have not.
  */
 export function recommendConfigurations(
   isSubsea: boolean,
   downtimeCostPerHourUsd: number,
   weights: PriorityWeights,
   maxResults = 5,
-  gridCarbonGco2PerKwh: number | null = null
+  gridCarbonGco2PerKwh: number | null = null,
+  eligibility: EligibilityOptions = {}
 ): RecommendedCandidate[] {
-  const configs = generateCandidateConfigs(isSubsea, downtimeCostPerHourUsd);
+  const configs = generateCandidateConfigs(isSubsea, downtimeCostPerHourUsd).filter(
+    (c) =>
+      (!eligibility.minTier || ALL_TIERS.indexOf(c.tier) >= ALL_TIERS.indexOf(eligibility.minTier)) &&
+      (!eligibility.coolingOptions || eligibility.coolingOptions.includes(c.cooling))
+  );
+  if (configs.length === 0) return [];
   const profiles = configs.map((c) => calculateFacilityProfile(c, gridCarbonGco2PerKwh));
   const complexities = configs.map((c) => estimateDeploymentComplexity(c));
 

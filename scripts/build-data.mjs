@@ -1,7 +1,7 @@
 // Transforms raw sourced data (scripts/raw/*, scripts/subsea-dcs.json) into
 // trimmed, app-ready JSON in public/data/. Re-run manually after re-scraping;
 // never fetched at app runtime.
-import { readFileSync, writeFileSync } from "fs";
+import { existsSync, readFileSync, writeFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 
@@ -94,3 +94,48 @@ subseaWithConnector.forEach((dc) =>
     `  ${dc.name} -> nearest landing point: ${dc.nearestLandingPoint?.name} (${dc.nearestLandingPointDistanceKm} km)`
   )
 );
+
+// --- Cable owners and builders (per-cable detail records) ---
+// Fetched separately by fetch-cable-details.mjs, because cable-geo.json
+// carries geometry only. Optional: the app works without it and says so.
+const detailsPath = join(RAW, "cable-details.json");
+if (existsSync(detailsPath)) {
+  const raw = readJSON(detailsPath);
+  // Owners and suppliers arrive as one comma-separated string, and a few
+  // names contain a comma of their own ("Unicom, Inc.", "Co., Ltd."). A part
+  // that is only a company-form suffix is joined back onto the name before it.
+  const SUFFIX = /^(inc|ltd|llc|co|corp|plc|s\.?a|ag|gmbh|lp|b\.?v|n\.?v|s\.?p\.?a|sas|limited)\.?$/i;
+  const splitNames = (s) => {
+    const out = [];
+    for (const part of (s ?? "").split(",").map((p) => p.trim()).filter(Boolean)) {
+      if (out.length && SUFFIX.test(part)) out[out.length - 1] += `, ${part}`;
+      else out.push(part);
+    }
+    return out;
+  };
+  const cables = {};
+  for (const r of raw.records) {
+    if (r.missing) continue;
+    const km = Number.parseFloat(String(r.length ?? "").replace(/,/g, ""));
+    cables[r.id] = {
+      owners: splitNames(r.owners),
+      suppliers: splitNames(r.suppliers),
+      rfsYear: Number.isFinite(r.rfs_year) ? r.rfs_year : null,
+      planned: r.is_planned === true,
+      lengthKm: Number.isFinite(km) ? km : null,
+      url: r.url || null,
+    };
+  }
+  writeFileSync(
+    join(OUT, "cable-details.json"),
+    JSON.stringify({
+      fetchedAt: raw.fetchedAt,
+      source: "TeleGeography Submarine Cable Map (submarinecablemap.com)",
+      licence: "CC BY-NC-SA 3.0",
+      cables,
+    })
+  );
+  console.log(`cable-details.json: ${Object.keys(cables).length} cable systems`);
+} else {
+  console.log("cable-details.json: skipped (run fetch-cable-details.mjs first)");
+}

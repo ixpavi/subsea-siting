@@ -13,10 +13,11 @@
 // and found nothing" remain different answers.
 import type { EnvironmentalAssessment } from "./routingTypes";
 import type { ProtectedAreaGrid } from "./protectedAreas";
-import { assessEnvironmentalWithGrid } from "./protectedAreas";
+import { assessEnvironmentalParts } from "./protectedAreas";
 
+/** @param marineParts the route's marine stretches -- see landCrossings.marineParts. */
 export function assessEnvironmental(
-  marinePath: [number, number][],
+  marineParts: [number, number][][],
   grid: ProtectedAreaGrid | null
 ): EnvironmentalAssessment {
   if (!grid) {
@@ -27,5 +28,5 @@ export function assessEnvironmental(
         "assessed for this route. Reported as unavailable, not as \"no constraints found.\"",
     };
   }
-  return assessEnvironmentalWithGrid(marinePath, grid);
+  return assessEnvironmentalParts(marineParts, grid);
 }

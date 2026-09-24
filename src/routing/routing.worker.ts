@@ -7,6 +7,7 @@
 // coordinates, not the whole cable/grid payload every time.
 import { loadOceanGrid } from "./oceanGrid";
 import { loadProtectedAreas } from "./protectedAreas";
+import { loadMaritimeActivity } from "./maritimeActivity";
 import { runHypotheticalRouting } from "./hypotheticalRouting";
 import type { CableFeature, LandingPoint } from "../types";
 import type { RouteEngineResult } from "./routingTypes";
@@ -65,15 +66,16 @@ function getLandingPoints(): Promise<LandingPoint[]> {
 self.onmessage = async (e: MessageEvent<RoutingRequest>) => {
   const req = e.data;
   try {
-    // Protected areas are allowed to fail without taking the route with them:
-    // a missing environmental dataset degrades that one criterion to
+    // Protected areas and maritime activity are allowed to fail without taking
+    // the route with them: a missing dataset degrades that one criterion to
     // unavailable, which the engine already handles, rather than failing the
     // whole request.
-    const [grid, cables, landingPoints, protectedAreas] = await Promise.all([
+    const [grid, cables, landingPoints, protectedAreas, maritimeActivity] = await Promise.all([
       loadOceanGrid(),
       getCables(),
       getLandingPoints(),
       loadProtectedAreas().catch(() => null),
+      loadMaritimeActivity().catch(() => null),
     ]);
     const result = runHypotheticalRouting({
       sourceLat: req.sourceLat,
@@ -86,6 +88,7 @@ self.onmessage = async (e: MessageEvent<RoutingRequest>) => {
       landingPoints,
       grid,
       protectedAreas,
+      maritimeActivity,
     });
     const response: RoutingResponse = { requestId: req.requestId, ok: true, result };
     (self as unknown as Worker).postMessage(response);

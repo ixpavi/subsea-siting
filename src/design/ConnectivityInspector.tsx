@@ -4,14 +4,17 @@
 // this only ever shows real, dataset-backed facts about the clicked item.
 import type { ConnectivitySelection, ConnectivityLandingPointDatum } from "../Globe";
 import type { RelevantCable } from "./connectivityAnalysis";
+import type { CableDetailsFile } from "./providers";
 import CloseButton from "../CloseButton";
 import "./design.css";
 
 export default function ConnectivityInspector({
   selection,
+  cableDetails,
   onClose,
 }: {
   selection: ConnectivitySelection;
+  cableDetails: CableDetailsFile | null;
   onClose: () => void;
 }) {
   return (
@@ -21,13 +24,18 @@ export default function ConnectivityInspector({
         <CloseButton onClick={onClose} />
       </div>
       <div className="panel-body">
-        {selection.kind === "cable" ? <CableDetail cable={selection.data} /> : <LandingPointDetail lp={selection.data} />}
+        {selection.kind === "cable" ? (
+          <CableDetail cable={selection.data} cableDetails={cableDetails} />
+        ) : (
+          <LandingPointDetail lp={selection.data} />
+        )}
       </div>
     </div>
   );
 }
 
-function CableDetail({ cable }: { cable: RelevantCable }) {
+function CableDetail({ cable, cableDetails }: { cable: RelevantCable; cableDetails: CableDetailsFile | null }) {
+  const record = cableDetails?.cables[cable.id] ?? null;
   const relevanceLabel =
     cable.relevance === "direct"
       ? "Direct system -- lands near both endpoints"
@@ -56,11 +64,31 @@ function CableDetail({ cable }: { cable: RelevantCable }) {
           <span>{cable.destinationLandingPoints.map((lp) => lp.name).join(", ")}</span>
         </div>
       )}
+      {record && record.owners.length > 0 && (
+        <div className="detail-row">
+          <span className="detail-key">Owners</span>
+          <span>{record.owners.join(", ")}</span>
+        </div>
+      )}
+      {record && record.suppliers.length > 0 && (
+        <div className="detail-row">
+          <span className="detail-key">Built by</span>
+          <span>{record.suppliers.join(", ")}</span>
+        </div>
+      )}
+      {record?.rfsYear != null && (
+        <div className="detail-row">
+          <span className="detail-key">{record.planned ? "Planned for" : "In service since"}</span>
+          <span className="dc-mono">{record.rfsYear}</span>
+        </div>
+      )}
       <div className="detail-row">
         <span className="detail-key">Path segments</span>
         <span>{cable.paths.length}</span>
       </div>
-      <p className="status-note">Source: TeleGeography submarine cable geometry (submarinecablemap.com).</p>
+      <p className="status-note">
+        Source: TeleGeography Submarine Cable Map (submarinecablemap.com); owners and builders CC BY-NC-SA 3.0.
+      </p>
     </>
   );
 }

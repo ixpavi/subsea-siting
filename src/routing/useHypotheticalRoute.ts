@@ -49,6 +49,36 @@ function getWorker(): Worker {
 let nextRequestId = 1;
 
 /**
+ * One route, as a promise, on the same worker -- for callers that need a
+ * route per item rather than a live search (Compare Sites routes each
+ * candidate site to the destination). Requests queue in the worker, so these
+ * run one after another.
+ */
+export function routeOnce(req: Omit<RoutingRequest, "requestId">): Promise<RouteEngineResult> {
+  return new Promise((resolve, reject) => {
+    const w = getWorker();
+    const requestId = nextRequestId++;
+    const cleanup = () => {
+      w.removeEventListener("message", onMessage);
+      w.removeEventListener("error", onError);
+    };
+    function onMessage(e: MessageEvent<RoutingResponse>) {
+      if (e.data.requestId !== requestId) return;
+      cleanup();
+      if (e.data.ok) resolve(e.data.result);
+      else reject(new Error(e.data.error));
+    }
+    function onError() {
+      cleanup();
+      reject(new Error(WORKER_LOAD_ERROR));
+    }
+    w.addEventListener("message", onMessage);
+    w.addEventListener("error", onError);
+    w.postMessage({ ...req, requestId } satisfies RoutingRequest);
+  });
+}
+
+/**
  * What the search depends on. Weights are deliberately NOT part of it: they
  * only rank the candidates, which is redone here on the main thread (see
  * rerankRouteResult). Keying on them restarted the whole search for every

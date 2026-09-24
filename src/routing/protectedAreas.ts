@@ -143,7 +143,20 @@ export function assessEnvironmentalWithGrid(
   marinePath: [number, number][],
   grid: ProtectedAreaGrid
 ): EnvironmentalAssessment {
-  if (marinePath.length < 2) {
+  return assessEnvironmentalParts([marinePath], grid);
+}
+
+/**
+ * The same, for a route made of several marine stretches -- one broken by an
+ * overland crossing (see landCrossings.ts). The crossing is land and is not
+ * assessed; the stretches either side are assessed together.
+ */
+export function assessEnvironmentalParts(
+  marineParts: [number, number][][],
+  grid: ProtectedAreaGrid
+): EnvironmentalAssessment {
+  const usable = marineParts.filter((p) => p.length >= 2);
+  if (usable.length === 0) {
     return {
       available: false,
       reason: "Route geometry too short to assess environmental exposure.",
@@ -154,10 +167,11 @@ export function assessEnvironmentalWithGrid(
   // Done before the coverage test too: measuring coverage on the caller's
   // vertices let a long segment leave the data extent and come back between
   // two covered endpoints, and be counted as fully covered.
-  const path = densify(marinePath, (grid.resolutionDeg * 111.32) / 2);
+  const densified = usable.map((p) => densify(p, (grid.resolutionDeg * 111.32) / 2));
+  const allPoints = densified.flat();
 
-  const outside = path.filter(([lat, lng]) => !inExtent(grid, lat, lng)).length;
-  const outsideFraction = outside / path.length;
+  const outside = allPoints.filter(([lat, lng]) => !inExtent(grid, lat, lng)).length;
+  const outsideFraction = outside / allPoints.length;
 
   // Any meaningful excursion beyond the data extent makes the whole answer
   // unreliable, so the threshold is deliberately strict.
@@ -178,24 +192,26 @@ export function assessEnvironmentalWithGrid(
   // distinct entries (a run of protected samples is one crossing, not many).
   let constrainedKm = 0;
   let crossings = 0;
-  let wasInside = false;
   let totalKm = 0;
 
-  for (let i = 0; i < path.length - 1; i++) {
-    const [lat1, lng1] = path[i];
-    const [lat2, lng2] = path[i + 1];
-    const segKm = haversineKm(lat1, lng1, lat2, lng2);
-    totalKm += segKm;
-    // Attribute a segment by its midpoint. Sound because `densify` above has
-    // already bounded every segment to half a cell; midpoint sampling then
-    // avoids double-counting the shared vertex between consecutive segments.
-    const [midLat, midLng] = interpolateLatLng(lat1, lng1, lat2, lng2, 0.5);
-    const inside = isProtected(grid, midLat, midLng);
-    if (inside) {
-      constrainedKm += segKm;
-      if (!wasInside) crossings++;
+  for (const path of densified) {
+    let wasInside = false;
+    for (let i = 0; i < path.length - 1; i++) {
+      const [lat1, lng1] = path[i];
+      const [lat2, lng2] = path[i + 1];
+      const segKm = haversineKm(lat1, lng1, lat2, lng2);
+      totalKm += segKm;
+      // Attribute a segment by its midpoint. Sound because `densify` above has
+      // already bounded every segment to half a cell; midpoint sampling then
+      // avoids double-counting the shared vertex between consecutive segments.
+      const [midLat, midLng] = interpolateLatLng(lat1, lng1, lat2, lng2, 0.5);
+      const inside = isProtected(grid, midLat, midLng);
+      if (inside) {
+        constrainedKm += segKm;
+        if (!wasInside) crossings++;
+      }
+      wasInside = inside;
     }
-    wasInside = inside;
   }
 
   // 0 = no protected water crossed, 1 = entirely inside. A share rather than an
