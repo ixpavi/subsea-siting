@@ -9,14 +9,27 @@
 % is attributable.
 
 % ---------------------------------------------------------------- the premise
-@misc{google_patent_2021,
-  author       = {{Google LLC}},
-  title        = {Submarine Cable Route Planning Tool},
-  howpublished = {U.S. Patent 11,031,757 B2},
-  month        = jun,
-  year         = {2021},
-  note         = {Assignee: Google LLC. Filed from provisional 62/903,230,
-                  Sep.~2019},
+@patent{google_patent_2021,
+  author      = {Bhattacharya, Shirshendu},
+  title       = {Submarine Cable Route Planning Tool},
+  nationality = {U.S.},
+  number      = {11,031,757~B2},
+  day         = {8},
+  month       = jun,
+  year        = {2021},
+  assignee    = {Google LLC},
+}
+
+@patent{cityu_patent_2019,
+  author      = {Zukerman, Moshe and others},
+  title       = {Method for Determining Optimal Laying Arrangement of
+                 Infrastructure Link},
+  nationality = {U.S.},
+  number      = {10,425,280~B2},
+  day         = {24},
+  month       = sep,
+  year        = {2019},
+  assignee    = {City University of Hong Kong},
 }
 
 % ------------------------------------------------- least-cost-path prior art
@@ -47,32 +60,37 @@
 }
 
 @article{wang2019cost,
-  author  = {Wang, Qing and Guo, Jing and Wang, Zengfu and Tahchi, Elias and
+  author  = {Wang, Qing and Guo, Jun and Wang, Zengfu and Tahchi, Elias and
              Wang, Xinyu and Moran, Bill and Zukerman, Moshe},
   title   = {Cost-Effective Path Planning for Submarine Cable Network
              Extension},
   journal = {IEEE Access},
   volume  = {7},
+  pages   = {61883--61895},
   year    = {2019},
   doi     = {10.1109/ACCESS.2019.2915125},
 }
 
 @article{wang2018fastmarching,
-  author  = {Wang, Zengfu and Wang, Xinyu and Moran, Bill and Zukerman, Moshe},
+  author  = {Wang, Zengfu and Wang, Qing and Moran, Bill and Zukerman, Moshe},
   title   = {Application of the Fast Marching Method for Path Planning of
              Long-Haul Optical Fiber Cables With Shielding},
   journal = {IEEE Access},
   volume  = {6},
   pages   = {41367--41378},
   year    = {2018},
+  doi     = {10.1109/ACCESS.2018.2854581},
 }
 
 @article{wang2020trunkbranch,
+  author  = {Wang, Zengfu and Wang, Qing and Moran, Bill and Zukerman, Moshe},
   title   = {Optimal Submarine Cable Path Planning and Trunk-and-Branch Tree
              Network Topology Design},
   journal = {IEEE/ACM Transactions on Networking},
   volume  = {28},
   number  = {4},
+  pages   = {1562--1572},
+  month   = aug,
   year    = {2020},
   doi     = {10.1109/TNET.2020.2988047},
 }
@@ -84,7 +102,22 @@
              Cable Path: Lessons from the {T}onga Volcano Disaster},
   journal = {IEEE Communications Magazine},
   volume  = {61},
+  number  = {7},
+  pages   = {179--185},
+  month   = jul,
   year    = {2023},
+  doi     = {10.1109/MCOM.008.2200512},
+}
+
+@article{walsh2026owf,
+  author  = {Walsh, Kevin and Holloway, Paul and Lim, Aaron},
+  title   = {Optimising Submarine Cable Routes from Offshore Wind Farms},
+  journal = {Journal of Ocean Engineering and Marine Energy},
+  volume  = {12},
+  number  = {2},
+  pages   = {971--993},
+  year    = {2026},
+  doi     = {10.1007/s40722-026-00472-7},
 }
 
 % --------------------------------------------- the control's home literature
@@ -126,11 +159,14 @@
 }
 
 @article{ridder2024shiftrotate,
-  author  = {Ridder and others},
+  author  = {Ridder, Grace I. and Hardy, Olivier J. and Ovaskainen, Otso},
   title   = {Generating Spatially Realistic Environmental Null Models with the
-             Shift-and-Rotate Approach Helps Evaluate False Positives in
+             Shift-\&-Rotate Approach Helps Evaluate False Positives in
              Species Distribution Modelling},
   journal = {Methods in Ecology and Evolution},
+  volume  = {15},
+  number  = {12},
+  pages   = {2331--2342},
   year    = {2024},
   doi     = {10.1111/2041-210X.14443},
 }
@@ -180,7 +216,7 @@
   institution = {UNEP-WCMC},
   type        = {Biodiversity Series No.~31},
   year        = {2009},
-  note        = {ICPC/UNEP/UNEP-WCMC. ICPC fault records 1958--2007},
+  note        = {{ICPC}/UNEP/UNEP-WCMC. ICPC fault records 1958--2007},
 }
 
 @techreport{csric2014separation,
@@ -208,7 +244,7 @@
                   Sources)},
   howpublished = {\url{https://ows.emodnet-humanactivities.eu/wfs}},
   year         = {2026},
-  note         = {Accessed 23 Aug.\ 2026},
+  note         = {{Accessed}: Aug.~23, 2026},
 }
 
 @misc{emodnet_bathymetry,
@@ -216,7 +252,7 @@
   title        = {{EMODnet} Digital Bathymetry ({DTM})},
   howpublished = {\url{https://ows.emodnet-bathymetry.eu/wcs}},
   year         = {2026},
-  note         = {Native 1/16 arc-minute. Accessed Aug.\ 2026},
+  note         = {Native 1/16 arc-minute. Accessed: Aug.~23, 2026},
 }
 
 @misc{emodnet_vesseldensity,
@@ -224,7 +260,8 @@
   title        = {Vessel Density Annual Averages --- Fishing},
   howpublished = {\url{https://ows.emodnet-humanactivities.eu/wcs}},
   year         = {2026},
-  note         = {AIS-derived, hours per km$^2$ per month, 2022 epoch},
+  note         = {{AIS}-derived, hours per km$^2$ per month, 2022 epoch.
+                  Accessed: Sep.~3, 2026},
 }
 
 @misc{noaa_ncei_dem,
@@ -233,7 +270,7 @@
   howpublished = {\url{https://gis.ngdc.noaa.gov/arcgis/rest/services}},
   year         = {2026},
   note         = {A multi-source composite, not a single uniform-accuracy
-                  product},
+                  product. Accessed: Aug.~24 and Sep.~3, 2026},
 }
 
 @misc{telegeography,
@@ -241,7 +278,8 @@
   title        = {Submarine Cable Map},
   howpublished = {\url{https://www.submarinecablemap.com}},
   year         = {2026},
-  note         = {Schematic system geometry; 724 systems at time of access},
+  note         = {Schematic system geometry; 724 systems at time of access.
+                  Accessed: Aug.~22, 2026},
 }
 
 @misc{makaiplan,
@@ -249,4 +287,5 @@
   title        = {{MakaiPlan}: Submarine Cable Route Planning Software},
   howpublished = {\url{https://www.makai.com/cable-software/}},
   year         = {2026},
+  note         = {{Accessed}: Sep.~24, 2026},
 }

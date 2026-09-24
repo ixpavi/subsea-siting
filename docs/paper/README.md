@@ -1,13 +1,17 @@
 # The paper
 
-IEEE submission draft of the study in
+*Corridor Reuse Outperforms Bathymetry in Submarine Cable Route Prediction: A
+Controlled Evaluation on 412 As-Laid Routes* — **Pavitra Sharma and Dhanush D**.
+
+IEEE submission version of the study in
 [`../seabed-route-preference-study.md`](../seabed-route-preference-study.md).
 The study document is the full engineering record; this is the ~10-page argument
 built from it.
 
-**Final draft. Compiles clean.** 10 pages, 8 figures, 11 tables, 23 references;
-0 errors, 0 undefined references, 0 overfull
-boxes, 1 underfull hbox (cosmetic). Built with MiKTeX 25.12 / pdfTeX 1.40.28.
+**Final. Compiles clean.** 10 pages, 8 figures, 11 tables, 25 references;
+0 errors, 0 undefined references, 0 overfull and 0 underfull boxes. Built with
+MiKTeX 25.12 / pdfTeX 1.40.28. Every reference with a DOI was checked against
+Crossref, and both patents against Google Patents.
 
 ## Build
 
@@ -76,15 +80,25 @@ reviewer rather than to carry the argument.
 
 ## Before submitting
 
-- [ ] Fill in the author affiliation in the `\thanks` block.
-- [ ] Decide the author list. Currently one name.
-- [ ] Read *Optimising submarine cable routes from offshore wind farms* (2026),
-      *J. Ocean Eng. Marine Energy*, doi:10.1007/s40722-026-00472-7 — paywalled,
-      and the one recent paper that could contain the validation this work
-      claims is missing.
-- [ ] Clear the remaining `[VERIFY]` entries in `../literature.md`. Nothing
-      marked `[VERIFY]` is cited here, so this only adds citations; it does not
-      correct any.
-- [ ] Confirm US 11,031,757 B2's claim set has not been amended post-grant, and
-      check US 10,425,280 — a second patent changes the prior-art paragraph.
-- [ ] Add access dates to the dataset entries in `refs.bib`.
+- [ ] **Affiliation.** IEEE journals require one. Set `\authoraffiliation` near
+      the top of `main.tex` (one line), then rebuild. While it is empty the
+      first-page footnote gives the corresponding author only, so the PDF never
+      prints a placeholder.
+- [x] Authors: Pavitra Sharma and Dhanush D; Pavitra Sharma corresponding.
+- [x] *Optimising submarine cable routes from offshore wind farms* (Walsh,
+      Holloway & Lim, 2026) — now open access. It routes export cables by
+      least-cost path with existing cables as an exclusion layer and does not
+      compare with installed routes, so the "never measured" framing stands. Cited.
+- [x] US 11,031,757 B2 is active with no reexamination or correction listed;
+      US 10,425,280 B2 (City University of Hong Kong) is least-cost optimisation,
+      not learning, and is cited in Related Work.
+- [x] Access dates on every dataset and web entry in `refs.bib`.
+- [x] Bibliography checked against Crossref: two author lists corrected
+      (Wang et al. 2018 and 2020), one co-author name (J. Guo), and missing
+      pages, issues and DOIs filled.
+- [ ] Optional: the remaining `[VERIFY]` entries in `../literature.md`. None
+      of them is cited here, so this can only add citations, never correct one.
+
+For the submission portal, upload `main.tex`, `numbers.tex`, `refs.bib`,
+`main.bbl`, `tables/` and `figures/` — or just `main.pdf` where a PDF is
+enough.

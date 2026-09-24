@@ -20,6 +20,11 @@
 % BEFORE COMPILING:  node scripts/research/make-paper-tables.mjs
 %                    node scripts/research/svg-to-pdf.mjs
 %                    node scripts/research/check-paper.mjs
+%
+% AFFILIATION.  IEEE journals require one. Put it in \authoraffiliation below,
+% e.g. {Department of Computer Science and Engineering, <College>, <City>,
+% India}. While it is empty the first-page footnote names the corresponding
+% author only, so the PDF never prints a placeholder.
 \documentclass[journal]{IEEEtran}
 
 \usepackage[T1]{fontenc}
@@ -29,10 +34,25 @@
 \usepackage{amsmath,amssymb}
 \usepackage{url}
 \usepackage[hidelinks]{hyperref}
+% Let long URLs break at any letter, as IEEE's own reference lists do, instead
+% of stretching the words before them across the column.
+\makeatletter
+\g@addto@macro\UrlBreaks{\do a\do b\do c\do d\do e\do f\do g\do h\do i\do j%
+  \do k\do l\do m\do n\do o\do p\do q\do r\do s\do t\do u\do v\do w\do x\do y%
+  \do z}
+\makeatother
 \usepackage{cite}
 
 \graphicspath{{figures/}}
 \input{numbers}
+\hypersetup{
+  pdftitle={Corridor Reuse Outperforms Bathymetry in Submarine Cable Route
+    Prediction: A Controlled Evaluation on \nCorpusRoutes{} As-Laid Routes},
+  pdfauthor={Pavitra Sharma and Dhanush D},
+  pdfkeywords={submarine cables, route planning, least-cost path, model
+    validation, placebo control, bathymetry}}
+
+\newcommand*{\authoraffiliation}{}
 
 % IEEEtran sets \paragraph as a run-in heading; nothing else is redefined.
 \begin{document}
@@ -41,15 +61,17 @@
 Submarine Cable Route Prediction: A Controlled\\
 Evaluation on \nCorpusRoutes{} As-Laid Routes}
 
-\author{Pavitra~Sharma% <-- add co-authors here
-\thanks{% TODO: affiliation and postal address before submission.
-The author is with [Affiliation], [City], [Country]
+\author{Pavitra~Sharma and Dhanush~D%
+\thanks{\ifx\authoraffiliation\empty\else Pavitra Sharma and Dhanush D are
+with \authoraffiliation.\ \fi
+Corresponding author: Pavitra Sharma\hfil\break
 (e-mail: pavitrasharma2306@gmail.com).}%
 \thanks{Analysis code and the full reproduction pipeline are available at
 \url{https://github.com/ixpavi/subsea-siting}.}}
 
-\markboth{IEEE Journal}%
-{Sharma: Corridor Reuse Outperforms Bathymetry in Submarine Cable Route Prediction}
+\markboth{}%
+{Sharma \MakeLowercase{\textit{et al.}}: Corridor Reuse Outperforms Bathymetry
+in Submarine Cable Route Prediction}
 
 \maketitle
 
@@ -109,7 +131,10 @@ own output as ``an initial guideline or benchmark rather than the final
 route'', and reports no accuracy metric against any deployed
 cable~\cite{wang2024evaluating}. A GIS multi-criteria study applied to real
 case studies likewise reports no comparison with the cables actually
-laid~\cite{makrakis2023gis}. The patent trains a model on existing routes
+laid~\cite{makrakis2023gis}, and a 2026 study of offshore-wind export cables
+generates least-cost routes from weighted criteria, treating existing cables
+only as exclusion zones, without comparing its routes with installed
+ones~\cite{walsh2026owf}. The patent trains a model on existing routes
 precisely \emph{because} it assumes those routes optimise over bathymetry, and
 reports no validation of that assumption~\cite{google_patent_2021}.
 
@@ -171,7 +196,10 @@ its application to submarine cables is a small but active literature dominated
 by one group~\cite{wang2018fastmarching,wang2019cost,wang2020trunkbranch,
 wang2023tonga,wang2024evaluating}. Multi-criteria decision analysis over
 normalised weighted criteria is likewise standard, and has been applied to
-cable siting with seismic fault avoidance~\cite{makrakis2023gis}.
+cable siting with seismic fault avoidance~\cite{makrakis2023gis}. The
+optimisation itself is patented: US~10,425,280~B2~\cite{cityu_patent_2019}
+claims routing a new link to an existing network over a triangulated terrain
+surface, trading construction cost against the expected number of repairs.
 
 \emph{Nothing in this paper claims a new routing algorithm.} Our search is
 deliberately conventional; it exists so that the premise under test has a

@@ -66,22 +66,24 @@ and Makrakis 2023 specifically for the validation gap.
 
 3. **Wang, Q., Guo, J., Wang, Z., Tahchi, E., Wang, X., Moran, B., &
    Zukerman, M. (2019).** Cost-Effective Path Planning for Submarine Cable
-   Network Extension. *IEEE Access*, 7.
+   Network Extension. *IEEE Access*, 7, 61883–61895.
    <https://doi.org/10.1109/ACCESS.2019.2915125>
 
-4. **Wang, Z., Wang, X., Moran, B., & Zukerman, M. (2018).** Application of the
+4. **Wang, Z., Wang, Q., Moran, B., & Zukerman, M. (2018).** Application of the
    fast marching method for path planning of long-haul optical fiber cables with
-   shielding. *IEEE Access*, 6, 41367–41378. **[VERIFY]** DOI.
+   shielding. *IEEE Access*, 6, 41367–41378.
+   <https://doi.org/10.1109/ACCESS.2018.2854581>
 
 5. **Wang, Z., et al. (2017).** Multiobjective path optimization for critical
    infrastructure links with consideration to seismic resilience.
    **[VERIFY]** journal — likely *Computer-Aided Civil and Infrastructure
    Engineering*.
 
-6. **Optimal Submarine Cable Path Planning and Trunk-and-Branch Tree Network
-   Topology Design (2020).** *IEEE/ACM Transactions on Networking*.
+6. **Wang, Z., Wang, Q., Moran, B., & Zukerman, M. (2020).** Optimal Submarine
+   Cable Path Planning and Trunk-and-Branch Tree Network Topology Design.
+   *IEEE/ACM Transactions on Networking*, 28(4), 1562–1572.
    <https://doi.org/10.1109/TNET.2020.2988047> — Steiner-tree formulation,
-   Lagrangian Fast Marching (LAFM). **[VERIFY]** author list.
+   Lagrangian Fast Marching (LAFM).
 
 7. **Zhao, et al. (2023).** Multi-Objective Optimization for Submarine Cable
    Route Planning Based on the Ant Colony Optimization Algorithm. **[VERIFY]**
@@ -97,11 +99,13 @@ and Makrakis 2023 specifically for the validation gap.
 10. **Huang, et al. (2017).** A* path planning with AUV motion constraints.
     **[VERIFY]**
 
-11. **Optimising submarine cable routes from offshore wind farms (2026).**
-    *Journal of Ocean Engineering and Marine Energy*.
-    <https://doi.org/10.1007/s40722-026-00472-7> — paywalled, not yet read.
-    Recent and directly adjacent; **must be read before submission** in case it
-    contains the validation this paper claims is absent.
+11. **Walsh, K., Holloway, P., & Lim, A. (2026).** Optimising submarine cable
+    routes from offshore wind farms. *Journal of Ocean Engineering and Marine
+    Energy*, 12(2), 971–993. <https://doi.org/10.1007/s40722-026-00472-7>
+    — Open access. AHP-weighted criteria and a least-cost path for export
+    cables off Ireland's south and west coasts; existing cables and pipelines
+    are an exclusion layer. No comparison with installed routes, so it does not
+    contain the validation this paper claims is absent. Cited in the paper.
 
 12. **Optimized routing of interconnected subsea pipelines using geospatial
     cost-surface modelling (2025).** **[VERIFY]** — pipelines, not cables, but
@@ -146,9 +150,10 @@ infrastructure and to the evaluation of a routing tool.
     selection models for habitat preferences in animals. *Ecology*, 100(1),
     e02452. <https://doi.org/10.1002/ecy.2452>
 
-17. **Ridder, et al. (2024).** Generating spatially realistic environmental null
-    models with the shift-&-rotate approach helps evaluate false positives in
-    species distribution modelling. *Methods in Ecology and Evolution*.
+17. **Ridder, G. I., Hardy, O. J., & Ovaskainen, O. (2024).** Generating
+    spatially realistic environmental null models with the shift-&-rotate
+    approach helps evaluate false positives in species distribution modelling.
+    *Methods in Ecology and Evolution*, 15(12), 2331–2342.
     <https://doi.org/10.1111/2041-210X.14443>
     — **The closest published analogue to the displaced placebo.** Shift-and-
     rotate preserves the spatial structure of the predictor while destroying its
@@ -321,20 +326,23 @@ argument for leading with the corridor finding rather than the terrain null.
 ## 8. Still to do
 
 **Must read before drafting**
-- [ ] *Optimising submarine cable routes from offshore wind farms* (2026,
-      J. Ocean Eng. Marine Energy) — paywalled. The one recent paper that could
-      plausibly contain the validation this study claims is missing. Check first.
+- [x] *Optimising submarine cable routes from offshore wind farms* (2026,
+      J. Ocean Eng. Marine Energy) — now open access. No validation against
+      installed routes; see entry 11.
 - [ ] Wang et al. (2024) PLOS ONE in full, including its reference list — it is
       open access and is the best single map of this literature.
 - [ ] Makrakis et al. (2023) in full — confirm no as-laid validation.
 
 **Must verify**
 - [ ] Every entry marked **[VERIFY]** above.
-- [ ] US 10,425,280, "Method for determining optimal laying arrangement of
-      infrastructure link" — surfaced in search, assignee and claim scope not yet
-      checked. A second patent in this space changes the prior-art paragraph.
-- [ ] Confirm US 11,031,757 B2's claim set has not been amended post-grant
-      (already on the `related-work.md` checklist).
+- [x] US 10,425,280 B2, "Method for determining optimal laying arrangement of
+      infrastructure link" — City University of Hong Kong (Zukerman et al.),
+      granted 24 Sep 2019. Claims a least-cost route to an existing network over
+      a triangulated terrain surface, trading construction cost against expected
+      repairs. Prior art for the optimisation, not for learning; cited.
+- [x] US 11,031,757 B2 — Google Patents lists it active (inventor Shirshendu
+      Bhattacharya, granted 8 Jun 2021), with no reexamination or correction
+      shown. Checked 24 Sep 2026.
 - [ ] Primary ITU or ICPC source for the 80–86% fishing/anchoring figure.
 
 **Gaps not yet searched**

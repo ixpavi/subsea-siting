@@ -186,7 +186,7 @@ And one rule that **predicts its own failure**: corridor following helps only wh
 
 | | |
 |---|---|
-| **Paper** (IEEE, 10 pp., 8 figures) | [`docs/paper/main.pdf`](docs/paper/main.pdf) · [source](docs/paper) |
+| **Paper** — Pavitra Sharma and Dhanush D (IEEE, 10 pp., 8 figures) | [`docs/paper/main.pdf`](docs/paper/main.pdf) · [source](docs/paper) |
 | Full write-up, every test and threat | [`docs/seabed-route-preference-study.md`](docs/seabed-route-preference-study.md) |
 | Positioning against prior art | [`docs/related-work.md`](docs/related-work.md) |
 | Annotated bibliography | [`docs/literature.md`](docs/literature.md) |
@@ -271,7 +271,7 @@ docs/
 ├── related-work.md                    positioning against prior art
 ├── literature.md                      annotated bibliography
 ├── figures/                           publication figures (SVG, generated)
-└── paper/                             IEEE submission draft + build
+└── paper/                             IEEE paper + build
 
 public/data/                  committed, app-ready datasets
 ```

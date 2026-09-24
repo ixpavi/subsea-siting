@@ -125,16 +125,23 @@ attacked:
 
 - **Wang, Q., Guo, J., Wang, Z., Tahchi, E., Wang, X., Moran, B., & Zukerman, M.
   (2019).** Cost-effective path planning for submarine cable network extension.
-  *IEEE Access* 7. <https://doi.org/10.1109/ACCESS.2019.2915125>
-- **Wang, Z., Wang, X., Moran, B., & Zukerman, M. (2018).** Application of the
+  *IEEE Access* 7, 61883–61895. <https://doi.org/10.1109/ACCESS.2019.2915125>
+- **Wang, Z., Wang, Q., Moran, B., & Zukerman, M. (2018).** Application of the
   fast marching method for path planning of long-haul optical fibre cables with
   shielding. *IEEE Access* 6, 41367–41378.
-- **Optimal submarine cable path planning and trunk-and-branch tree network
-  topology design (2020).** *IEEE/ACM Transactions on Networking* 28(4).
+  <https://doi.org/10.1109/ACCESS.2018.2854581>
+- **Wang, Z., Wang, Q., Moran, B., & Zukerman, M. (2020).** Optimal submarine
+  cable path planning and trunk-and-branch tree network topology design.
+  *IEEE/ACM Transactions on Networking* 28(4), 1562–1572.
   <https://doi.org/10.1109/TNET.2020.2988047>
 - **Wang, X., Wang, Z., Wang, T., & Zukerman, M. (2023).** Designing
   cost-effective and reliable submarine communications cable path: lessons from
-  the Tonga volcano disaster. *IEEE Communications Magazine* 61.
+  the Tonga volcano disaster. *IEEE Communications Magazine* 61(7), 179–185.
+  <https://doi.org/10.1109/MCOM.008.2200512>
+- **US 10,425,280 B2** (City University of Hong Kong, Zukerman et al., 2019).
+  Method for determining optimal laying arrangement of infrastructure link — a
+  least-cost route to an existing network over a triangulated terrain surface,
+  trading construction cost against expected repairs.
 
 **A positioning note that matters more than any single citation.** This cluster
 is substantially one group at City University of Hong Kong. A submission to an
@@ -143,12 +150,13 @@ line must therefore be *these are well-built optimisers whose objective function
 has never been checked against reality* — not that they are wrong. They are not
 wrong; they are unvalidated, and they say so.
 
-**Still to read before submission:** *Optimising submarine cable routes from
-offshore wind farms* (2026), *Journal of Ocean Engineering and Marine Energy*,
-<https://doi.org/10.1007/s40722-026-00472-7>. Paywalled and not yet obtained. It
-is the one recent paper that could plausibly contain the validation this work
-claims is missing, and the framing has to be checked against it rather than
-after a reviewer finds it.
+**Checked:** Walsh, Holloway & Lim, *Optimising submarine cable routes from
+offshore wind farms* (2026), *Journal of Ocean Engineering and Marine Energy*
+12(2), 971–993, <https://doi.org/10.1007/s40722-026-00472-7>, now open access.
+It weights criteria by AHP and routes export cables off Ireland's south and west
+coasts by least-cost path, with existing cables and pipelines as an exclusion
+layer. It does not compare its routes with installed ones, so the framing
+stands; the paper cites it as a further example.
 
 ---
 
@@ -338,16 +346,16 @@ silently mixed.
 ## Citation checklist before submission
 
 - [x] ~~Locate and cite specific peer-reviewed least-cost-path submarine cable routing papers rather than referring to the category~~ — done, §3
-- [ ] **Read *Optimising submarine cable routes from offshore wind farms* (2026), J. Ocean Eng. Marine Energy — paywalled, and the one paper that could contain the validation this work claims is missing**
+- [x] ~~Read *Optimising submarine cable routes from offshore wind farms* (2026)~~ — open access; no validation against installed routes (§3)
 - [ ] Verify every `[VERIFY]`-marked entry in `literature.md` at source
 - [ ] Verify MakaiPlan's current published capability description and cite the vendor documentation directly
-- [ ] Confirm the patent's claim set has not been amended post-grant
-- [ ] Check US 10,425,280 ("Method for determining optimal laying arrangement of infrastructure link") — assignee and claim scope unknown; a second patent changes the prior-art paragraph
+- [x] ~~Confirm the patent's claim set has not been amended post-grant~~ — active, no reexamination or correction listed (checked 24 Sep 2026)
+- [x] ~~Check US 10,425,280~~ — City University of Hong Kong; least-cost optimisation over terrain, not learning. Cited alongside the Wang et al. cluster
 - [ ] Cite EMODnet Human Activities and EMODnet Bathymetry with their DOIs and access dates
-- [ ] Cite the NOAA NCEI global DEM mosaic as a multi-source composite, **not** as "GEBCO"
+- [x] ~~Cite the NOAA NCEI global DEM mosaic as a multi-source composite, **not** as "GEBCO"~~
 - [ ] Cite Kroodsma et al. (2018), *Science* 359(6378), 904–908 for Global Fishing Watch, with Amoroso et al.'s published resolution critique alongside it
-- [ ] Cite the step-selection literature (Fortin 2005; Thurfjell 2014; Avgar 2016) and Ridder et al. (2024) for the displaced control
-- [ ] Cite SMAA (Lahdelma, Hokkanen & Salminen 1998; Lahdelma & Salminen 2001) for weight robustness
+- [x] ~~Cite the step-selection literature (Fortin 2005; Thurfjell 2014; Avgar 2016) and Ridder et al. (2024) for the displaced control~~
+- [x] ~~Cite SMAA (Lahdelma, Hokkanen & Salminen 1998; Lahdelma & Salminen 2001) for weight robustness~~
 - [ ] Cite the nearest siting competitor: *Macro-Regional Spatial Decision Support for Geo-Distributed Data Center Siting in Europe*, IJGI 15(7), 294 (2026) — it tests four weighting scenarios where this work enumerates the space
 - [ ] Trace the 80–86% fishing/anchoring fault figure to a primary ITU or ICPC document, not trade-press restatements
 - [ ] Cite ERA5 / Open-Meteo, WRI Aqueduct and Our World in Data for the siting side if the tool is described at all

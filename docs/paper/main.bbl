@@ -24,10 +24,10 @@
 \bibitem{wang2019cost}
 Q.~Wang, J.~Guo, Z.~Wang, E.~Tahchi, X.~Wang, B.~Moran, and M.~Zukerman,
   ``Cost-effective path planning for submarine cable network extension,''
-  \emph{IEEE Access}, vol.~7, 2019.
+  \emph{IEEE Access}, vol.~7, pp. 61\,883--61\,895, 2019.
 
 \bibitem{wang2018fastmarching}
-Z.~Wang, X.~Wang, B.~Moran, and M.~Zukerman, ``Application of the fast marching
+Z.~Wang, Q.~Wang, B.~Moran, and M.~Zukerman, ``Application of the fast marching
   method for path planning of long-haul optical fiber cables with shielding,''
   \emph{IEEE Access}, vol.~6, pp. 41\,367--41\,378, 2018.
 
@@ -37,28 +37,38 @@ N.~Makrakis, P.~N. Psarropoulos, and Y.~Tsompanakis, ``{GIS}-based optimal
   zones,'' \emph{Applied Sciences}, vol.~13, no.~5, p. 2995, 2023.
 
 \bibitem{wang2020trunkbranch}
-``Optimal submarine cable path planning and trunk-and-branch tree network
-  topology design,'' \emph{IEEE/ACM Transactions on Networking}, vol.~28,
-  no.~4, 2020.
+Z.~Wang, Q.~Wang, B.~Moran, and M.~Zukerman, ``Optimal submarine cable path
+  planning and trunk-and-branch tree network topology design,'' \emph{IEEE/ACM
+  Transactions on Networking}, vol.~28, no.~4, pp. 1562--1572, Aug. 2020.
 
 \bibitem{makaiplan}
 {Makai Ocean Engineering}, ``{MakaiPlan}: Submarine cable route planning
-  software,'' \url{https://www.makai.com/cable-software/}, 2026.
+  software,'' \url{https://www.makai.com/cable-software/}, 2026, {Accessed}:
+  Sep.~24, 2026.
 
 \bibitem{google_patent_2021}
-{Google LLC}, ``Submarine cable route planning tool,'' U.S. Patent 11,031,757
-  B2, Jun. 2021, assignee: Google LLC. Filed from provisional 62/903,230,
-  Sep.~2019.
+S.~Bhattacharya, ``Submarine cable route planning tool,'' U.S. Patent
+  11,031,757~B2, Jun. 8, 2021.
 
 \bibitem{wang2024evaluating}
 T.~Wang, Z.~Wang, B.~Moran, X.~Wang, and M.~Zukerman, ``Evaluating and refining
   undersea cable path planning algorithms: A comparative study,'' \emph{PLOS
   ONE}, vol.~19, no.~12, p. e0315074, 2024.
 
+\bibitem{walsh2026owf}
+K.~Walsh, P.~Holloway, and A.~Lim, ``Optimising submarine cable routes from
+  offshore wind farms,'' \emph{Journal of Ocean Engineering and Marine Energy},
+  vol.~12, no.~2, pp. 971--993, 2026.
+
 \bibitem{wang2023tonga}
 X.~Wang, Z.~Wang, T.~Wang, and M.~Zukerman, ``Designing cost-effective and
   reliable submarine communications cable path: Lessons from the {T}onga
-  volcano disaster,'' \emph{IEEE Communications Magazine}, vol.~61, 2023.
+  volcano disaster,'' \emph{IEEE Communications Magazine}, vol.~61, no.~7, pp.
+  179--185, Jul. 2023.
+
+\bibitem{cityu_patent_2019}
+M.~Zukerman \emph{et~al.}, ``Method for determining optimal laying arrangement
+  of infrastructure link,'' U.S. Patent 10,425,280~B2, Sep. 24, 2019.
 
 \bibitem{fortin2005wolves}
 D.~Fortin, H.~L. Beyer, M.~S. Boyce, D.~W. Smith, T.~Duchesne, and J.~S. Mao,
@@ -78,10 +88,10 @@ T.~Avgar, J.~R. Potts, M.~A. Lewis, and M.~S. Boyce, ``Integrated step
   619--630, 2016.
 
 \bibitem{ridder2024shiftrotate}
-Ridder \emph{et~al.}, ``Generating spatially realistic environmental null
-  models with the shift-and-rotate approach helps evaluate false positives in
-  species distribution modelling,'' \emph{Methods in Ecology and Evolution},
-  2024.
+G.~I. Ridder, O.~J. Hardy, and O.~Ovaskainen, ``Generating spatially realistic
+  environmental null models with the shift-\&-rotate approach helps evaluate
+  false positives in species distribution modelling,'' \emph{Methods in Ecology
+  and Evolution}, vol.~15, no.~12, pp. 2331--2342, 2024.
 
 \bibitem{wagner2015moran}
 H.~H. Wagner and S.~Dray, ``Generating spatially constrained null models for
@@ -102,28 +112,29 @@ R.~Lahdelma and P.~Salminen, ``{SMAA-2}: Stochastic multicriteria acceptability
 \bibitem{telegeography}
 {TeleGeography}, ``Submarine cable map,''
   \url{https://www.submarinecablemap.com}, 2026, schematic system geometry; 724
-  systems at time of access.
+  systems at time of access. Accessed: Aug.~22, 2026.
 
 \bibitem{emodnet_humanactivities}
 {EMODnet Human Activities}, ``Telecommunication cable routes (national
   hydrographic office sources),''
-  \url{https://ows.emodnet-humanactivities.eu/wfs}, 2026, accessed 23 Aug.\
+  \url{https://ows.emodnet-humanactivities.eu/wfs}, 2026, {Accessed}: Aug.~23,
   2026.
 
 \bibitem{emodnet_bathymetry}
 {EMODnet Bathymetry Consortium}, ``{EMODnet} digital bathymetry ({DTM}),''
   \url{https://ows.emodnet-bathymetry.eu/wcs}, 2026, native 1/16 arc-minute.
-  Accessed Aug.\ 2026.
+  Accessed: Aug.~23, 2026.
 
 \bibitem{noaa_ncei_dem}
 {NOAA National Centers for Environmental Information}, ``{NCEI} global {DEM}
   mosaic,'' \url{https://gis.ngdc.noaa.gov/arcgis/rest/services}, 2026, a
-  multi-source composite, not a single uniform-accuracy product.
+  multi-source composite, not a single uniform-accuracy product. Accessed:
+  Aug.~24 and Sep.~3, 2026.
 
 \bibitem{emodnet_vesseldensity}
 {EMODnet Human Activities}, ``Vessel density annual averages --- fishing,''
-  \url{https://ows.emodnet-humanactivities.eu/wcs}, 2026, aIS-derived, hours
-  per km$^2$ per month, 2022 epoch.
+  \url{https://ows.emodnet-humanactivities.eu/wcs}, 2026, {AIS}-derived, hours
+  per km$^2$ per month, 2022 epoch. Accessed: Sep.~3, 2026.
 
 \bibitem{kroodsma2018gfw}
 D.~A. Kroodsma \emph{et~al.}, ``Tracking the global footprint of fisheries,''
@@ -132,8 +143,8 @@ D.~A. Kroodsma \emph{et~al.}, ``Tracking the global footprint of fisheries,''
 \bibitem{carter2009cables}
 L.~Carter, D.~Burnett, S.~Drew, G.~Marle, L.~Hagadorn, D.~Bartlett-McNeil, and
   N.~Irvine, ``Submarine cables and the oceans: Connecting the world,''
-  UNEP-WCMC, Biodiversity Series No.~31, 2009, iCPC/UNEP/UNEP-WCMC. ICPC fault
-  records 1958--2007.
+  UNEP-WCMC, Biodiversity Series No.~31, 2009, {ICPC}/UNEP/UNEP-WCMC. ICPC
+  fault records 1958--2007.
 
 \bibitem{csric2014separation}
 {FCC CSRIC IV, Working Group 8}, ``Protection of submarine cables through
