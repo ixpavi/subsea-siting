@@ -9,7 +9,7 @@
 [![Vite](https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white)](https://vite.dev)
 [![Tests](https://img.shields.io/badge/tests-292%20passing-2ea44f)](#-testing)
 [![Data](https://img.shields.io/badge/cable%20systems-724-0e7c86)](#-data-provenance)
-[![Paper](https://img.shields.io/badge/paper-IEEE%20final%20draft-b31b1b)](docs/paper/main.pdf)
+[![Paper](https://img.shields.io/badge/paper-technical%20report-b31b1b)](docs/paper/main.pdf)
 [![Licence](https://img.shields.io/badge/licence-Apache%202.0-blue)](LICENSE)
 
 </div>
@@ -178,20 +178,18 @@ Run against a **412-route as-laid corpus (206,175 km)** from seven national hydr
 - **Discretisation control** — measuring what a grid search costs when reproducing a known answer. Without it, the study would have reported that bathymetry-aware routing is worse than a straight line, which is wrong.
 - **Resolution gate** — re-running the original measurement at both grid resolutions before quoting anything from the coarser one. It retained 47% / 55% / 98% of the slope, relief and depth effects, which is why the long-haul results are a finding rather than an artefact.
 
-And one rule that **predicts its own failure**: corridor following helps only when the neighbour geometry's error is small relative to the prediction's scale — monotonic across six bins, Spearman ρ = +0.656 on 348 routes.
+And one rule that **explains its failures**: corridor following helps only when the neighbour geometry's error is small relative to the prediction's scale — monotonic across six bins, Spearman ρ = +0.656 on 348 routes.
 
-> **What is not claimed as novel.** The displaced control is not an invention — it is the used-availability design that step-selection analysis in movement ecology has used for two decades. What is new is the transfer to *engineered linear infrastructure* and the measured consequence of omitting it. Likewise, the app's weight-robustness reporting is rank acceptability analysis, which has a name (SMAA) and a literature. Both are cited as such in [`docs/related-work.md`](docs/related-work.md).
+> **What is not claimed as novel.** The displaced control is not an invention — it is the used-availability design that step-selection analysis in movement ecology has used for two decades. What is new is the transfer to *engineered linear infrastructure* and the measured consequence of omitting it. Likewise, the app's weight-robustness reporting is rank acceptability analysis, which has a name (SMAA) and a literature. Both are cited as such in the [technical report](docs/paper/main.pdf).
 
 ### 📄 Read it
 
 | | |
 |---|---|
-| **Paper** — Pavitra Sharma and Dhanush D (IEEE, 10 pp., 8 figures) | [`docs/paper/main.pdf`](docs/paper/main.pdf) · [source](docs/paper) |
+| **Technical report** — Pavitra Sharma and Dhanush D (11 pp., 8 figures) | [`docs/paper/main.pdf`](docs/paper/main.pdf) · [source](docs/paper) |
 | Full write-up, every test and threat | [`docs/seabed-route-preference-study.md`](docs/seabed-route-preference-study.md) |
-| Positioning against prior art | [`docs/related-work.md`](docs/related-work.md) |
-| Annotated bibliography | [`docs/literature.md`](docs/literature.md) |
 
-The paper's tables, inline numbers and figures are **generated from the analysis cache**, so a number in the prose cannot drift from the run that produced it. `docs/paper/build.ps1` regenerates and compiles the whole thing.
+The report's tables, inline numbers and figures are **generated from the analysis cache**, so a number in the prose cannot drift from the run that produced it. `docs/paper/build.ps1` regenerates and compiles the whole thing.
 
 ---
 
@@ -268,10 +266,8 @@ scripts/
 
 docs/
 ├── seabed-route-preference-study.md   the full study
-├── related-work.md                    positioning against prior art
-├── literature.md                      annotated bibliography
 ├── figures/                           publication figures (SVG, generated)
-└── paper/                             IEEE paper + build
+└── paper/                             technical report + build
 
 public/data/                  committed, app-ready datasets
 ```

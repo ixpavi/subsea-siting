@@ -32,9 +32,9 @@ source was controlled for.
 
 **Terrain preference does measurably improve route prediction.** Given only two
 endpoints, adding it to a least-cost-path search cuts median error from 9.6 km
-to 7.1 km — a 26% reduction, better on 62% of held-out routes (p = 0.0009).
+to 7.1 km — a 27% reduction, better on 62% of held-out routes (p = 0.0007).
 
-**But fitting the weights does not beat guessing them** (52%, p = 0.63), and the
+**But fitting the weights does not beat guessing them** (52%, p = 0.58), and the
 absolute accuracy stays modest: predictions land about 7 km from the real cable,
 which is the same order as a naive great circle once the grid's own
 discretisation handicap (7.9 km) is accounted for.
@@ -354,11 +354,11 @@ cancels and only the terrain preference differs:
 
 | Comparison | Better on | p |
 |---|---|---|
-| **Fitted terrain preference vs shortest sea path** | **133/216 (62%)** | **0.0009** |
-| Hand-set terrain preference vs shortest sea path | 125/216 (58%) | 0.0247 |
-| Fitting the weights vs guessing them | 108/208 (52%) | 0.63 |
+| **Fitted terrain preference vs shortest sea path** | **134/217 (62%)** | **0.0007** |
+| Hand-set terrain preference vs shortest sea path | 126/217 (58%) | 0.021 |
+| Fitting the weights vs guessing them | 109/209 (52%) | 0.58 |
 
-Median error falls from **9.61 km to 7.08 km — a 26% reduction** — when terrain
+Median error falls from **9.70 km to 7.09 km — a 27% reduction** — when terrain
 preference is added to the same search.
 
 Two things follow, and the second is as important as the first.
@@ -367,7 +367,7 @@ Two things follow, and the second is as important as the first.
 quarter of the error, on 62% of held-out routes, across sources the weights were
 never fitted on.
 
-**Fitting the weights does not beat guessing them** (52%, p = 0.63). Whatever
+**Fitting the weights does not beat guessing them** (52%, p = 0.58). Whatever
 the terrain signal is, it is coarse enough that a sensible hand-set weighting
 captures it. That is a direct and unflattering finding about learned cost
 surfaces for this problem.
@@ -393,7 +393,7 @@ different method.
 ## 4b. Test 5 — if not terrain, then what?
 
 The terrain effect is real but modest, and the prediction experiment showed it
-buys a 26% error reduction inside a search that still lands ~7 km from the real
+buys a 27% error reduction inside a search that still lands ~7 km from the real
 cable. That leaves the interesting question open, and the most plausible answer
 is not exotic: **cable projects reuse corridors.** Existing routes carry survey
 data, established permits, known burial conditions and proven landing
@@ -805,8 +805,8 @@ following, against 33% above it.
 So the rule is not a post-hoc reading of three bands. It holds route by route
 across every band, which makes it a statement about the mechanism rather than
 about length — and it is the most directly useful thing in this study for
-anyone building such a router, because it says in advance when the method will
-fail.
+anyone building such a router, because it shows which neighbour data the method
+needs in order to help.
 
 **It is descriptive, not causal.** The ratio and the gain share the
 great-circle error as a denominator, so a route that is simply hard to predict
@@ -1018,7 +1018,7 @@ it from an observation into a rule: it helps when the neighbour geometry's error
 is small relative to the prediction's scale, and hurts otherwise. That range is
 not academic. It says a planner with access to *surveyed* neighbour routes —
 which operators have — can beat a bathymetric optimiser, while one working from
-public schematic geometry cannot. It also predicts its own failure, which a
+public schematic geometry cannot. It also explains its own failures, which a
 purely empirical finding does not.
 
 **And the most-cited explanation for the terrain null is now measured and
@@ -1226,8 +1226,7 @@ the prediction being made. Tested per route on 348 routes it is monotonic across
 six bins — 90% of routes helped at the low end, 7% at the high end, Spearman
 ρ = +0.656 — so it is a property of the mechanism rather than of route length.
 Without it, §4e reads as two contradictory results (corridor following works
-long-haul and fails regionally) instead of one rule that predicts both, and
-says in advance where the method will fail next.
+long-haul and fails regionally) instead of one rule that explains both.
 
 All four point the same way. An evaluation of route-choice models needs a stated
 zero point for its instrument — and neither the nominal null, nor the analytic
@@ -1241,4 +1240,4 @@ published analogue). What is new here is the transfer to engineered linear
 infrastructure and the measured consequence of omitting it, not the design
 itself. Likewise, reporting the share of admissible weightings under which a
 recommendation holds is rank acceptability analysis, which has a name (SMAA) and
-a literature. See `docs/literature.md`.
+a literature (Lahdelma et al., 1998; Lahdelma and Salminen, 2001).

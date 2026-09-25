@@ -3,12 +3,6 @@
 % BUILD:  pdflatex main -> bibtex main -> pdflatex main -> pdflatex main
 %         (or: latexmk -pdf main)
 %
-% VENUE.  Set for an IEEE journal (IEEE Access, IEEE J. Ocean. Eng., IEEE
-% Systems Journal). For a conference, change the class option below to
-% [conference] -- IEEEtran handles both -- and cut Sections VI-B, VII-C and
-% Tables VI and IX, which are the parts that exist to survive a journal
-% reviewer rather than to carry the argument.
-%
 % NUMBERS.  The tables and the \n... macros are generated from the analysis
 % cache by scripts/research/make-paper-tables.mjs. Every headline figure -- the
 % abstract, and each claim the argument rests on -- is a macro, so it cannot
@@ -20,11 +14,6 @@
 % BEFORE COMPILING:  node scripts/research/make-paper-tables.mjs
 %                    node scripts/research/svg-to-pdf.mjs
 %                    node scripts/research/check-paper.mjs
-%
-% AFFILIATION.  IEEE journals require one. Put it in \authoraffiliation below,
-% e.g. {Department of Computer Science and Engineering, <College>, <City>,
-% India}. While it is empty the first-page footnote names the corresponding
-% author only, so the PDF never prints a placeholder.
 \documentclass[journal]{IEEEtran}
 
 \usepackage[T1]{fontenc}
@@ -52,7 +41,8 @@
   pdfkeywords={submarine cables, route planning, least-cost path, model
     validation, placebo control, bathymetry}}
 
-\newcommand*{\authoraffiliation}{}
+\newcommand*{\authoraffiliation}{the Department of Computing Technologies,
+SRM Institute of Science and Technology, Kattankulathur, Chennai, India}
 
 % IEEEtran sets \paragraph as a run-in heading; nothing else is redefined.
 \begin{document}
@@ -65,7 +55,7 @@ Evaluation on \nCorpusRoutes{} As-Laid Routes}
 \thanks{\ifx\authoraffiliation\empty\else Pavitra Sharma and Dhanush D are
 with \authoraffiliation.\ \fi
 Corresponding author: Pavitra Sharma\hfil\break
-(e-mail: pavitrasharma2306@gmail.com).}%
+(e-mail: ps6758@srmist.edu.in).}%
 \thanks{Analysis code and the full reproduction pipeline are available at
 \url{https://github.com/ixpavi/subsea-siting}.}}
 
@@ -98,8 +88,8 @@ routes, after excluding same-agency data, the landfall approaches and every
 cable sharing a named landing point. Built into the same search, this corridor
 term is the only method tested that beats a great circle, and it
 \emph{strengthens} with route length, winning on \nLongHaulWin{} routes above
-2{,}000\,km ($p=\nLongHaulP$). Its operating range is predictable: a per-route
-rule (Spearman $\rho=\nErRho$, $n=\nErN$) states in advance when it will fail.
+2{,}000\,km ($p=\nLongHaulP$). Its operating range is explained by a per-route
+rule (Spearman $\rho=\nErRho$, $n=\nErN$) that shows when it will fail.
 A third candidate driver, fishing effort, shows no signal once landfalls are
 removed. Terrain-driven route optimisation models the weaker of two available
 signals while ignoring the stronger one, which requires no bathymetry at all.
@@ -178,7 +168,7 @@ same-agency exclusion, landfall trimming, shared-landing-point exclusion, and
 complete replacement of the candidate set, and it strengthens with route length
 (Sections~\ref{sec:corridor}--\ref{sec:candidates}).
 
-\item \textbf{A rule that predicts its own failure.} Corridor following helps
+\item \textbf{A rule that explains its failures.} Corridor following helps
 only when the neighbour geometry's error is small relative to the prediction's
 scale; tested per route it is monotonic across six bins
 (Section~\ref{sec:ratio}).
@@ -481,13 +471,13 @@ cancels:
 
 \begin{itemize}
 \item \textbf{Terrain preference genuinely improves route prediction.} Median
-error falls from \nRegSeapath\,km to \nRegFitted\,km---a 26\% reduction---on
+error falls from \nRegSeapath\,km to \nRegFitted\,km---a 27\% reduction---on
 62\% of the \nRegN{} held-out routes ($p=0.0007$), across sources the weights
 were never fitted on. Slope alone reaches \nRegSlope\,km; the hand-set
 combination of all three terms is worse at \nRegHandset\,km.
 \item \textbf{Fitting the weights does not beat guessing them}
 (55\%, $p=0.14$ against fitted terrain; the fitted-versus-hand-set contrast is
-52\%, $p=0.63$). Whatever the terrain signal is, it is coarse enough that a
+52\%, $p=0.58$). Whatever the terrain signal is, it is coarse enough that a
 sensible hand-set weighting captures it---a direct and unflattering finding
 about learned cost surfaces for this problem, and one that bears on
 \cite{google_patent_2021}.
@@ -669,8 +659,8 @@ the dashed line the method helps more often than not.}
 
 The rule holds \emph{within} every length band, which makes it a statement
 about the mechanism rather than about length, and it is the most directly
-useful result here for anyone building such a router because it says in advance
-when the method will fail. It is descriptive, not causal: the ratio and the
+useful result here for anyone building such a router because it shows which
+neighbour data the method needs in order to help. It is descriptive, not causal: the ratio and the
 gain share the great-circle error as a denominator, so a route that is simply
 hard to predict moves both. The binned pattern is the load-bearing part; the
 correlation coefficient inherits that shared term and should not be read as an
@@ -809,7 +799,7 @@ of~\cite{google_patent_2021}.
 
 \emph{Add the corridor term, and check the ratio first.} It is the strongest
 single predictor found here, it needs no bathymetry, and
-Section~\ref{sec:ratio} says in advance whether it will help on a given route.
+Section~\ref{sec:ratio} shows which neighbour data it needs in order to help.
 
 \subsection{The corridor result has a policy counterpart}
 Corridor reuse is not a neutral finding. Regulators and industry bodies have
