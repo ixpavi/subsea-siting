@@ -2,9 +2,9 @@
 // and ships' anchors break cables.
 //
 // WHY. Fishing and anchoring cause most submarine cable faults (Carter et al.,
-// 2009, from the ICPC fault records), nearly all of them on the continental
-// shelf. The router already scores seabed depth, but depth is not
-// where cables actually break. This measures the thing that does.
+// 2009), most of them in water shallower than 200 m. The router already
+// scores seabed depth, but depth is not where cables actually break. This
+// measures the thing that does.
 //
 // THE DATA (scripts/build-maritime-activity.mjs). EMODnet vessel density from
 // AIS, 2024: fishing vessels, and cargo plus tanker traffic as a proxy for

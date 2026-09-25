@@ -827,9 +827,8 @@ survives removing three systems.
 §6 lists the likely real drivers as "landing-point constraints, existing
 infrastructure, fishing and anchoring zones, jurisdiction". Two are measured in
 §4b and §4c. This measures the third, and it is the best-motivated of them:
-external aggression, overwhelmingly fishing gear and anchors in water shallower
-than about 200 m, accounts for roughly three quarters of recorded cable faults
-(Carter et al., 2009, from the ICPC fault records).
+65–75% of fibre-optic cable faults occur in water shallower than 200 m and
+result mainly from fishing and shipping (Carter et al., 2009).
 
 **Data.** EMODnet Human Activities `vesseldensity_01avg` — "Vessel Density
 Annual Averages – Fishing", AIS-derived, ~1.7 km native, hours per km² per

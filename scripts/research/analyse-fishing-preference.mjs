@@ -1,12 +1,11 @@
 // Do cables sit where fishing is light -- and if so, is that a cause or a consequence?
 //
-// THE HYPOTHESIS. Roughly three quarters of recorded cable faults are external
-// aggression -- overwhelmingly fishing and anchoring in water shallower than
-// 200 m (Carter et al., 2009, ICPC fault records). The study's own conclusion is
-// that bathymetry explains little about where cables go and that the real
-// drivers are "landing-point constraints, existing infrastructure, fishing and
-// anchoring zones, jurisdiction". Two of those are now measured. This measures
-// the third.
+// THE HYPOTHESIS. 65-75% of fibre-optic cable faults occur in water shallower
+// than 200 m and result mainly from fishing and shipping (Carter et al., 2009).
+// The study's own conclusion is that bathymetry explains little about where
+// cables go and that the real drivers are "landing-point constraints, existing
+// infrastructure, fishing and anchoring zones, jurisdiction". Two of those are
+// now measured. This measures the third.
 //
 // THE INSTRUMENT is the study's placebo-displaced control, unchanged: take the
 // observed geometry, displace it sideways perpendicular to the local heading,
