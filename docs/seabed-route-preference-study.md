@@ -72,7 +72,7 @@ small relative to the prediction's scale. A corridor known to ±12 km cannot
 improve a 7 km prediction.
 
 **The third suspected driver was tested and found absent.** Fishing effort, the
-mechanism behind 80–86% of real cable faults, shows no spatial relationship to
+mechanism behind most real cable faults, shows no spatial relationship to
 cable position once the landfall approaches are removed. Whatever separates
 cables from the hazard that actually breaks them, it is not route selection.
 
@@ -827,8 +827,9 @@ survives removing three systems.
 §6 lists the likely real drivers as "landing-point constraints, existing
 infrastructure, fishing and anchoring zones, jurisdiction". Two are measured in
 §4b and §4c. This measures the third, and it is the best-motivated of them:
-80–86% of cable faults are fishing and anchoring, overwhelmingly in water
-shallower than 200 m.
+external aggression, overwhelmingly fishing gear and anchors in water shallower
+than about 200 m, accounts for roughly three quarters of recorded cable faults
+(Carter et al., 2009, from the ICPC fault records).
 
 **Data.** EMODnet Human Activities `vesseldensity_01avg` — "Vessel Density
 Annual Averages – Fishing", AIS-derived, ~1.7 km native, hours per km² per
@@ -1024,7 +1025,7 @@ purely empirical finding does not.
 **And the most-cited explanation for the terrain null is now measured and
 wrong.** It is natural to assume that if cables are not following terrain they
 must be avoiding the hazard that actually breaks them — fishing gear and
-anchors, 80–86% of faults, in water under 200 m. §4f finds no such signal at
+anchors, the cause of most faults, in water under 200 m. §4f finds no such signal at
 all once the landfall approaches are removed. Cables are not routed away from
 fishing grounds; the hazard is evidently managed after the route is chosen, by
 burial and armouring, rather than by choosing where to go.
@@ -1144,8 +1145,8 @@ node scripts/research/make-figures.mjs                 # all five, into docs/fig
 ```
 
 Every value in every figure is read from `.cache/`; none is transcribed, so a
-figure that disagrees with the text means one of the two is stale. Output is SVG
-at IEEE column widths and converts to PDF or EPS without resampling.
+figure that disagrees with the text means one of the two is stale. Output is
+SVG.
 
 `build-fishing-surface.mjs` takes `--year` (2017–2024, default 2022) and
 `--dry-run`. Tiles the service cannot serve return HTTP 500 and are recorded as
@@ -1153,7 +1154,7 @@ uncovered rather than retried; 144 of 1,787 in-envelope tiles have no granule.
 
 ### Cheapest way to check the two load-bearing results
 
-The corridor result -- the largest effect in the paper -- is measured purely on
+The corridor result -- the largest effect in this study -- is measured purely on
 route geometry and touches no bathymetry at all. It needs **Phase 1 only**, so
 it can be checked in a couple of minutes without downloading a single tile:
 
@@ -1173,7 +1174,7 @@ Phase 2, but not Phase 3:
 node scripts/research/measure-discretisation-penalty.mjs  # the control that flipped Test 4's sign   [~21 s]
 ```
 
-Between them these two cover the finding this paper's conclusion rests on and
+Between them these two cover the finding this study's conclusion rests on and
 the control that reversed one of its headlines -- which is where a sceptical
 reader should start.
 

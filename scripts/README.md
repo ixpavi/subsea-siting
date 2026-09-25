@@ -89,8 +89,8 @@ arcs.
 ## The research pipeline
 
 `scripts/research/` is a separate, self-contained pipeline behind the study in
-[`docs/seabed-route-preference-study.md`](../docs/seabed-route-preference-study.md)
-and the paper in [`docs/paper/`](../docs/paper). It is **not** part of the app
+[`docs/seabed-route-preference-study.md`](../docs/seabed-route-preference-study.md).
+It is **not** part of the app
 build; nothing in `public/data/` comes from it, and `npm run build` never runs
 it.
 
@@ -111,7 +111,7 @@ beyond Node.** Every script writes its result to `scripts/research/.cache/`
 | Validation | `validate-*` | downsampling fidelity, coverage, cross-product agreement, the resolution gate |
 | Analysis | `analyse-*` | the nine tests, in the order the study presents them |
 | Prediction | `evaluate-*`, `measure-discretisation-penalty` | route prediction and its controls |
-| Paper | `make-figures`, `svg-to-pdf`, `make-paper-tables`, `check-paper` | figures, tables and cross-file checks, all from the cache |
+| Figures | `make-figures` | the study's figures, every value read from the cache |
 
 Run order, runtimes and which steps are cheap:
 [study §7, *Reproducing*](../docs/seabed-route-preference-study.md#7-reproducing).

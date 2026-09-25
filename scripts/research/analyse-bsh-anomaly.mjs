@@ -15,7 +15,7 @@
 // wrong: if BSH routes cross relief far above the noise floor, the hypothesis
 // fails and the contradiction is real and unexplained.
 //
-// The distinction matters for the paper. An anomaly explained by a measurement
+// The distinction matters for the study. An anomaly explained by a measurement
 // limit is a scope condition -- the method needs terrain above its noise floor.
 // An unexplained one undermines the main result.
 import { readFileSync, writeFileSync } from "fs";

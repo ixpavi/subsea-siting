@@ -20,7 +20,7 @@
 // different operator's cable landing on the same beach passes all three.
 //
 // TWO CONTROLS, applied on top of the strictest published exclusion (different
-// agency), because that is the level the paper's claim rests on.
+// agency), because that is the level the study's claim rests on.
 //
 //   A. TRIM. Discard samples within T km along the route of either of its own
 //      endpoints, so the landfall approaches are not measured at all. Swept
@@ -52,7 +52,7 @@
 // the real line, or excluding candidates only for it, would manufacture the
 // very bias this is testing for.
 //
-// WHAT WOULD FALSIFY THE PAPER'S CLAIM. If the effect is landfall geometry, it
+// WHAT WOULD FALSIFY THE STUDY'S CLAIM. If the effect is landfall geometry, it
 // should fall towards zero as T grows past the width of a convergence zone --
 // a few tens of km. If it is corridor reuse, mid-route water should follow
 // other cables too, and the effect should persist with the ends removed.

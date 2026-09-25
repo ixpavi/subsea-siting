@@ -5,9 +5,9 @@
 // The study's discussion says the dominant influences on cable routing are
 // "landing-point constraints, existing infrastructure, fishing and anchoring
 // zones, jurisdiction" -- and then tests only the first two. Fishing is the
-// obvious next candidate and the best-motivated one: 80-86% of real cable
-// faults are fishing and anchoring, overwhelmingly in water shallower than
-// 200 m. A router optimising deep-water bathymetric difficulty is optimising a
+// obvious next candidate and the best-motivated one: roughly three quarters of
+// recorded cable faults are external aggression, overwhelmingly fishing and
+// anchoring in water shallower than 200 m (Carter et al., 2009). A router optimising deep-water bathymetric difficulty is optimising a
 // variable that is not where cables actually break.
 //
 // Global Fishing Watch (Kroodsma et al., Science 2018) is the citable global

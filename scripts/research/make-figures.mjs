@@ -19,7 +19,7 @@
 // dash pattern, and marker shape. The palette passes an all-pairs
 // colour-vision check (worst adjacent pair dE 9.2 deutan, normal-vision floor
 // 16.3), but a reader with a photocopy has no hue at all, and a figure that
-// collapses in that case is a figure that fails exactly where a printed paper
+// collapses in that case is a figure that fails exactly where a printed copy
 // is most likely to be read.
 //
 // There is deliberately no hover layer, no tooltip and no interaction: the
@@ -436,8 +436,8 @@ function figurePlacebo() {
 // ============================================================================
 // FIGURE A -- corpus geographic coverage
 // ============================================================================
-// A paper whose most-quoted limitation is "75% of corpus length is NW Europe
-// and the Mediterranean" should show that rather than assert it. A reviewer
+// A study whose most-quoted limitation is "most of the corpus length is NW
+// Europe and the Mediterranean" should show that rather than assert it. A reviewer
 // checking geographic scope can read this in one glance, and it makes the
 // long-haul band's concentration -- two corridors, transatlantic and
 // Marseille-Levant -- visible instead of a sentence in Threats to Validity.
@@ -626,7 +626,7 @@ function figureProtocol() {
 // ============================================================================
 // FIGURE C -- the corridor control ladder
 // ============================================================================
-// The corridor result is the paper's largest claim and it moved from 68% to
+// The corridor result is the study's largest claim and it moved from 68% to
 // 29% under controls. Reporting only the final number hides the work; reporting
 // only the table makes the reader reconstruct the sequence. A ladder shows the
 // claim shrinking as each confound is removed, which is the actual argument.

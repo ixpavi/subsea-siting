@@ -1,9 +1,9 @@
 // Fault exposure: how much of a route runs through water where fishing gear
 // and ships' anchors break cables.
 //
-// WHY. Fishing and anchoring cause most submarine cable faults -- 80-86% in the
-// studies this project's paper cites -- and nearly all of them on the
-// continental shelf. The router already scores seabed depth, but depth is not
+// WHY. Fishing and anchoring cause most submarine cable faults (Carter et al.,
+// 2009, from the ICPC fault records), nearly all of them on the continental
+// shelf. The router already scores seabed depth, but depth is not
 // where cables actually break. This measures the thing that does.
 //
 // THE DATA (scripts/build-maritime-activity.mjs). EMODnet vessel density from

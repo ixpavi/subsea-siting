@@ -3,8 +3,8 @@
 // routing engine's fault-exposure criterion.
 //
 // WHY THESE TWO. Fishing gear and ships' anchors cause most submarine cable
-// faults -- 80-86% in the studies this project's paper cites, and nearly all of
-// them on the continental shelf. Seabed depth, which the router already scores,
+// faults (Carter et al., 2009, from the ICPC fault records), nearly all of them
+// on the continental shelf. Seabed depth, which the router already scores,
 // is not where cables actually break. Fishing effort is measured directly.
 // Anchoring is not published as a layer anywhere, so cargo and tanker traffic
 // density stands in for it: those are the ships whose anchors snag cables, and

@@ -1,7 +1,8 @@
 // Do cables sit where fishing is light -- and if so, is that a cause or a consequence?
 //
-// THE HYPOTHESIS. 80-86% of submarine cable faults are fishing and anchoring,
-// overwhelmingly in water shallower than 200 m. The study's own conclusion is
+// THE HYPOTHESIS. Roughly three quarters of recorded cable faults are external
+// aggression -- overwhelmingly fishing and anchoring in water shallower than
+// 200 m (Carter et al., 2009, ICPC fault records). The study's own conclusion is
 // that bathymetry explains little about where cables go and that the real
 // drivers are "landing-point constraints, existing infrastructure, fishing and
 // anchoring zones, jurisdiction". Two of those are now measured. This measures
