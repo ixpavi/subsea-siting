@@ -942,7 +942,7 @@ zones, protected areas and jurisdiction are not. The bathymetric finding is
 about *bathymetry*, and the study as a whole still covers only part of what a
 route planner weighs.
 
-**Geographic scope.** 75% of corpus length is NW Europe/Mediterranean. The
+**Geographic scope.** Most of corpus length is NW Europe/Mediterranean. The
 long-haul extension does not fix this — it *sharpens* it, because the 2,000+ km
 band is 13 of 15 routes from one agency and reduces in practice to two
 corridors, transatlantic and Marseille–Levant.
