@@ -1,5 +1,6 @@
 // Builds public/data/protected-areas.json: marine protected area coverage,
-// rasterised to the same grid the routing engine already uses.
+// rasterised to its own 0.1 degree grid, finer than the routing engine's
+// 0.5 degree ocean grid (see RESOLUTION_DEG below).
 //
 // WHY RASTERISE. The source is 826 MultiPolygons averaging ~2,500 vertices.
 // Testing a route against those polygons at runtime would mean hundreds of
@@ -213,8 +214,8 @@ writeFileSync(join(OUT, "protected-areas.json"), JSON.stringify({
   cols: COLS,
   provenance:
     "Marine protected areas from EMODnet Human Activities, which republishes the EUROPEAN EXTRACT of the " +
-    "World Database on Protected Areas (WDPA). Rasterised to a 0.5 degree grid at build time by " +
-    "scripts/build-protected-areas.mjs. This is NOT global WDPA: all features fall within the dataExtent " +
+    `World Database on Protected Areas (WDPA). Rasterised to a ${RESOLUTION_DEG} degree grid (about 11 km) ` +
+    "at build time by scripts/build-protected-areas.mjs. This is NOT global WDPA: all features fall within the dataExtent " +
     "below, and outside that extent the absence of a marked cell means NO DATA, never 'no protected areas'.",
   source: { service: WFS, layer: LAYER, features: features.length, polygons: polys.length },
   /** Outside this box the grid carries no information at all. */
